@@ -36,7 +36,7 @@ export default function NewsDetail() {
           <View style={styles.heroText}>
             <View style={styles.badge}><Text style={styles.badgeText}>{item.category}</Text></View>
             <Text style={styles.title}>{item.title}</Text>
-            <Text style={styles.meta}>{item.author} · {date}</Text>
+            <Text style={styles.meta}>{item.author} · {date}{item.reading_time ? ` · ${item.reading_time} min` : ""}</Text>
           </View>
         </View>
         <Text style={styles.body}>{item.body}</Text>

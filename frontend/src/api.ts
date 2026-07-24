@@ -77,4 +77,29 @@ export const api = {
   adminEditCrew: (id: string, body: any) => request(`/admin/crew/${id}`, { method: "PATCH", body: JSON.stringify(body) }, true),
   adminCrewPortrait: (id: string, portrait: string) => request(`/admin/crew/${id}/portrait`, { method: "POST", body: JSON.stringify({ portrait }) }, true),
   adminDeleteCrew: (id: string) => request(`/admin/crew/${id}`, { method: "DELETE" }, true),
+  // admin podcasts
+  adminPodcasts: (status?: string, search?: string) => {
+    const q = new URLSearchParams();
+    if (status) q.set("status", status);
+    if (search) q.set("search", search);
+    return request(`/admin/podcasts?${q.toString()}`, {}, true);
+  },
+  adminCreatePodcast: (body: any) => request("/admin/podcasts", { method: "POST", body: JSON.stringify(body) }, true),
+  adminEditPodcast: (id: string, body: any) => request(`/admin/podcasts/${id}`, { method: "PATCH", body: JSON.stringify(body) }, true),
+  adminDeletePodcast: (id: string) => request(`/admin/podcasts/${id}`, { method: "DELETE" }, true),
+  // admin news
+  adminNews: (status?: string, search?: string) => {
+    const q = new URLSearchParams();
+    if (status) q.set("status", status);
+    if (search) q.set("search", search);
+    return request(`/admin/news?${q.toString()}`, {}, true);
+  },
+  adminCreateNews: (body: any) => request("/admin/news", { method: "POST", body: JSON.stringify(body) }, true),
+  adminEditNews: (id: string, body: any) => request(`/admin/news/${id}`, { method: "PATCH", body: JSON.stringify(body) }, true),
+  adminDeleteNews: (id: string) => request(`/admin/news/${id}`, { method: "DELETE" }, true),
+  // public content
+  podcast: (id: string) => request(`/podcasts/${id}`),
+  featuredPodcasts: () => request("/podcasts/featured"),
+  featuredNews: () => request("/news/featured"),
+  newsCategories: () => request("/news/categories"),
 };

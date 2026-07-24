@@ -43,6 +43,7 @@ export default function RootLayout() {
               <Stack.Screen name="equipaggio/[id]" />
               <Stack.Screen name="join" options={{ presentation: "card" }} />
               <Stack.Screen name="news/[id]" />
+              <Stack.Screen name="podcast/[id]" />
               <Stack.Screen name="admin" />
             </Stack>
           </PlayerProvider>

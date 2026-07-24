@@ -196,30 +196,73 @@ async def live_status():
 
 
 # ---------------- Content routes ----------------
+def _pub_filter(extra: dict = None):
+    q = {"published": {"$ne": False}}
+    if extra:
+        q.update(extra)
+    return q
+
+
+def _reading_time(text: str) -> int:
+    words = len((text or "").split())
+    return max(1, round(words / 200))
+
+
 @api_router.get("/podcasts")
 async def get_podcasts(search: Optional[str] = None, category: Optional[str] = None):
-    query = {}
+    query = _pub_filter()
     if category and category != "Tutti":
         query["category"] = category
     if search:
         query["$or"] = [
             {"title": {"$regex": search, "$options": "i"}},
             {"description": {"$regex": search, "$options": "i"}},
+            {"subtitle": {"$regex": search, "$options": "i"}},
         ]
-    docs = await db.podcasts.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    docs = await db.podcasts.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return docs
+
+
+@api_router.get("/podcasts/featured")
+async def featured_podcasts():
+    docs = await db.podcasts.find(_pub_filter({"featured": True}), {"_id": 0}).sort("featured_order", 1).to_list(50)
     return docs
 
 
 @api_router.get("/podcasts/categories")
 async def podcast_categories():
-    cats = await db.podcasts.distinct("category")
-    return ["Tutti"] + sorted(cats)
+    cats = await db.podcasts.distinct("category", _pub_filter())
+    return ["Tutti"] + sorted([c for c in cats if c])
+
+
+@api_router.get("/podcasts/{podcast_id}")
+async def get_podcast(podcast_id: str):
+    doc = await db.podcasts.find_one({"id": podcast_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Podcast non trovato")
+    return doc
 
 
 @api_router.get("/news")
 async def get_news():
-    docs = await db.news.find({}, {"_id": 0}).sort("date", -1).to_list(200)
+    docs = await db.news.find(_pub_filter(), {"_id": 0}).sort("date", -1).to_list(500)
+    for d in docs:
+        d["reading_time"] = _reading_time(d.get("body", ""))
     return docs
+
+
+@api_router.get("/news/featured")
+async def featured_news():
+    docs = await db.news.find(_pub_filter({"featured": True}), {"_id": 0}).sort("date", -1).to_list(50)
+    for d in docs:
+        d["reading_time"] = _reading_time(d.get("body", ""))
+    return docs
+
+
+@api_router.get("/news/categories")
+async def news_categories():
+    cats = await db.news.distinct("category", _pub_filter())
+    return ["Tutte"] + sorted([c for c in cats if c])
 
 
 @api_router.get("/news/{news_id}")
@@ -227,6 +270,7 @@ async def get_news_item(news_id: str):
     doc = await db.news.find_one({"id": news_id}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Notizia non trovata")
+    doc["reading_time"] = _reading_time(doc.get("body", ""))
     return doc
 
 
@@ -563,6 +607,149 @@ async def admin_delete_crew(member_id: str, admin=Depends(require_admin)):
     return {"ok": True}
 
 
+# ---------------- Admin: Podcast CMS ----------------
+class PodcastIn(BaseModel):
+    title: str
+    subtitle: Optional[str] = ""
+    description: Optional[str] = ""
+    author: Optional[str] = ""
+    category: Optional[str] = "Generale"
+    tags: Optional[List[str]] = []
+    artwork: Optional[str] = None
+    audio_url: Optional[str] = None
+    episode_number: Optional[int] = None
+    duration: Optional[str] = ""
+    publish_date: Optional[str] = None
+    featured: Optional[bool] = False
+    published: Optional[bool] = False
+
+
+class PodcastEdit(BaseModel):
+    title: Optional[str] = None
+    subtitle: Optional[str] = None
+    description: Optional[str] = None
+    author: Optional[str] = None
+    category: Optional[str] = None
+    tags: Optional[List[str]] = None
+    artwork: Optional[str] = None
+    audio_url: Optional[str] = None
+    episode_number: Optional[int] = None
+    duration: Optional[str] = None
+    publish_date: Optional[str] = None
+    featured: Optional[bool] = None
+    published: Optional[bool] = None
+
+
+@api_router.get("/admin/podcasts")
+async def admin_podcasts(status: Optional[str] = None, search: Optional[str] = None, admin=Depends(require_admin)):
+    query = {}
+    if status == "published":
+        query["published"] = True
+    elif status == "draft":
+        query["published"] = {"$ne": True}
+    if search:
+        query["$or"] = [{"title": {"$regex": search, "$options": "i"}}, {"author": {"$regex": search, "$options": "i"}}]
+    docs = await db.podcasts.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return docs
+
+
+@api_router.post("/admin/podcasts")
+async def admin_create_podcast(body: PodcastIn, admin=Depends(require_admin)):
+    doc = body.model_dump()
+    doc["id"] = new_id("pod")
+    doc["created_at"] = now_utc()
+    doc["featured_order"] = await db.podcasts.count_documents({})
+    if not doc.get("publish_date"):
+        doc["publish_date"] = now_utc().isoformat()
+    await db.podcasts.insert_one(dict(doc))
+    doc.pop("_id", None)
+    return {"ok": True, "id": doc["id"]}
+
+
+@api_router.patch("/admin/podcasts/{pid}")
+async def admin_edit_podcast(pid: str, body: PodcastEdit, admin=Depends(require_admin)):
+    updates = body.model_dump(exclude_unset=True)
+    if updates:
+        await db.podcasts.update_one({"id": pid}, {"$set": updates})
+    return {"ok": True}
+
+
+@api_router.delete("/admin/podcasts/{pid}")
+async def admin_delete_podcast(pid: str, admin=Depends(require_admin)):
+    await db.podcasts.delete_one({"id": pid})
+    return {"ok": True}
+
+
+@api_router.post("/admin/podcasts/featured-order")
+async def admin_podcast_featured_order(body: dict, admin=Depends(require_admin)):
+    ids = body.get("ids", [])
+    for i, pid in enumerate(ids):
+        await db.podcasts.update_one({"id": pid}, {"$set": {"featured_order": i}})
+    return {"ok": True}
+
+
+# ---------------- Admin: News CMS ----------------
+class NewsIn(BaseModel):
+    title: str
+    excerpt: Optional[str] = ""
+    body: Optional[str] = ""
+    category: Optional[str] = "Mondo Cristiano"
+    author: Optional[str] = "Redazione"
+    image: Optional[str] = None
+    date: Optional[str] = None
+    featured: Optional[bool] = False
+    published: Optional[bool] = False
+
+
+class NewsEdit(BaseModel):
+    title: Optional[str] = None
+    excerpt: Optional[str] = None
+    body: Optional[str] = None
+    category: Optional[str] = None
+    author: Optional[str] = None
+    image: Optional[str] = None
+    date: Optional[str] = None
+    featured: Optional[bool] = None
+    published: Optional[bool] = None
+
+
+@api_router.get("/admin/news")
+async def admin_news(status: Optional[str] = None, search: Optional[str] = None, admin=Depends(require_admin)):
+    query = {}
+    if status == "published":
+        query["published"] = True
+    elif status == "draft":
+        query["published"] = {"$ne": True}
+    if search:
+        query["$or"] = [{"title": {"$regex": search, "$options": "i"}}, {"author": {"$regex": search, "$options": "i"}}]
+    docs = await db.news.find(query, {"_id": 0}).sort("date", -1).to_list(500)
+    return docs
+
+
+@api_router.post("/admin/news")
+async def admin_create_news(body: NewsIn, admin=Depends(require_admin)):
+    doc = body.model_dump()
+    doc["id"] = new_id("news")
+    if not doc.get("date"):
+        doc["date"] = now_utc().isoformat()
+    await db.news.insert_one(dict(doc))
+    return {"ok": True, "id": doc["id"]}
+
+
+@api_router.patch("/admin/news/{nid}")
+async def admin_edit_news(nid: str, body: NewsEdit, admin=Depends(require_admin)):
+    updates = body.model_dump(exclude_unset=True)
+    if updates:
+        await db.news.update_one({"id": nid}, {"$set": updates})
+    return {"ok": True}
+
+
+@api_router.delete("/admin/news/{nid}")
+async def admin_delete_news(nid: str, admin=Depends(require_admin)):
+    await db.news.delete_one({"id": nid})
+    return {"ok": True}
+
+
 app.include_router(api_router)
 
 app.add_middleware(
@@ -675,8 +862,7 @@ async def startup():
 
     if await db.crew.count_documents({}) == 0:
         await db.crew.insert_one({
-            "id": "crew_luigi_volpe",
-            "name": "Luigi Volpe",
+            "id": "crew_luigi_volpe",            "name": "Luigi Volpe",
             "role": "Fondatore e Responsabile",
             "mission": "Annunciare Cristo attraverso la radio e i nuovi media.",
             "bio": "Ho fondato Radio Pescatori di Uomini con il desiderio di annunciare il Vangelo e glorificare Dio attraverso contenuti biblici, testimonianze e programmi che possano raggiungere ogni persona. Credo che ognuno possa essere uno strumento nelle mani di Dio per portare speranza in un mondo che ha sete di verità.",
@@ -691,6 +877,21 @@ async def startup():
             "order": 0,
             "published": True,
         })
+
+    # --- CMS migration (idempotent): ensure existing content has publish/feature flags ---
+    await db.podcasts.update_many({"published": {"$exists": False}}, {"$set": {"published": True}})
+    await db.podcasts.update_many({"featured": {"$exists": False}}, {"$set": {"featured": False}})
+    await db.podcasts.update_many({"featured_order": {"$exists": False}}, {"$set": {"featured_order": 0}})
+    await db.news.update_many({"published": {"$exists": False}}, {"$set": {"published": True}})
+    await db.news.update_many({"featured": {"$exists": False}}, {"$set": {"featured": False}})
+    if await db.podcasts.count_documents({"featured": True}) == 0:
+        feat = await db.podcasts.find({}, {"id": 1}).sort("created_at", -1).to_list(3)
+        for i, d in enumerate(feat):
+            await db.podcasts.update_one({"id": d["id"]}, {"$set": {"featured": True, "featured_order": i}})
+    if await db.news.count_documents({"featured": True}) == 0:
+        fn = await db.news.find_one({}, sort=[("date", -1)])
+        if fn:
+            await db.news.update_one({"id": fn["id"]}, {"$set": {"featured": True}})
     logger.info("Seed complete")
 
 

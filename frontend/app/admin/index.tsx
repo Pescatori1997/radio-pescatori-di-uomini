@@ -13,8 +13,8 @@ const CARDS = [
   { key: "approved_members", label: "Membri approvati", icon: "anchor", color: colors.brandPrimary, route: "/admin/team" },
   { key: "total_users", label: "Utenti totali", icon: "account-group", color: "#8B5CF6", route: "/admin/soon?s=Utenti" },
   { key: "prayer_requests", label: "Richieste di preghiera", icon: "hands-pray", color: "#10B981", route: "/admin/soon?s=Preghiere" },
-  { key: "news", label: "Articoli News", icon: "newspaper-variant", color: "#38BDF8", route: "/admin/soon?s=News" },
-  { key: "podcasts", label: "Podcast", icon: "microphone", color: "#EF4444", route: "/admin/soon?s=Podcast" },
+  { key: "news", label: "Articoli News", icon: "newspaper-variant", color: "#38BDF8", route: "/admin/news" },
+  { key: "podcasts", label: "Podcast", icon: "microphone", color: "#EF4444", route: "/admin/podcasts" },
 ];
 
 export default function AdminDashboard() {
