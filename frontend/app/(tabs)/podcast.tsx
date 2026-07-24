@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/src/api";
 import { usePlayer } from "@/src/context/PlayerContext";
+import PressableScale from "@/src/components/PressableScale";
 import { colors, spacing, radius } from "@/src/theme";
 
 export default function PodcastScreen() {
@@ -75,7 +76,7 @@ export default function PodcastScreen() {
           contentContainerStyle={{ gap: spacing.lg, paddingTop: spacing.md, paddingBottom: 180 }}
           showsVerticalScrollIndicator={false}
           renderItem={({ item }) => (
-            <Pressable
+            <PressableScale
               testID={`podcast-card-${item.id}`}
               style={styles.card}
               onPress={() => playTrack({ id: item.id, title: item.title, artist: item.author, artwork: item.artwork, url: item.audio_url, isLive: false })}
@@ -88,7 +89,7 @@ export default function PodcastScreen() {
               </View>
               <Text numberOfLines={2} style={styles.cardTitle}>{item.title}</Text>
               <Text numberOfLines={1} style={styles.cardCat}>{item.category}</Text>
-            </Pressable>
+            </PressableScale>
           )}
         />
       )}

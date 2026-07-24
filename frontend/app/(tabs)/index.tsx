@@ -6,10 +6,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { api } from "@/src/api";
 import { usePlayer, Track } from "@/src/context/PlayerContext";
 import Collaborators from "@/src/components/Collaborators";
+import PressableScale from "@/src/components/PressableScale";
 import { colors, spacing, radius } from "@/src/theme";
+
+const LOGO = require("@/assets/images/logo.png");
 
 export default function Home() {
   const insets = useSafeAreaInsets();
@@ -75,33 +79,38 @@ export default function Home() {
       <View style={[styles.hero, { paddingTop: insets.top + spacing.lg }]}>
         <Image source={{ uri: live?.artwork }} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={2} />
         <LinearGradient colors={["rgba(10,17,40,0.75)", "rgba(10,17,40,0.97)"]} style={StyleSheet.absoluteFill} />
-        <View style={styles.brandRow}>
+        <Animated.View entering={FadeInDown.duration(500)} style={styles.brandRow}>
           <View style={styles.logoBadge}>
-            <Ionicons name="fish" size={22} color={colors.white} />
+            <Image source={LOGO} style={styles.logoImg} contentFit="contain" />
           </View>
-          <Text style={styles.brandName}>Pescatori di Uomini</Text>
-        </View>
-        <Text style={styles.slogan}>La radio che annuncia il Vangelo</Text>
+          <View>
+            <Text style={styles.brandName}>Pescatori di Uomini</Text>
+            <Text style={styles.slogan}>La radio che annuncia il Vangelo</Text>
+          </View>
+        </Animated.View>
 
-        <View style={styles.liveBadge} testID="live-indicator">
+        <Animated.View entering={FadeInDown.duration(500).delay(120)} style={styles.liveBadge} testID="live-indicator">
           <View style={[styles.dot, { backgroundColor: live?.is_live ? colors.success : colors.error }]} />
           <Text style={styles.liveText}>{live?.is_live ? "IN DIRETTA ORA" : "OFFLINE"}</Text>
-        </View>
+        </Animated.View>
 
-        <Text style={styles.nowTitle} numberOfLines={1}>{live?.title}</Text>
-        <Text style={styles.nowArtist} numberOfLines={1}>{live?.artist}</Text>
+        <Animated.View entering={FadeInDown.duration(500).delay(180)}>
+          <Text style={styles.nowLabel}>ORA IN ONDA</Text>
+          <Text style={styles.nowTitle} numberOfLines={1}>{live?.title}</Text>
+          <Text style={styles.nowArtist} numberOfLines={1}>{live?.artist}</Text>
+        </Animated.View>
 
-        <Pressable testID="listen-live-button" style={styles.cta} onPress={onListen}>
+        <PressableScale testID="listen-live-button" style={styles.cta} onPress={onListen}>
           <Ionicons name={isLivePlaying ? "pause" : "play"} size={22} color={colors.navy} />
           <Text style={styles.ctaText}>{isLivePlaying ? "In riproduzione" : "Ascolta la Diretta"}</Text>
-        </Pressable>
+        </PressableScale>
       </View>
 
       {/* PODCASTS */}
       <SectionHeader title="Ultimi Podcast" onPress={() => router.push("/podcast")} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hRow}>
         {podcasts.slice(0, 6).map((p) => (
-          <Pressable
+          <PressableScale
             key={p.id}
             testID={`home-podcast-${p.id}`}
             style={styles.podCard}
@@ -110,7 +119,7 @@ export default function Home() {
             <Image source={{ uri: p.artwork }} style={styles.podArt} contentFit="cover" />
             <Text numberOfLines={2} style={styles.podTitle}>{p.title}</Text>
             <Text numberOfLines={1} style={styles.podCat}>{p.category} · {p.duration}</Text>
-          </Pressable>
+          </PressableScale>
         ))}
       </ScrollView>
 
@@ -118,12 +127,12 @@ export default function Home() {
       <SectionHeader title="Ultime Notizie" onPress={() => router.push("/news")} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hRow}>
         {news.slice(0, 5).map((n) => (
-          <Pressable key={n.id} testID={`home-news-${n.id}`} style={styles.newsCard} onPress={() => router.push(`/news/${n.id}`)}>
+          <PressableScale key={n.id} testID={`home-news-${n.id}`} style={styles.newsCard} onPress={() => router.push(`/news/${n.id}`)}>
             <Image source={{ uri: n.image }} style={styles.newsImg} contentFit="cover" />
             <LinearGradient colors={["transparent", "rgba(10,17,40,0.9)"]} style={styles.newsScrim} />
             <View style={styles.newsBadge}><Text style={styles.newsBadgeText}>{n.category}</Text></View>
             <Text numberOfLines={2} style={styles.newsTitle}>{n.title}</Text>
-          </Pressable>
+          </PressableScale>
         ))}
       </ScrollView>
 
@@ -165,25 +174,27 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
   hero: { padding: spacing.xl, paddingBottom: spacing.xl, overflow: "hidden" },
   brandRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  logoBadge: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
-  brandName: { color: colors.white, fontSize: 18, fontWeight: "800" },
-  slogan: { color: colors.brandSecondary, fontSize: 14, marginTop: spacing.sm },
+  logoBadge: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.white, alignItems: "center", justifyContent: "center", overflow: "hidden", shadowColor: colors.brandPrimary, shadowOpacity: 0.4, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
+  logoImg: { width: 46, height: 46 },
+  brandName: { color: colors.white, fontSize: 17, fontWeight: "800" },
+  slogan: { color: colors.brandSecondary, fontSize: 13, marginTop: 2 },
+  nowLabel: { color: colors.brandSecondary, fontSize: 11, fontWeight: "700", letterSpacing: 1.5, marginTop: spacing.md },
   liveBadge: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: spacing.xl, backgroundColor: "rgba(255,255,255,0.12)", alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill },
   dot: { width: 8, height: 8, borderRadius: 4 },
   liveText: { color: colors.white, fontSize: 11, fontWeight: "700", letterSpacing: 0.5 },
-  nowTitle: { color: colors.white, fontSize: 24, fontWeight: "800", marginTop: spacing.md },
+  nowTitle: { color: colors.white, fontSize: 26, fontWeight: "800", marginTop: 4, letterSpacing: -0.5 },
   nowArtist: { color: colors.muted, fontSize: 14, marginTop: 2 },
-  cta: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, backgroundColor: colors.white, paddingVertical: spacing.md, borderRadius: radius.pill, marginTop: spacing.lg },
+  cta: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, backgroundColor: colors.white, paddingVertical: spacing.md, borderRadius: radius.pill, marginTop: spacing.lg, shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
   ctaText: { color: colors.navy, fontSize: 16, fontWeight: "800" },
   sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, marginTop: spacing.xl, marginBottom: spacing.md },
   sectionTitle: { color: colors.onSurface, fontSize: 18, fontWeight: "800" },
   seeAll: { color: colors.brandPrimary, fontSize: 13, fontWeight: "600" },
   hRow: { paddingHorizontal: spacing.lg, gap: spacing.md },
   podCard: { width: 150 },
-  podArt: { width: 150, height: 150, borderRadius: radius.md, backgroundColor: colors.surfaceTertiary },
+  podArt: { width: 150, height: 150, borderRadius: radius.md, backgroundColor: colors.surfaceTertiary, shadowColor: colors.navy, shadowOpacity: 0.15, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 4 },
   podTitle: { color: colors.onSurface, fontSize: 14, fontWeight: "700", marginTop: spacing.sm },
   podCat: { color: colors.onSurfaceTertiary, fontSize: 12, marginTop: 2 },
-  newsCard: { width: 260, height: 160, borderRadius: radius.md, overflow: "hidden", backgroundColor: colors.navy },
+  newsCard: { width: 260, height: 160, borderRadius: radius.lg, overflow: "hidden", backgroundColor: colors.navy, shadowColor: colors.navy, shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 5 },
   newsImg: { ...StyleSheet.absoluteFillObject },
   newsScrim: { ...StyleSheet.absoluteFillObject },
   newsBadge: { position: "absolute", top: spacing.md, left: spacing.md, backgroundColor: colors.brandPrimary, paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.sm },

@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePlayer } from "@/src/context/PlayerContext";
+import PressableScale from "@/src/components/PressableScale";
 import { colors, spacing, radius } from "@/src/theme";
 
 function fmt(s: number) {
@@ -87,9 +88,9 @@ export default function PlayerScreen() {
         )}
 
         <View style={styles.controls}>
-          <Pressable testID="player-main-toggle" style={styles.mainBtn} onPress={togglePlay}>
+          <PressableScale testID="player-main-toggle" style={styles.mainBtn} onPress={togglePlay}>
             <Ionicons name={isBuffering ? "hourglass" : isPlaying ? "pause" : "play"} size={34} color={colors.navy} />
-          </Pressable>
+          </PressableScale>
         </View>
 
         <View style={styles.volumeRow}>

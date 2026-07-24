@@ -4,7 +4,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/src/context/AuthContext";
+import PressableScale from "@/src/components/PressableScale";
+import { Image } from "expo-image";
 import { colors, spacing, radius } from "@/src/theme";
+
+const LOGO = require("@/assets/images/logo.png");
 
 export default function Login() {
   const insets = useSafeAreaInsets();
@@ -48,14 +52,14 @@ export default function Login() {
         <Pressable testID="login-close" onPress={() => router.back()} hitSlop={12} style={{ alignSelf: "flex-start" }}>
           <Ionicons name="close" size={28} color={colors.onSurface} />
         </Pressable>
-        <View style={styles.logoBadge}><Ionicons name="fish" size={28} color={colors.white} /></View>
+        <View style={styles.logoBadge}><Image source={LOGO} style={styles.logoImg} contentFit="contain" /></View>
         <Text style={styles.title}>{mode === "login" ? "Bentornato" : "Crea un account"}</Text>
         <Text style={styles.sub}>Accedi per salvare preferiti, cronologia e notifiche.</Text>
 
-        <Pressable testID="google-login" style={styles.googleBtn} onPress={google} disabled={busy}>
+        <PressableScale testID="google-login" style={styles.googleBtn} onPress={google} disabled={busy}>
           <Ionicons name="logo-google" size={20} color={colors.navy} />
           <Text style={styles.googleText}>Continua con Google</Text>
-        </Pressable>
+        </PressableScale>
 
         <View style={styles.divider}><View style={styles.line} /><Text style={styles.or}>oppure</Text><View style={styles.line} /></View>
 
@@ -67,9 +71,9 @@ export default function Login() {
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        <Pressable testID="login-submit" style={[styles.primaryBtn, busy && { opacity: 0.6 }]} onPress={submit} disabled={busy}>
+        <PressableScale testID="login-submit" style={[styles.primaryBtn, busy && { opacity: 0.6 }]} onPress={submit} disabled={busy}>
           {busy ? <ActivityIndicator color={colors.white} /> : <Text style={styles.primaryText}>{mode === "login" ? "Accedi" : "Registrati"}</Text>}
-        </Pressable>
+        </PressableScale>
 
         <Pressable testID="toggle-mode" onPress={() => setMode(mode === "login" ? "register" : "login")} style={{ marginTop: spacing.lg }}>
           <Text style={styles.toggle}>
@@ -84,7 +88,8 @@ export default function Login() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
-  logoBadge: { width: 56, height: 56, borderRadius: 16, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center", marginTop: spacing.lg },
+  logoBadge: { width: 72, height: 72, borderRadius: 20, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center", overflow: "hidden", marginTop: spacing.lg, borderWidth: 1, borderColor: colors.border },
+  logoImg: { width: 60, height: 60 },
   title: { fontSize: 28, fontWeight: "800", color: colors.onSurface, marginTop: spacing.lg },
   sub: { fontSize: 15, color: colors.onSurfaceSecondary, marginTop: spacing.sm, marginBottom: spacing.xl },
   googleBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, borderWidth: 1.5, borderColor: colors.border, borderRadius: radius.pill, paddingVertical: spacing.md },
