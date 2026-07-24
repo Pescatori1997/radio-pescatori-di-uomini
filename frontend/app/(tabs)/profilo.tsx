@@ -27,6 +27,7 @@ export default function Profilo() {
   );
 
   const menu = [
+    { icon: "boat-outline", label: "L'Equipaggio", route: "/equipaggio" },
     { icon: "heart-outline", label: "Richieste di Preghiera", route: "/prayer" },
     { icon: "chatbubbles-outline", label: "Messaggi e Testimonianze", route: "/messages" },
     { icon: "information-circle-outline", label: "Chi Siamo", route: "/about" },

@@ -5,7 +5,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Collaborators from "@/src/components/Collaborators";
+import PressableScale from "@/src/components/PressableScale";
 import { colors, spacing, radius } from "@/src/theme";
 
 export default function About() {
@@ -45,9 +45,14 @@ export default function About() {
             </View>
           ))}
         </View>
-        <View style={{ marginTop: spacing.xl }}>
-          <Collaborators title="Il nostro team" />
-        </View>
+        <PressableScale testID="about-crew-cta" style={styles.crewCta} onPress={() => router.push("/equipaggio")}>
+          <View style={styles.crewIcon}><Ionicons name="boat" size={22} color={colors.white} /></View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.crewTitle}>Scopri l'Equipaggio</Text>
+            <Text style={styles.crewSub}>Le persone che servono in Pescatori di Uomini</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+        </PressableScale>
       </ScrollView>
     </View>
   );
@@ -66,4 +71,8 @@ const styles = StyleSheet.create({
   valueIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.navy, alignItems: "center", justifyContent: "center" },
   valueTitle: { fontSize: 16, fontWeight: "800", color: colors.onSurface },
   valueText: { fontSize: 14, color: colors.onSurfaceSecondary, marginTop: 2, lineHeight: 20 },
+  crewCta: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginHorizontal: spacing.xl, marginTop: spacing.xl, backgroundColor: colors.navy, borderRadius: radius.lg, padding: spacing.lg },
+  crewIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
+  crewTitle: { color: colors.white, fontSize: 16, fontWeight: "800" },
+  crewSub: { color: colors.muted, fontSize: 13, marginTop: 2 },
 });

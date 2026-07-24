@@ -12,7 +12,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.emergent.evangelicstream.wwoeys",
       "infoPlist": {
-        "UIBackgroundModes": ["audio"]
+        "UIBackgroundModes": ["audio"],
+        "NSPhotoLibraryUsageDescription": "Carica la tua foto ritratto per candidarti all'Equipaggio"
       }
     },
     "android": {
@@ -22,7 +23,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.emergent.evangelicstream.wwoeys",
-      "permissions": ["FOREGROUND_SERVICE", "WAKE_LOCK"]
+      "permissions": ["FOREGROUND_SERVICE", "WAKE_LOCK", "READ_MEDIA_IMAGES"]
     },
     "web": {
       "bundler": "metro",

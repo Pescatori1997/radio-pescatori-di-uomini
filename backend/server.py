@@ -242,6 +242,50 @@ async def get_collaborators():
     return docs
 
 
+# ---------------- Crew (L'Equipaggio) ----------------
+class ApplicationIn(BaseModel):
+    name: str
+    surname: str
+    age: Optional[int] = None
+    city: Optional[str] = None
+    email: EmailStr
+    phone: Optional[str] = None
+    desired_role: str
+    testimony: Optional[str] = None
+    motivation: str
+    experience: Optional[str] = None
+    portrait: Optional[str] = None  # base64 data URI (optional)
+
+
+@api_router.get("/crew")
+async def get_crew():
+    docs = await db.crew.find({"published": True}, {"_id": 0}).sort("order", 1).to_list(200)
+    return docs
+
+
+@api_router.get("/crew/{member_id}")
+async def get_crew_member(member_id: str):
+    doc = await db.crew.find_one({"id": member_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Membro non trovato")
+    return doc
+
+
+@api_router.post("/crew/applications")
+async def create_application(body: ApplicationIn):
+    doc = {
+        "id": new_id("app"),
+        "name": body.name, "surname": body.surname, "age": body.age,
+        "city": body.city, "email": body.email.lower(), "phone": body.phone,
+        "desired_role": body.desired_role, "testimony": body.testimony,
+        "motivation": body.motivation, "experience": body.experience,
+        "portrait": body.portrait, "status": "pending",
+        "created_at": now_utc().isoformat(),
+    }
+    await db.crew_applications.insert_one(dict(doc))
+    return {"ok": True}
+
+
 @api_router.post("/prayer-requests")
 async def create_prayer(body: PrayerRequest):
     doc = {"id": new_id("pray"), "text": body.text,
@@ -424,6 +468,25 @@ async def startup():
         for i, (name, role, photo) in enumerate(team):
             docs.append({"id": new_id("collab"), "name": name, "role": role, "photo": photo, "order": i})
         await db.collaborators.insert_many(docs)
+
+    if await db.crew.count_documents({}) == 0:
+        await db.crew.insert_one({
+            "id": "crew_luigi_volpe",
+            "name": "Luigi Volpe",
+            "role": "Fondatore e Responsabile",
+            "mission": "Annunciare Cristo attraverso la radio e i nuovi media.",
+            "bio": "Ho fondato Radio Pescatori di Uomini con il desiderio di annunciare il Vangelo e glorificare Dio attraverso contenuti biblici, testimonianze e programmi che possano raggiungere ogni persona. Credo che ognuno possa essere uno strumento nelle mani di Dio per portare speranza in un mondo che ha sete di verità.",
+            "ministry": "Direzione della radio, predicazione e sviluppo dei contenuti. Coordina la squadra e cura la visione spirituale del progetto.",
+            "programs": ["Buongiorno con la Parola", "Il Culto della Domenica"],
+            "verse": "Non voi avete scelto me, ma io ho scelto voi e vi ho costituiti perché andiate e portiate frutto e il vostro frutto rimanga.",
+            "verse_ref": "Giovanni 15:16",
+            "testimony": "La mia vita è cambiata quando ho incontrato personalmente il Signore. Da allora ho sentito la chiamata a usare ogni mezzo possibile — e in particolare la radio — per raccontare ciò che Dio ha fatto per me e per tanti altri. Pescatori di Uomini è nato da questa chiamata: essere pescatori, gettare le reti e lasciare che sia Lui a fare il resto.",
+            "portrait_key": "luigi",
+            "portrait": None,
+            "poster": True,
+            "order": 0,
+            "published": True,
+        })
     logger.info("Seed complete")
 
 

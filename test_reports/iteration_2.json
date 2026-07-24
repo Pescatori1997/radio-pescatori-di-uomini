@@ -1,0 +1,27 @@
+{
+  "summary": "New L'Equipaggio (crew) feature verified end-to-end. Backend: all 33 pytest tests pass (7 new for crew list/detail/404/application full/minimal/validation/no-public-list + 26 regression). Frontend: /equipaggio renders header + Luigi full-poster card (crew-card-crew_luigi_volpe) + join-crew-button; tap navigates to /equipaggio/crew_luigi_volpe showing Ministero/Programmi/Testimonianza and crew-profile-back; /join validates required fields, submits with backend and shows join-done success; Home collaborators-section shows crew teaser with Luigi Volpe; About page removed old collaborator names and shows about-crew-cta linking to /equipaggio; Profilo menu-/equipaggio present and navigates correctly. Deprecation console warnings only (shadow* / pointerEvents) - non-blocking.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "global", "issue": "Non-blocking console warnings: 'shadow* style props are deprecated (use boxShadow)' and 'props.pointerEvents is deprecated (use style.pointerEvents)' - carried over from iteration 1."}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py: no admin/authenticated GET endpoint exists to review submitted /api/crew/applications - by design per spec (not exposed via public GET). Ensure an admin/CMS path exists before launch to actually read applications.",
+    "server.py:73 bcrypt still imported mid-file (pre-existing).",
+    "join.tsx uses expo-image-picker - correctly OPTIONAL; on web the picker won't open but submit works without portrait (verified).",
+    "get_crew returns 'portrait_key' and 'portrait' (null) - frontend crewAssets.crewPortrait must map portrait_key='luigi' to local asset; verify mapping exists (not inspected)."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py"],
+  "success_rate": {"backend": "100% (33/33)", "frontend": "100% - crew list, profile navigation, join form validation + submission, home teaser, about CTA, profilo menu entry all verified"},
+  "seed_data_creation": "Startup seed inserts Luigi Volpe crew doc (id=crew_luigi_volpe, poster=true, published=true) on first boot. Tests created transient TEST_ crew_applications docs (2) + prior TEST_ prayer/message/contact docs; no cleanup.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Use EXPO_PUBLIC_BACKEND_URL from /app/frontend/.env. Crew endpoints: GET /api/crew, GET /api/crew/{id} (404 for unknown), POST /api/crew/applications ({ok:true}, 422 if missing motivation/name/surname/email/desired_role). Applications are write-only (no public GET). Frontend testIDs: crew-card-crew_luigi_volpe, crew-profile-back, join-crew-button, join-back, join-name/surname/age/city/email/phone/testimony/motivation/experience, join-role-<Role> (Speaker|Conduttore|Tecnico del suono|Redazione|Social & Comunicazione|Preghiera|Altro), join-portrait, join-submit, join-done, about-crew-cta, collaborators-section, menu-/equipaggio. Portrait upload OPTIONAL - form submits fine without it on web.",
+  "rca_of_issue": "N/A"
+}

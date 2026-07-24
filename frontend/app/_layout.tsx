@@ -39,6 +39,9 @@ export default function RootLayout() {
               <Stack.Screen name="contact" />
               <Stack.Screen name="donate" />
               <Stack.Screen name="messages" />
+              <Stack.Screen name="equipaggio/index" />
+              <Stack.Screen name="equipaggio/[id]" />
+              <Stack.Screen name="join" options={{ presentation: "card" }} />
               <Stack.Screen name="news/[id]" />
             </Stack>
           </PlayerProvider>

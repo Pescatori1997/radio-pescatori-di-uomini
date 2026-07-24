@@ -206,3 +206,84 @@ def test_logout():
     # token should now be invalid
     r2 = requests.get(f"{API}/auth/me", headers=_auth(), timeout=15)
     assert r2.status_code == 401
+
+
+# --- Crew (L'Equipaggio) ---
+def test_crew_list():
+    r = session.get(f"{API}/crew", timeout=15)
+    assert r.status_code == 200
+    data = r.json()
+    assert isinstance(data, list) and len(data) >= 1
+    luigi = next((m for m in data if m["id"] == "crew_luigi_volpe"), None)
+    assert luigi is not None, "Luigi Volpe missing from crew list"
+    assert luigi.get("poster") is True
+    assert luigi.get("published") is True
+    for k in ("name", "role", "mission", "bio", "ministry", "programs", "verse", "verse_ref", "testimony"):
+        assert k in luigi, f"missing field {k}"
+    assert isinstance(luigi["programs"], list)
+
+
+def test_crew_member_detail():
+    r = session.get(f"{API}/crew/crew_luigi_volpe", timeout=15)
+    assert r.status_code == 200
+    d = r.json()
+    assert d["id"] == "crew_luigi_volpe"
+    assert d["name"] == "Luigi Volpe"
+    assert d["poster"] is True
+    assert d["verse_ref"] == "Giovanni 15:16"
+    assert len(d["testimony"]) > 20
+    assert len(d["bio"]) > 20
+
+
+def test_crew_member_404():
+    r = session.get(f"{API}/crew/nonexistent_crew_id", timeout=15)
+    assert r.status_code == 404
+
+
+def test_crew_application_full():
+    payload = {
+        "name": "TEST_Mario",
+        "surname": "TEST_Rossi",
+        "age": 30,
+        "city": "Roma",
+        "email": "test_apply@pescatoridiuomini.it",
+        "phone": "+391234567890",
+        "desired_role": "Speaker",
+        "testimony": "TEST_ La mia testimonianza",
+        "motivation": "TEST_ Vorrei servire il Signore attraverso la radio",
+        "experience": "TEST_ Nessuna esperienza precedente",
+        "portrait": None,
+    }
+    r = session.post(f"{API}/crew/applications", json=payload, timeout=15)
+    assert r.status_code == 200, r.text
+    assert r.json().get("ok") is True
+
+
+def test_crew_application_minimal():
+    payload = {
+        "name": "TEST_Anna",
+        "surname": "TEST_Bianchi",
+        "email": "test_minimal@pescatoridiuomini.it",
+        "desired_role": "Preghiera",
+        "motivation": "TEST_ Chiamata alla preghiera",
+    }
+    r = session.post(f"{API}/crew/applications", json=payload, timeout=15)
+    assert r.status_code == 200
+    assert r.json().get("ok") is True
+
+
+def test_crew_application_missing_required():
+    # missing motivation
+    payload = {
+        "name": "TEST_x", "surname": "TEST_y",
+        "email": "bad@x.it", "desired_role": "Altro",
+    }
+    r = session.post(f"{API}/crew/applications", json=payload, timeout=15)
+    assert r.status_code == 422
+
+
+def test_crew_applications_not_publicly_listed():
+    # No public GET should expose the applications
+    r = session.get(f"{API}/crew/applications", timeout=15)
+    # Should either be 404 (no route) or 405 (method not allowed) - never 200 with list
+    assert r.status_code in (404, 405), f"applications should NOT be publicly listed, got {r.status_code}"
