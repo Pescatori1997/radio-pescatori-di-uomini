@@ -10,6 +10,7 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { api } from "@/src/api";
 import { usePlayer, Track } from "@/src/context/PlayerContext";
 import Collaborators from "@/src/components/Collaborators";
+import WhatsAppSection from "@/src/components/WhatsAppSection";
 import PressableScale from "@/src/components/PressableScale";
 import { colors, spacing, radius } from "@/src/theme";
 
@@ -159,6 +160,8 @@ export default function Home() {
       </View>
 
       <Collaborators />
+
+      <WhatsAppSection />
 
       <Pressable testID="prayer-cta" style={styles.prayerCta} onPress={() => router.push("/prayer")}>
         <Ionicons name="heart" size={20} color={colors.brandPrimary} />
