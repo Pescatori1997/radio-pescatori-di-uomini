@@ -7,11 +7,17 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
+import { ensureIconFontFaces } from "@/src/iconFonts";
 import { AuthProvider } from "@/src/context/AuthContext";
 import { PlayerProvider } from "@/src/context/PlayerContext";
 
 LogBox.ignoreAllLogs(true);
 SplashScreen.preventAutoHideAsync();
+
+// Inject @expo/vector-icons @font-face rules on web before any icon mounts, so the
+// fontfaceobserver 6000ms-timeout polyfill never runs (prevents a hard crash on some
+// Chromium browsers / slow networks). No-op on native. See src/iconFonts.ts.
+ensureIconFontFaces();
 
 export default function RootLayout() {
   const [loaded, error] = useIconFonts();
