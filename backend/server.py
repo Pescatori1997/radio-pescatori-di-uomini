@@ -493,6 +493,7 @@ async def admin_stats(admin=Depends(require_admin)):
         "programs": await db.programs.count_documents({}),
         "news": await db.news.count_documents({}),
         "podcasts": await db.podcasts.count_documents({}),
+        "products": await db.products.count_documents({}),
     }
 
 
@@ -1000,6 +1001,134 @@ async def admin_update_settings(body: GeneralSettings, admin=Depends(require_adm
     doc = await db.settings.find_one({"_id": "general"}) or {}
     doc.pop("_id", None)
     return doc
+
+
+# ---------------- Merchandising: Products ----------------
+MERCH_CATEGORIES = ["Abbigliamento", "Cappelli", "Tazze", "Accessori", "Libri", "Altro"]
+PRODUCT_AVAILABILITY = ["available", "coming_soon", "sold_out"]
+
+
+class ProductIn(BaseModel):
+    name: str
+    description: Optional[str] = ""
+    long_description: Optional[str] = ""
+    category: Optional[str] = "Altro"
+    price: Optional[str] = ""
+    images: Optional[List[str]] = []
+    colors: Optional[List[str]] = []
+    sizes: Optional[List[str]] = []
+    availability: Optional[str] = "available"
+    featured: Optional[bool] = False
+    published: Optional[bool] = True
+
+
+class ProductEdit(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    long_description: Optional[str] = None
+    category: Optional[str] = None
+    price: Optional[str] = None
+    images: Optional[List[str]] = None
+    colors: Optional[List[str]] = None
+    sizes: Optional[List[str]] = None
+    availability: Optional[str] = None
+    featured: Optional[bool] = None
+    published: Optional[bool] = None
+
+
+# ---- Public ----
+@api_router.get("/products")
+async def get_products(search: Optional[str] = None, category: Optional[str] = None):
+    query = {"published": {"$ne": False}}
+    if category and category != "Tutti":
+        query["category"] = category
+    if search:
+        query["$or"] = [
+            {"name": {"$regex": search, "$options": "i"}},
+            {"description": {"$regex": search, "$options": "i"}},
+            {"category": {"$regex": search, "$options": "i"}},
+        ]
+    docs = await db.products.find(query, {"_id": 0}).sort([("featured", -1), ("order", 1)]).to_list(500)
+    return docs
+
+
+@api_router.get("/products/categories")
+async def product_categories():
+    return ["Tutti"] + MERCH_CATEGORIES
+
+
+@api_router.get("/products/{product_id}")
+async def get_product(product_id: str):
+    doc = await db.products.find_one({"id": product_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Prodotto non trovato")
+    return doc
+
+
+# ---- Admin ----
+@api_router.get("/admin/products")
+async def admin_products(status: Optional[str] = None, category: Optional[str] = None,
+                         search: Optional[str] = None, admin=Depends(require_admin)):
+    query = {}
+    if status == "published":
+        query["published"] = True
+    elif status == "hidden":
+        query["published"] = {"$ne": True}
+    elif status == "featured":
+        query["featured"] = True
+    if category and category != "Tutti":
+        query["category"] = category
+    if search:
+        query["$or"] = [
+            {"name": {"$regex": search, "$options": "i"}},
+            {"description": {"$regex": search, "$options": "i"}},
+        ]
+    docs = await db.products.find(query, {"_id": 0}).sort([("featured", -1), ("order", 1)]).to_list(500)
+    return docs
+
+
+@api_router.get("/admin/products/{product_id}")
+async def admin_get_product(product_id: str, admin=Depends(require_admin)):
+    doc = await db.products.find_one({"id": product_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Prodotto non trovato")
+    return doc
+
+
+@api_router.post("/admin/products", status_code=201)
+async def admin_create_product(body: ProductIn, admin=Depends(require_admin)):
+    if body.availability not in PRODUCT_AVAILABILITY:
+        raise HTTPException(status_code=400, detail="Disponibilità non valida")
+    doc = body.model_dump()
+    doc["id"] = new_id("prod")
+    doc["created_at"] = now_utc()
+    doc["order"] = await db.products.count_documents({})
+    await db.products.insert_one(dict(doc))
+    return {"ok": True, "id": doc["id"]}
+
+
+@api_router.patch("/admin/products/{product_id}")
+async def admin_edit_product(product_id: str, body: ProductEdit, admin=Depends(require_admin)):
+    updates = body.model_dump(exclude_unset=True)
+    if "availability" in updates and updates["availability"] not in PRODUCT_AVAILABILITY:
+        raise HTTPException(status_code=400, detail="Disponibilità non valida")
+    if updates:
+        await db.products.update_one({"id": product_id}, {"$set": updates})
+    return {"ok": True}
+
+
+@api_router.delete("/admin/products/{product_id}")
+async def admin_delete_product(product_id: str, admin=Depends(require_admin)):
+    await db.products.delete_one({"id": product_id})
+    return {"ok": True}
+
+
+@api_router.post("/admin/products/reorder")
+async def admin_reorder_products(body: dict, admin=Depends(require_admin)):
+    ids = body.get("ids", [])
+    for i, pid in enumerate(ids):
+        await db.products.update_one({"id": pid}, {"$set": {"order": i}})
+    return {"ok": True}
 
 
 app.include_router(api_router)

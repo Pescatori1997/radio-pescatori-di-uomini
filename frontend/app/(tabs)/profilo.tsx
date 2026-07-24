@@ -35,6 +35,7 @@ export default function Profilo() {
     { icon: "boat-outline", label: "L'Equipaggio", route: "/equipaggio" },
     { icon: "heart-outline", label: "Richieste di Preghiera", route: "/prayer" },
     { icon: "chatbubbles-outline", label: "Messaggi e Testimonianze", route: "/messages" },
+    { icon: "storefront-outline", label: "Merchandising", route: "/merch" },
     { icon: "information-circle-outline", label: "Chi Siamo", route: "/about" },
     { icon: "gift-outline", label: "Sostieni il progetto", route: "/donate" },
     { icon: "mail-outline", label: "Contatti", route: "/contact" },

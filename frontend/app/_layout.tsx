@@ -45,6 +45,8 @@ export default function RootLayout() {
               <Stack.Screen name="contact" />
               <Stack.Screen name="donate" />
               <Stack.Screen name="messages" />
+              <Stack.Screen name="merch/index" />
+              <Stack.Screen name="merch/[id]" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
               <Stack.Screen name="equipaggio/index" />
               <Stack.Screen name="equipaggio/[id]" />
               <Stack.Screen name="join" options={{ presentation: "card" }} />

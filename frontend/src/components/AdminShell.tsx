@@ -11,6 +11,7 @@ const NAV = [
   { key: "team", label: "Team", icon: "anchor", route: "/admin/team" },
   { key: "podcast", label: "Podcast", icon: "microphone", route: "/admin/podcasts" },
   { key: "news", label: "News", icon: "newspaper-variant", route: "/admin/news" },
+  { key: "merch", label: "Merchandising", icon: "storefront", route: "/admin/products" },
   { key: "schedule", label: "Palinsesto", icon: "calendar-month", route: "/admin/schedule" },
   { key: "radio", label: "Radio", icon: "radio", route: "/admin/radio" },
   { key: "prayer", label: "Richieste di Preghiera", icon: "hands-pray", route: "/admin/prayers" },

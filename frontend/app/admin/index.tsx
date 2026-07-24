@@ -18,6 +18,7 @@ const CARDS = [
   { key: "programs", label: "Programmi", icon: "calendar-month", color: "#14B8A6", route: "/admin/schedule" },
   { key: "news", label: "Articoli News", icon: "newspaper-variant", color: "#38BDF8", route: "/admin/news" },
   { key: "podcasts", label: "Podcast", icon: "microphone", color: "#EF4444", route: "/admin/podcasts" },
+  { key: "products", label: "Prodotti", icon: "storefront", color: "#22C55E", route: "/admin/products" },
 ];
 
 export default function AdminDashboard() {

@@ -135,6 +135,28 @@ export const api = {
   adminUpdateRadio: (body: any) => request("/admin/radio", { method: "PUT", body: JSON.stringify(body) }, true),
   adminSettings: () => request("/admin/settings", {}, true),
   adminUpdateSettings: (body: any) => request("/admin/settings", { method: "PUT", body: JSON.stringify(body) }, true),
+  // merchandising (public)
+  products: (search?: string, category?: string) => {
+    const q = new URLSearchParams();
+    if (search) q.set("search", search);
+    if (category) q.set("category", category);
+    return request(`/products?${q.toString()}`);
+  },
+  product: (id: string) => request(`/products/${id}`),
+  productCategories: () => request("/products/categories"),
+  // merchandising (admin)
+  adminProducts: (status?: string, category?: string, search?: string) => {
+    const q = new URLSearchParams();
+    if (status) q.set("status", status);
+    if (category) q.set("category", category);
+    if (search) q.set("search", search);
+    return request(`/admin/products?${q.toString()}`, {}, true);
+  },
+  adminProduct: (id: string) => request(`/admin/products/${id}`, {}, true),
+  adminCreateProduct: (body: any) => request("/admin/products", { method: "POST", body: JSON.stringify(body) }, true),
+  adminEditProduct: (id: string, body: any) => request(`/admin/products/${id}`, { method: "PATCH", body: JSON.stringify(body) }, true),
+  adminDeleteProduct: (id: string) => request(`/admin/products/${id}`, { method: "DELETE" }, true),
+  adminReorderProducts: (ids: string[]) => request("/admin/products/reorder", { method: "POST", body: JSON.stringify({ ids }) }, true),
   // public content
   podcast: (id: string) => request(`/podcasts/${id}`),
   featuredPodcasts: () => request("/podcasts/featured"),
