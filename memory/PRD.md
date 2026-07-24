@@ -55,6 +55,13 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 
 ## Remaining Backlog (prioritized)
 - P1: Real Donations via Stripe (one-time + recurring, predefined + custom amounts, donation history, admin donations dashboard, test mode).
-- P1: Merchandising module (admin CRUD catalog with images/prices/categories/sizes/colors/stock; public catalog "Available Soon", payment-ready data model).
 - P2: Backend refactor server.py into feature routers/services/models.
 - P2: Real radio stream URL wiring (waiting on user URL).
+
+## Implemented (2026-07-24, session 3)
+- **WhatsApp premium section** in Home: pannello glassmorphism navy, 3 feature card (Domande Bibliche / Richieste di Preghiera / Testimonianze), pulsante verde con pulse animation → wa.me/393517556255, disclaimer dirette lun/mer/dom.
+- **Merchandising module (catalog-only, payment-ready)**:
+  - Public: `/merch` catalog (hero + CTA, search istantanea, filtri categoria, griglia responsive glass card con badge Featured/Disponibilità, empty-state) + `/merch/[id]` modal (gallery multi-immagine, colori, taglie, prezzo, disponibilità, pulsante WhatsApp wa.me/393517556255). Linkato da Profilo.
+  - Admin `/admin/products`: CRUD completo, upload multi-immagine, categoria/prezzo/colori/taglie/disponibilità (available|coming_soon|sold_out), Featured, mostra/nascondi, riordino (frecce su/giù → order) — tutto gestibile senza toccare il codice.
+  - Backend: `products` collection; public GET /products(+search/category/categories/{id}), admin CRUD (+201, validazione availability) + /admin/products/reorder. Tested 17/17 (iteration_7).
+- Nota: drag & drop sostituito da controlli freccia su/giù per affidabilità cross-web/native.
