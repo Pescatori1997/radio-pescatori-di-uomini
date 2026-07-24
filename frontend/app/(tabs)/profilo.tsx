@@ -32,10 +32,9 @@ export default function Profilo() {
 
   const menu = [
     ...(isAdmin ? [{ icon: "shield-checkmark-outline", label: "Pannello Amministratore", route: "/admin" }] : []),
-    { icon: "boat-outline", label: "L'Equipaggio", route: "/equipaggio" },
+    { icon: "boat-outline", label: "Il nostro Team", route: "/equipaggio" },
     { icon: "heart-outline", label: "Richieste di Preghiera", route: "/prayer" },
-    { icon: "chatbubbles-outline", label: "Messaggi e Testimonianze", route: "/messages" },
-    { icon: "storefront-outline", label: "Merchandising", route: "/merch" },
+    { icon: "bag-handle-outline", label: "Merchandising", route: "/merch" },
     { icon: "information-circle-outline", label: "Chi Siamo", route: "/about" },
     { icon: "gift-outline", label: "Sostieni il progetto", route: "/donate" },
     { icon: "mail-outline", label: "Contatti", route: "/contact" },
