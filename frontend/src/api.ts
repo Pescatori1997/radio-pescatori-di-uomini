@@ -58,4 +58,23 @@ export const api = {
   toggleFavorite: (id: string) => request(`/me/favorites/${id}`, { method: "POST" }, true),
   history: () => request("/me/history", {}, true),
   addHistory: (id: string) => request(`/me/history/${id}`, { method: "POST" }, true),
+  // admin
+  adminMe: () => request("/admin/me", {}, true),
+  adminStats: () => request("/admin/stats", {}, true),
+  adminApplications: (status?: string, sort?: string, search?: string) => {
+    const q = new URLSearchParams();
+    if (status) q.set("status", status);
+    if (sort) q.set("sort", sort);
+    if (search) q.set("search", search);
+    return request(`/admin/applications?${q.toString()}`, {}, true);
+  },
+  adminApplication: (id: string) => request(`/admin/applications/${id}`, {}, true),
+  adminEditApplication: (id: string, body: any) => request(`/admin/applications/${id}`, { method: "PATCH", body: JSON.stringify(body) }, true),
+  adminApprove: (id: string) => request(`/admin/applications/${id}/approve`, { method: "POST" }, true),
+  adminReject: (id: string) => request(`/admin/applications/${id}/reject`, { method: "POST" }, true),
+  adminDeleteApplication: (id: string) => request(`/admin/applications/${id}`, { method: "DELETE" }, true),
+  adminCrew: () => request("/admin/crew", {}, true),
+  adminEditCrew: (id: string, body: any) => request(`/admin/crew/${id}`, { method: "PATCH", body: JSON.stringify(body) }, true),
+  adminCrewPortrait: (id: string, portrait: string) => request(`/admin/crew/${id}/portrait`, { method: "POST", body: JSON.stringify({ portrait }) }, true),
+  adminDeleteCrew: (id: string) => request(`/admin/crew/${id}`, { method: "DELETE" }, true),
 };

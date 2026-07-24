@@ -1,0 +1,30 @@
+{
+  "summary": "Admin RBAC + approval workflow backend verified end-to-end. 58/58 pytest tests pass (25 new admin tests + 33 regression). Verified: 401 without token & 403 for non-admin users across all 12 /api/admin/* endpoints; GET /admin/me returns is_admin:true for ADMINTESTTOKEN123; /admin/stats returns integer counts for the 6 required keys; /admin/applications supports status (pending/approved/rejected), sort=newest|oldest, and search filters; full approve workflow (create ZZTEST app -> POST approve -> status=approved with crew_id -> public GET /api/crew contains new member -> PATCH application syncs to public crew (role & mission verified) -> PATCH /admin/crew edits directly (ministry) -> POST /admin/crew/{id}/portrait sets portrait -> DELETE application removes both application & linked public crew member); reject workflow leaves no public member, DELETE cleans up. Public endpoints /crew, /live/status, /podcasts, /news, /programs still return 200. Data safety guardrails asserted: Luigi Volpe (crew_luigi_volpe) still published & poster; Concetta Chiofro application still pending, unmodified. All ZZTEST_ data created was cleaned up (verified via direct MongoDB inspection: 0 ZZTEST applications, 0 ZZTEST crew members remain). NOTE: The admin session token ADMINTESTTOKEN123 was NOT present in user_sessions on entry — conftest.py fixture upserts it (7-day expiry) tied to existing admin user user_admin001; main agent should ensure a startup seed or ops step creates this session in production/preview environments.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": [], "react_native_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_admin.py",
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml",
+    "/app/test_reports/pytest/admin_results.xml"
+  ],
+  "action_items": [
+    "Confirm the admin session seed (ADMINTESTTOKEN123 in user_sessions) is created by the intended mechanism — on first run it was missing; the test conftest upserted it. If this token is meant to be seeded automatically at backend startup for testing, add that logic to server.py startup event, otherwise document how it should be created for QA."
+  ],
+  "critical_code_review_comments": [
+    "server.py:363 ADMIN_EMAILS parsed once at import time from os.environ — restart backend after any ADMIN_EMAILS change (expected).",
+    "server.py:477 admin PATCH application uses model_dump(exclude_unset=True) — good, avoids clobbering unset fields.",
+    "server.py:495 crew sync on PATCH remaps only whitelisted fields to public crew — good separation.",
+    "server.py:522 admin_reject deletes any linked crew doc — matches spec (rejected never public).",
+    "server.py:531 admin_delete_application also removes linked crew — matches spec.",
+    "get_current_user (server.py:98) correctly returns 401 for missing token, invalid, expired, or missing user; require_admin returns 403 for authenticated non-admin — verified via parametrized tests."
+  ],
+  "updated_files": ["/app/backend/tests/test_admin.py", "/app/backend/tests/conftest.py"],
+  "success_rate": {"backend": "100% (58/58)", "frontend": "not tested (per request)"},
+  "seed_data_creation": "conftest.py autouse session-scoped fixture upserts user_sessions doc {session_token: ADMINTESTTOKEN123, user_id: user_admin001, expires_at: +7d}. Tests created transient ZZTEST_ applications (Approve + Reject + one linked crew member) and cleaned them all up. Final DB inspection: 0 ZZTEST applications, 0 ZZTEST crew, Luigi Volpe intact, Concetta Chiofro still pending.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Admin token: ADMINTESTTOKEN123 in user_sessions (upserted by conftest.py). All /api/admin/* endpoints require Bearer token with email in ADMIN_EMAILS env (currently pescatoridiuomini@outlook.it). 401 unauth, 403 non-admin. Approve flow: application.crew_id set + public /api/crew has new member. PATCH admin/applications syncs mapped fields (role, mission, bio, ministry, programs, verse, verse_ref, testimony, portrait, display_name->name) to linked crew. DELETE admin/applications also deletes linked public crew member. Reject removes any prior linked crew. When creating apps via POST /api/crew/applications, backend LOWERCASES email — assert against email.lower() when searching. DO NOT touch crew_luigi_volpe or Concetta Chiofro's application.",
+  "rca_of_issue": "N/A - no bug found. Initial test failure was in my own filter (compared with original-case email; backend lowercases). Fixed by comparing with email.lower()."
+}

@@ -1,0 +1,112 @@
+import React, { useState } from "react";
+import { View, Text, StyleSheet, Pressable, ScrollView, Dimensions } from "react-native";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useRouter, usePathname } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated, { SlideInLeft } from "react-native-reanimated";
+import { colors, spacing, radius } from "@/src/theme";
+
+const NAV = [
+  { key: "dash", label: "Dashboard", icon: "view-dashboard", route: "/admin" },
+  { key: "team", label: "Team", icon: "anchor", route: "/admin/team" },
+  { key: "podcast", label: "Podcast", icon: "microphone", route: "/admin/soon?s=Podcast" },
+  { key: "news", label: "News", icon: "newspaper-variant", route: "/admin/soon?s=News" },
+  { key: "schedule", label: "Palinsesto", icon: "calendar-month", route: "/admin/soon?s=Palinsesto" },
+  { key: "radio", label: "Radio", icon: "radio", route: "/admin/soon?s=Radio" },
+  { key: "prayer", label: "Richieste di Preghiera", icon: "hands-pray", route: "/admin/soon?s=Preghiere" },
+  { key: "users", label: "Utenti", icon: "account-group", route: "/admin/soon?s=Utenti" },
+  { key: "settings", label: "Impostazioni", icon: "cog", route: "/admin/soon?s=Impostazioni" },
+];
+
+const ADMIN = {
+  bg: "#0A1128", surface: "#16213E", card: "#1E293B", border: "#243049",
+  text: "#FFFFFF", muted: "#94A3B8", accent: colors.brandPrimary,
+};
+
+export default function AdminShell({ title, activeKey, children }: { title: string; activeKey: string; children: React.ReactNode }) {
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const wide = Dimensions.get("window").width >= 900;
+
+  const Sidebar = ({ onNav }: { onNav?: () => void }) => (
+    <View style={[styles.sidebar, { paddingTop: wide ? insets.top + spacing.lg : spacing.lg }]}>
+      <View style={styles.brand}>
+        <View style={styles.brandBadge}><MaterialCommunityIcons name="anchor" size={20} color={colors.white} /></View>
+        <View>
+          <Text style={styles.brandName}>Admin Panel</Text>
+          <Text style={styles.brandSub}>Pescatori di Uomini</Text>
+        </View>
+      </View>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {NAV.map((n) => {
+          const active = n.key === activeKey;
+          return (
+            <Pressable
+              key={n.key}
+              testID={`admin-nav-${n.key}`}
+              style={[styles.navItem, active && styles.navItemActive]}
+              onPress={() => { onNav?.(); router.push(n.route as any); }}
+            >
+              <MaterialCommunityIcons name={n.icon as any} size={20} color={active ? colors.white : ADMIN.muted} />
+              <Text style={[styles.navLabel, active && styles.navLabelActive]}>{n.label}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+      <Pressable testID="admin-exit" style={styles.exit} onPress={() => { onNav?.(); router.replace("/(tabs)"); }}>
+        <Ionicons name="exit-outline" size={18} color={ADMIN.muted} />
+        <Text style={styles.exitText}>Torna all'app</Text>
+      </Pressable>
+    </View>
+  );
+
+  return (
+    <View style={[styles.root, { flexDirection: wide ? "row" : "column" }]}>
+      {wide && <Sidebar />}
+      <View style={{ flex: 1 }}>
+        <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
+          {!wide && (
+            <Pressable testID="admin-menu" onPress={() => setOpen(true)} hitSlop={10} style={styles.menuBtn}>
+              <Ionicons name="menu" size={24} color={colors.white} />
+            </Pressable>
+          )}
+          <Text style={styles.headerTitle}>{title}</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <View style={{ flex: 1 }}>{children}</View>
+      </View>
+
+      {!wide && open && (
+        <View style={styles.overlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpen(false)} />
+          <Animated.View entering={SlideInLeft.duration(220)} style={styles.drawer}>
+            <Sidebar onNav={() => setOpen(false)} />
+          </Animated.View>
+        </View>
+      )}
+    </View>
+  );
+}
+
+export { ADMIN };
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: ADMIN.bg },
+  sidebar: { width: 260, backgroundColor: ADMIN.surface, paddingHorizontal: spacing.md, paddingBottom: spacing.lg, borderRightWidth: 1, borderRightColor: ADMIN.border, flex: 1 },
+  brand: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: spacing.sm, marginBottom: spacing.xl },
+  brandBadge: { width: 40, height: 40, borderRadius: 12, backgroundColor: ADMIN.accent, alignItems: "center", justifyContent: "center" },
+  brandName: { color: colors.white, fontSize: 16, fontWeight: "800" },
+  brandSub: { color: ADMIN.muted, fontSize: 12 },
+  navItem: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.md, paddingHorizontal: spacing.md, borderRadius: radius.md, marginBottom: 4 },
+  navItemActive: { backgroundColor: ADMIN.accent },
+  navLabel: { color: ADMIN.muted, fontSize: 14, fontWeight: "600" },
+  navLabelActive: { color: colors.white, fontWeight: "800" },
+  exit: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.md, marginTop: spacing.sm },
+  exitText: { color: ADMIN.muted, fontSize: 14, fontWeight: "600" },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingBottom: spacing.md, backgroundColor: ADMIN.bg, borderBottomWidth: 1, borderBottomColor: ADMIN.border },
+  menuBtn: { width: 24 },
+  headerTitle: { color: colors.white, fontSize: 20, fontWeight: "800" },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.5)", flexDirection: "row" },
+  drawer: { width: 280, height: "100%" },
+});

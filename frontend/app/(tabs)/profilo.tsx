@@ -16,17 +16,22 @@ export default function Profilo() {
   const { playTrack } = usePlayer();
   const [favs, setFavs] = useState<any[]>([]);
   const [history, setHistory] = useState<any[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       if (user) {
         api.favorites().then(setFavs).catch(() => {});
         api.history().then(setHistory).catch(() => {});
+        api.adminMe().then(() => setIsAdmin(true)).catch(() => setIsAdmin(false));
+      } else {
+        setIsAdmin(false);
       }
     }, [user])
   );
 
   const menu = [
+    ...(isAdmin ? [{ icon: "shield-checkmark-outline", label: "Pannello Amministratore", route: "/admin" }] : []),
     { icon: "boat-outline", label: "L'Equipaggio", route: "/equipaggio" },
     { icon: "heart-outline", label: "Richieste di Preghiera", route: "/prayer" },
     { icon: "chatbubbles-outline", label: "Messaggi e Testimonianze", route: "/messages" },

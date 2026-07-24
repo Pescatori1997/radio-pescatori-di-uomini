@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Header
+from fastapi import FastAPI, APIRouter, HTTPException, Header, Depends
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -357,6 +357,210 @@ async def get_history(authorization: Optional[str] = Header(None)):
     order = {pid: i for i, pid in enumerate(ids)}
     docs.sort(key=lambda d: order.get(d["id"], 999))
     return docs
+
+
+# ---------------- Admin (RBAC) ----------------
+ADMIN_EMAILS = [e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()]
+
+
+async def require_admin(authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    if (user.get("email") or "").lower() not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Accesso negato: non sei un amministratore")
+    return user
+
+
+class ApplicationEdit(BaseModel):
+    name: Optional[str] = None
+    surname: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    city: Optional[str] = None
+    age: Optional[int] = None
+    desired_role: Optional[str] = None
+    testimony: Optional[str] = None
+    motivation: Optional[str] = None
+    experience: Optional[str] = None
+    portrait: Optional[str] = None
+    # crew-style overrides used at approval
+    display_name: Optional[str] = None
+    role: Optional[str] = None
+    mission: Optional[str] = None
+    bio: Optional[str] = None
+    ministry: Optional[str] = None
+    programs: Optional[List[str]] = None
+    verse: Optional[str] = None
+    verse_ref: Optional[str] = None
+
+
+class CrewEdit(BaseModel):
+    name: Optional[str] = None
+    role: Optional[str] = None
+    mission: Optional[str] = None
+    bio: Optional[str] = None
+    ministry: Optional[str] = None
+    programs: Optional[List[str]] = None
+    verse: Optional[str] = None
+    verse_ref: Optional[str] = None
+    portrait: Optional[str] = None
+    published: Optional[bool] = None
+
+
+class PortraitIn(BaseModel):
+    portrait: str
+
+
+def build_crew_from_app(a: dict, order: int) -> dict:
+    return {
+        "id": new_id("crew"),
+        "name": a.get("display_name") or f"{a.get('name','')} {a.get('surname','')}".strip(),
+        "role": a.get("role") or a.get("desired_role") or "Collaboratore",
+        "mission": a.get("mission") or (a.get("motivation") or "")[:140],
+        "bio": a.get("bio") or a.get("experience") or "",
+        "ministry": a.get("ministry") or "",
+        "programs": a.get("programs") or [],
+        "verse": a.get("verse") or "",
+        "verse_ref": a.get("verse_ref") or "",
+        "testimony": a.get("testimony") or "",
+        "portrait_key": None,
+        "portrait": a.get("portrait"),
+        "poster": False,
+        "order": order,
+        "published": True,
+    }
+
+
+@api_router.get("/admin/me")
+async def admin_me(admin=Depends(require_admin)):
+    return {"is_admin": True, "user": {"email": admin.get("email"), "name": admin.get("name"), "picture": admin.get("picture")}}
+
+
+@api_router.get("/admin/stats")
+async def admin_stats(admin=Depends(require_admin)):
+    return {
+        "pending_applications": await db.crew_applications.count_documents({"status": "pending"}),
+        "approved_members": await db.crew.count_documents({"published": True}),
+        "total_users": await db.users.count_documents({}),
+        "prayer_requests": await db.prayer_requests.count_documents({}),
+        "news": await db.news.count_documents({}),
+        "podcasts": await db.podcasts.count_documents({}),
+    }
+
+
+@api_router.get("/admin/applications")
+async def admin_applications(status: Optional[str] = None, sort: Optional[str] = "newest",
+                             search: Optional[str] = None, admin=Depends(require_admin)):
+    query = {}
+    if status and status in ("pending", "approved", "rejected"):
+        query["status"] = status
+    if search:
+        query["$or"] = [
+            {"name": {"$regex": search, "$options": "i"}},
+            {"surname": {"$regex": search, "$options": "i"}},
+            {"email": {"$regex": search, "$options": "i"}},
+        ]
+    direction = 1 if sort == "oldest" else -1
+    docs = await db.crew_applications.find(query, {"_id": 0}).sort("created_at", direction).to_list(500)
+    return docs
+
+
+@api_router.get("/admin/applications/{app_id}")
+async def admin_application(app_id: str, admin=Depends(require_admin)):
+    doc = await db.crew_applications.find_one({"id": app_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Candidatura non trovata")
+    return doc
+
+
+@api_router.patch("/admin/applications/{app_id}")
+async def admin_edit_application(app_id: str, body: ApplicationEdit, admin=Depends(require_admin)):
+    updates = {k: v for k, v in body.model_dump(exclude_unset=True).items()}
+    if not updates:
+        return {"ok": True}
+    await db.crew_applications.update_one({"id": app_id}, {"$set": updates})
+    # keep public profile in sync if already approved
+    doc = await db.crew_applications.find_one({"id": app_id})
+    if doc and doc.get("crew_id"):
+        crew_updates = {}
+        mapping = {"role": "role", "mission": "mission", "bio": "bio", "ministry": "ministry",
+                   "programs": "programs", "verse": "verse", "verse_ref": "verse_ref",
+                   "testimony": "testimony", "portrait": "portrait", "display_name": "name"}
+        for src, dst in mapping.items():
+            if src in updates:
+                crew_updates[dst] = updates[src]
+        if "portrait" in crew_updates:
+            crew_updates["portrait_key"] = None
+            crew_updates["poster"] = False
+        if crew_updates:
+            await db.crew.update_one({"id": doc["crew_id"]}, {"$set": crew_updates})
+    return {"ok": True}
+
+
+@api_router.post("/admin/applications/{app_id}/approve")
+async def admin_approve(app_id: str, admin=Depends(require_admin)):
+    a = await db.crew_applications.find_one({"id": app_id})
+    if not a:
+        raise HTTPException(status_code=404, detail="Candidatura non trovata")
+    if a.get("crew_id"):
+        await db.crew.update_one({"id": a["crew_id"]}, {"$set": {"published": True}})
+        crew_id = a["crew_id"]
+    else:
+        order = await db.crew.count_documents({})
+        member = build_crew_from_app(a, order)
+        await db.crew.insert_one(dict(member))
+        crew_id = member["id"]
+    await db.crew_applications.update_one({"id": app_id}, {"$set": {"status": "approved", "crew_id": crew_id}})
+    return {"ok": True, "crew_id": crew_id}
+
+
+@api_router.post("/admin/applications/{app_id}/reject")
+async def admin_reject(app_id: str, admin=Depends(require_admin)):
+    a = await db.crew_applications.find_one({"id": app_id})
+    if not a:
+        raise HTTPException(status_code=404, detail="Candidatura non trovata")
+    if a.get("crew_id"):
+        await db.crew.delete_one({"id": a["crew_id"]})
+    await db.crew_applications.update_one({"id": app_id}, {"$set": {"status": "rejected", "crew_id": None}})
+    return {"ok": True}
+
+
+@api_router.delete("/admin/applications/{app_id}")
+async def admin_delete_application(app_id: str, admin=Depends(require_admin)):
+    a = await db.crew_applications.find_one({"id": app_id})
+    if a and a.get("crew_id"):
+        await db.crew.delete_one({"id": a["crew_id"]})
+    await db.crew_applications.delete_one({"id": app_id})
+    return {"ok": True}
+
+
+@api_router.get("/admin/crew")
+async def admin_crew(admin=Depends(require_admin)):
+    docs = await db.crew.find({}, {"_id": 0}).sort("order", 1).to_list(500)
+    return docs
+
+
+@api_router.patch("/admin/crew/{member_id}")
+async def admin_edit_crew(member_id: str, body: CrewEdit, admin=Depends(require_admin)):
+    updates = {k: v for k, v in body.model_dump(exclude_unset=True).items()}
+    if "portrait" in updates:
+        updates["portrait_key"] = None
+        updates["poster"] = False
+    if updates:
+        await db.crew.update_one({"id": member_id}, {"$set": updates})
+    return {"ok": True}
+
+
+@api_router.post("/admin/crew/{member_id}/portrait")
+async def admin_crew_portrait(member_id: str, body: PortraitIn, admin=Depends(require_admin)):
+    await db.crew.update_one({"id": member_id}, {"$set": {"portrait": body.portrait, "portrait_key": None, "poster": False}})
+    return {"ok": True}
+
+
+@api_router.delete("/admin/crew/{member_id}")
+async def admin_delete_crew(member_id: str, admin=Depends(require_admin)):
+    await db.crew.delete_one({"id": member_id})
+    await db.crew_applications.update_many({"crew_id": member_id}, {"$set": {"crew_id": None}})
+    return {"ok": True}
 
 
 app.include_router(api_router)
