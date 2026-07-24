@@ -7,11 +7,11 @@ import { ADMIN } from "@/src/components/AdminShell";
 import PressableScale from "@/src/components/PressableScale";
 import { colors, spacing, radius } from "@/src/theme";
 
-export function AInput({ label, value, onChangeText, multiline, keyboardType, placeholder }: any) {
+export function AInput({ label, value, onChangeText, multiline, keyboardType, placeholder, testID }: any) {
   return (
     <View style={{ marginBottom: spacing.md }}>
       <Text style={styles.label}>{label}</Text>
-      <TextInput value={value ?? ""} onChangeText={onChangeText} multiline={multiline} keyboardType={keyboardType}
+      <TextInput testID={testID} value={value ?? ""} onChangeText={onChangeText} multiline={multiline} keyboardType={keyboardType}
         placeholder={placeholder} placeholderTextColor={ADMIN.muted}
         style={[styles.input, multiline && { height: 110, textAlignVertical: "top" }]} />
     </View>
