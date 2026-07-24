@@ -65,3 +65,16 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
   - Admin `/admin/products`: CRUD completo, upload multi-immagine, categoria/prezzo/colori/taglie/disponibilità (available|coming_soon|sold_out), Featured, mostra/nascondi, riordino (frecce su/giù → order) — tutto gestibile senza toccare il codice.
   - Backend: `products` collection; public GET /products(+search/category/categories/{id}), admin CRUD (+201, validazione availability) + /admin/products/reorder. Tested 17/17 (iteration_7).
 - Nota: drag & drop sostituito da controlli freccia su/giù per affidabilità cross-web/native.
+
+## Implemented (2026-07-24, session 4 — RBAC Authentication)
+- **Sistema RBAC completo** con 3 ruoli: `administrator` (auto-assegnato dalle email in `ADMIN_EMAILS`), `collaborator` (permessi per-sezione), `listener` (default). Modalità **Ospite** (sola lettura) per navigazione senza account.
+- **Backend**: auth endpoints (register/login/session/me) salvano e restituiscono `role`+`permissions`; `get_current_user` normalizza il ruolo (admin allowlist sempre prioritaria). Nuovo `PUT /api/admin/users/{uid}/role` (admin-only) per assegnare Collaboratore + permessi. `GET /api/admin/me` ora ammette anche i collaboratori (con permessi). Endpoint contenuti admin (podcasts/news/merch/schedule/radio/prayers/messages) protetti con `require_perm(section)`; team/utenti/impostazioni/dashboard restano admin-only.
+- **Frontend**: schermata gate `/welcome` (login classico + Google + "Continua come Ospite") mostrata al primo avvio finché l'utente non accede o sceglie Ospite (gate in `_layout.tsx`). Flag ospite persistito in `pdu_guest_mode`. Restrizioni Ospite: prompt di login su Preghiere, Messaggi, e preferiti podcast. AuthContext esteso con `role/permissions/guestChosen/isAdmin/isCollaborator/can()`.
+- **Admin > Utenti**: badge ruolo + modale per assegnare Collaboratore e selezionare le sezioni gestibili. Sidebar del pannello filtrata per permessi del collaboratore.
+- Tested: backend 23/23 (iteration_8), frontend 6/6 flussi. 100% pass. Nessuna regressione.
+
+## Remaining Backlog after session 4 (prioritized)
+- P0/tech-debt: refactor `server.py` (~1375 righe) in APIRouter modulari (auth, team, podcast, news, radio, schedule, prayers, messages, merch, users, settings).
+- P1: Donazioni reali con Stripe (test mode).
+- P2: URL streaming radio reale (configurabile da Admin > Radio, in attesa URL AzuraCast).
+- P3: migrare props deprecate RN Web (`shadow*` → `boxShadow`, `pointerEvents`).

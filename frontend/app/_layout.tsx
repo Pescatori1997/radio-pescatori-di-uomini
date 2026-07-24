@@ -27,9 +27,12 @@ function AuthGate() {
 
   useEffect(() => {
     if (loading) return;
-    const inWelcome = segments[0] === "welcome";
+    const root = segments[0] as string | undefined;
+    const inWelcome = root === "welcome";
+    // Public routes reachable before deciding (welcome cards + auth form + in-app login modal).
+    const inPublic = inWelcome || root === "auth" || root === "login";
     const decided = !!user || guestChosen;
-    if (!decided && !inWelcome) {
+    if (!decided && !inPublic) {
       router.replace("/welcome");
     } else if (decided && inWelcome) {
       router.replace("/(tabs)");
@@ -59,6 +62,7 @@ export default function RootLayout() {
             <AuthGate />
             <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#FFFFFF" } }}>
               <Stack.Screen name="welcome" />
+              <Stack.Screen name="auth" />
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="player" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
               <Stack.Screen name="login" options={{ presentation: "modal" }} />
