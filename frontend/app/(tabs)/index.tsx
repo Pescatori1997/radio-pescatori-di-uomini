@@ -14,6 +14,7 @@ import PressableScale from "@/src/components/PressableScale";
 import { colors, spacing, radius } from "@/src/theme";
 
 const LOGO = require("@/assets/images/logo.png");
+const STUDIO = require("@/assets/images/studio.png");
 
 export default function Home() {
   const insets = useSafeAreaInsets();
@@ -77,8 +78,15 @@ export default function Home() {
     >
       {/* HERO */}
       <View style={[styles.hero, { paddingTop: insets.top + spacing.lg }]}>
-        <Image source={{ uri: live?.artwork }} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={2} />
-        <LinearGradient colors={["rgba(10,17,40,0.75)", "rgba(10,17,40,0.97)"]} style={StyleSheet.absoluteFill} />
+        <Image
+          source={STUDIO}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          contentPosition="top"
+          blurRadius={1}
+        />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(10,17,40,0.65)" }]} />
+        <LinearGradient colors={["rgba(10,17,40,0.35)", "rgba(10,17,40,0.92)"]} style={StyleSheet.absoluteFill} />
         <Animated.View entering={FadeInDown.duration(500)} style={styles.brandRow}>
           <View style={styles.logoBadge}>
             <Image source={LOGO} style={styles.logoImg} contentFit="contain" />
