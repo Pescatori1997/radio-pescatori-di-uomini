@@ -1,0 +1,40 @@
+# PRD — Pescatori di Uomini (Radio Evangelica)
+
+## Problem Statement
+Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini" launching in September. Modern, elegant, minimal style; navy/white/light-blue. Spotify/YouTube-Music fluidity. Sections: Home, Radio Player, Podcast, News, Palinsesto, Prayer Requests, Messages, Donations, Merchandising, About, Contact, Notifications, Account, Admin panel.
+
+## User Choices
+- Phase 1: Home + Player + Podcast + News + Palinsesto + Prayer + About/Contact + Account
+- Auth: Emergent Google Auth + email/password
+- Donations/Merch: informational only (no real payments yet)
+- Push notifications: deferred
+- Radio stream: demo Icecast placeholder (user will provide real URL later)
+
+## Architecture
+- Frontend: Expo SDK 54, expo-router (tabs + modals), expo-audio (persistent player context), expo-image, expo-blur, expo-linear-gradient, @gorhom/bottom-sheet installed.
+- Backend: FastAPI + MongoDB (motor), all routes under /api. Session-token auth (7d) + Emergent Google OAuth session exchange.
+- Persistent global PlayerProvider + AuthProvider in root layout; floating BlurView mini-player above bottom tabs.
+
+## Implemented (2026-07-24)
+- Home: hero + logo/slogan, LIVE indicator (green/red), Ascolta la Diretta, now-playing, horizontal podcasts/news, weekly programs, prayer CTA.
+- Player: full-screen modal (big artwork, play/pause, volume bar, seek bar for podcasts, LIVE tag, share) + persistent mini-player.
+- Podcast: search + category chips filter, 2-col grid, tap-to-play.
+- News: card feed + detail screen with share.
+- Palinsesto: day-chip selector, program rows (name/time/host/description).
+- Prayer Requests: form with anonymous toggle -> backend.
+- Messages/Testimonies: text form (voice deferred).
+- Account: email register/login + Google OAuth, profile with favorites & history, menu.
+- About, Contact (channels + form), Donate (informational).
+- Backend: live/status, podcasts(+search/category/categories), news(+detail), programs, prayer-requests, messages, contact, auth(register/login/me/logout/session), favorites toggle/list/ids, history add/list. Seed data on startup.
+- Tested: 26/26 backend endpoints pass; frontend flows verified.
+
+## Backlog (prioritized)
+- P0: Real radio stream URL + now-playing metadata polling; favorite/download buttons on podcast cards; connect history tracking on play.
+- P1: Donations via Stripe; Merchandising shop; Admin dashboard (podcasts/news/programs/messages/prayer/users); Notifications (Emergent push) on live/podcast/news.
+- P1: Podcast download for offline; Apple Sign-In.
+- P2: Voice messages (recording), search across news, tablet/desktop responsive polish, dark mode.
+
+## Next Tasks
+1. Wire real stream URL + metadata when provided.
+2. Add favorite/download actions to podcast cards + play-history recording.
+3. Build Admin panel + Merchandising + Stripe donations.
