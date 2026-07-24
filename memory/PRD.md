@@ -78,3 +78,9 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - P1: Donazioni reali con Stripe (test mode).
 - P2: URL streaming radio reale (configurabile da Admin > Radio, in attesa URL AzuraCast).
 - P3: migrare props deprecate RN Web (`shadow*` → `boxShadow`, `pointerEvents`).
+
+## Implemented (2026-07-24, session 5 — User & Roles Management)
+- **Welcome**: rimossa la card "Amministrazione" (3 card: Accedi/Registrati/Ospite). Dopo il login di un Amministratore, redirect automatico a `/admin` (gate in `_layout.tsx`).
+- **Backend**: campo `status` (active|suspended) + `last_login`; suspended bloccato al login/sessione. `GET /admin/users` con filtri role/status e sort. Nuovi endpoint: `PUT /admin/users/{uid}/status`, inviti (`POST/GET/DELETE /admin/invitations`, pubblici `GET /invitations/{token}` + `POST /invitations/{token}/accept`), `GET /admin/activity`. Email inviti via Emergent Resend (best-effort; `EMERGENT_EMAIL_KEY` vuota in dev → link mostrato). Audit `log_activity()` su ruoli/stato/eliminazione utenti e su create/edit contenuti. PERM_SECTIONS = podcasts,news,merch,schedule,prayers,messages,team,radio; endpoint Team ora `require_perm("team")`.
+- **Frontend**: `/admin/users` "Gestione Utenti" (tabella responsive foto/nome/email/ruolo/stato/ultimo accesso/registrato + menu azioni kebab, ricerca, filtri ruolo/stato, ordinamento, modale permessi con toggle, modale invito + inviti pendenti copy/revoke). `/admin/activity` registro attività per giorno. `/invite` accettazione pubblica. AuthContext: `acceptInvite`. AdminShell: voce "Registro Attività".
+- Tested: backend 17/17 (test_rbac_v2), frontend 14/14 flussi — 100% pass. Nessuna regressione.
