@@ -40,19 +40,11 @@ const CARDS: Card[] = [
   },
   {
     key: "guest",
-    title: "Ospite",
-    subtitle: "Esplora senza account",
+    title: "Continua come Ospite",
+    subtitle: "Esplora la radio senza account",
     icon: "eye-outline",
     colors: ["#334155", "#475569"],
     onPress: (_nav, guest) => guest(),
-  },
-  {
-    key: "admin",
-    title: "Amministrazione",
-    subtitle: "Area riservata al team",
-    icon: "shield-checkmark-outline",
-    colors: ["#7C3AED", "#A855F7"],
-    onPress: (nav) => nav.push("/auth?mode=admin"),
   },
 ];
 
@@ -78,9 +70,9 @@ export default function Welcome() {
 
         <View style={styles.grid}>
           {CARDS.map((c, i) => (
-            <Animated.View key={c.key} entering={FadeInDown.delay(i * 70).springify().damping(16)} style={styles.cardWrap}>
+            <Animated.View key={c.key} entering={FadeInDown.delay(i * 70).springify().damping(16)} style={[styles.cardWrap, c.key === "guest" && styles.cardWrapFull]}>
               <PressableScale testID={`welcome-card-${c.key}`} onPress={() => c.onPress(router, continueAsGuest)} style={styles.cardPress}>
-                <LinearGradient colors={c.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.card}>
+                <LinearGradient colors={c.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.card, c.key === "guest" && styles.cardFull]}>
                   <View style={styles.cardIcon}><Ionicons name={c.icon} size={26} color={colors.white} /></View>
                   <View>
                     <Text style={styles.cardTitle}>{c.title}</Text>
@@ -109,8 +101,10 @@ const styles = StyleSheet.create({
   promptSub: { fontSize: 15, color: "rgba(255,255,255,0.6)", marginTop: 4, marginBottom: spacing.xl },
   grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
   cardWrap: { width: "48.5%", marginBottom: spacing.md },
+  cardWrapFull: { width: "100%" },
   cardPress: { borderRadius: radius.lg },
   card: { height: 150, borderRadius: radius.lg, padding: spacing.lg, justifyContent: "space-between" },
+  cardFull: { height: 108, flexDirection: "row", alignItems: "center", justifyContent: "flex-start", gap: spacing.md },
   cardIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" },
   cardTitle: { fontSize: 18, fontWeight: "800", color: colors.white },
   cardSub: { fontSize: 12, color: "rgba(255,255,255,0.82)", marginTop: 2 },

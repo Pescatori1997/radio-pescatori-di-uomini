@@ -40,6 +40,7 @@ type AuthState = {
   loginGoogle: () => Promise<void>;
   loginEmail: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
+  acceptInvite: (token: string, name: string, password: string) => Promise<User>;
   logout: () => Promise<void>;
 };
 
@@ -158,6 +159,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await storage.removeItem(GUEST_KEY);
   };
 
+  const acceptInvite = async (token: string, name: string, password: string) => {
+    const res = await api.acceptInvitation(token, { name, password });
+    await setToken(res.token);
+    setUser(res.user);
+    setGuestChosen(false);
+    await storage.removeItem(GUEST_KEY);
+    return res.user as User;
+  };
+
   const logout = async () => {
     try {
       await api.logout();
@@ -185,6 +195,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loginGoogle,
         loginEmail,
         register,
+        acceptInvite,
         logout,
       }}
     >

@@ -127,6 +127,26 @@ export const api = {
   adminDeleteUser: (id: string) => request(`/admin/users/${id}`, { method: "DELETE" }, true),
   adminSetUserRole: (id: string, body: { role: string; permissions?: string[] }) =>
     request(`/admin/users/${id}/role`, { method: "PUT", body: JSON.stringify(body) }, true),
+  adminUsersFiltered: (params: { search?: string; role?: string; status?: string; sort?: string }) => {
+    const q = new URLSearchParams();
+    if (params.search) q.set("search", params.search);
+    if (params.role) q.set("role", params.role);
+    if (params.status) q.set("status", params.status);
+    if (params.sort) q.set("sort", params.sort);
+    return request(`/admin/users?${q.toString()}`, {}, true);
+  },
+  adminSetUserStatus: (id: string, status: string) =>
+    request(`/admin/users/${id}/status`, { method: "PUT", body: JSON.stringify({ status }) }, true),
+  // invitations
+  adminInvitations: () => request("/admin/invitations", {}, true),
+  adminCreateInvitation: (body: { email: string; role: string; permissions?: string[] }) =>
+    request("/admin/invitations", { method: "POST", body: JSON.stringify(body) }, true),
+  adminDeleteInvitation: (id: string) => request(`/admin/invitations/${id}`, { method: "DELETE" }, true),
+  getInvitation: (token: string) => request(`/invitations/${token}`),
+  acceptInvitation: (token: string, body: { name: string; password: string }) =>
+    request(`/invitations/${token}/accept`, { method: "POST", body: JSON.stringify(body) }),
+  // activity log
+  adminActivity: (limit?: number) => request(`/admin/activity${limit ? `?limit=${limit}` : ""}`, {}, true),
   // admin programs
   adminPrograms: () => request("/admin/programs", {}, true),
   adminCreateProgram: (body: any) => request("/admin/programs", { method: "POST", body: JSON.stringify(body) }, true),

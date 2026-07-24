@@ -117,6 +117,10 @@ async def get_current_user(authorization: Optional[str]):
     elif not user.get("role"):
         user["role"] = ROLE_LISTENER
     user["permissions"] = user.get("permissions") or []
+    user["status"] = user.get("status") or "active"
+    # Suspended accounts are blocked (allowlist admins can never be suspended)
+    if user["status"] == "suspended" and email not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Account sospeso. Contatta l'amministrazione.")
     return user
 
 
@@ -138,7 +142,9 @@ async def register(body: RegisterIn):
         "provider": "email",
         "role": role,
         "permissions": [],
+        "status": "active",
         "created_at": now_utc(),
+        "last_login": now_utc(),
     })
     token = await create_session(uid)
     return {"token": token, "user": {"user_id": uid, "email": email_l, "name": body.name, "picture": None, "role": role, "permissions": []}}
@@ -149,8 +155,11 @@ async def login(body: LoginIn):
     user = await db.users.find_one({"email": body.email.lower()})
     if not user or not user.get("password") or not check_pw(body.password, user["password"]):
         raise HTTPException(status_code=401, detail="Credenziali non valide")
-    token = await create_session(user["user_id"])
     email_l = (user.get("email") or "").lower()
+    if (user.get("status") == "suspended") and email_l not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Account sospeso. Contatta l'amministrazione.")
+    token = await create_session(user["user_id"])
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"last_login": now_utc()}})
     role = ROLE_ADMIN if email_l in ADMIN_EMAILS else (user.get("role") or ROLE_LISTENER)
     return {"token": token, "user": {"user_id": user["user_id"], "email": user["email"], "name": user["name"], "picture": user.get("picture"), "role": role, "permissions": user.get("permissions") or []}}
 
@@ -175,6 +184,9 @@ async def auth_session(body: SessionIn):
             await db.users.update_one({"user_id": uid}, {"$set": {"role": ROLE_ADMIN}})
         role = ROLE_ADMIN if email in ADMIN_EMAILS else (user.get("role") or ROLE_LISTENER)
         permissions = user.get("permissions") or []
+        if (user.get("status") == "suspended") and email not in ADMIN_EMAILS:
+            raise HTTPException(status_code=403, detail="Account sospeso. Contatta l'amministrazione.")
+        await db.users.update_one({"user_id": uid}, {"$set": {"last_login": now_utc()}})
     else:
         uid = new_id("user")
         permissions = []
@@ -186,7 +198,9 @@ async def auth_session(body: SessionIn):
             "provider": "google",
             "role": role,
             "permissions": [],
+            "status": "active",
             "created_at": now_utc(),
+            "last_login": now_utc(),
         })
     token = await create_session(uid)
     return {"token": token, "user": {"user_id": uid, "email": email, "name": data.get("name"), "picture": data.get("picture"), "role": role, "permissions": permissions}}
@@ -428,7 +442,47 @@ async def get_history(authorization: Optional[str] = Header(None)):
 # ---------------- Admin (RBAC) ----------------
 ADMIN_EMAILS = [e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()]
 ROLE_ADMIN, ROLE_COLLAB, ROLE_LISTENER = "administrator", "collaborator", "listener"
-PERM_SECTIONS = ["podcasts", "news", "merch", "schedule", "prayers", "messages", "radio", "users"]
+# Sections that can be delegated to a collaborator (each maps to an existing admin area).
+PERM_SECTIONS = ["podcasts", "news", "merch", "schedule", "prayers", "messages", "team", "radio"]
+
+# ---------------- Email (Emergent-managed Resend) ----------------
+EMAIL_BASE_URL = "https://integrations.emergentagent.com"
+EMAIL_KEY = os.environ.get("EMERGENT_EMAIL_KEY", "")
+EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "Pescatori di Uomini")
+APP_BASE_URL = (os.environ.get("preview_endpoint") or os.environ.get("APP_BASE_URL") or "").rstrip("/")
+
+
+async def send_email(to_email: str, subject: str, html: str) -> bool:
+    """Best-effort transactional email. Returns True if accepted, False otherwise.
+    Never raises so invitation creation keeps working even without a provisioned key."""
+    if not EMAIL_KEY:
+        logger.info("EMERGENT_EMAIL_KEY not set; skipping email send to %s", to_email)
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=30) as hc:
+            resp = await hc.post(
+                f"{EMAIL_BASE_URL}/api/v1/email/send",
+                headers={"X-Email-Key": EMAIL_KEY},
+                json={"to": [to_email], "subject": subject, "html": html, "from_name": EMAIL_FROM_NAME},
+            )
+        resp.raise_for_status()
+        return True
+    except Exception as e:
+        logger.error("Email send failed: %s", e)
+        return False
+
+
+async def log_activity(actor: dict, action: str, target: str = "", meta: Optional[dict] = None):
+    """Append an entry to the audit trail. actor is the acting admin/collaborator user doc."""
+    await db.activity_log.insert_one({
+        "id": new_id("act"),
+        "actor_id": actor.get("user_id"),
+        "actor_name": actor.get("name") or actor.get("email"),
+        "action": action,
+        "target": target,
+        "meta": meta or {},
+        "created_at": now_utc(),
+    })
 
 
 def role_for_email(email: str) -> str:
@@ -549,7 +603,7 @@ async def admin_stats(admin=Depends(require_admin)):
 
 @api_router.get("/admin/applications")
 async def admin_applications(status: Optional[str] = None, sort: Optional[str] = "newest",
-                             search: Optional[str] = None, admin=Depends(require_admin)):
+                             search: Optional[str] = None, admin=Depends(require_perm("team"))):
     query = {}
     if status and status in ("pending", "approved", "rejected"):
         query["status"] = status
@@ -565,7 +619,7 @@ async def admin_applications(status: Optional[str] = None, sort: Optional[str] =
 
 
 @api_router.get("/admin/applications/{app_id}")
-async def admin_application(app_id: str, admin=Depends(require_admin)):
+async def admin_application(app_id: str, admin=Depends(require_perm("team"))):
     doc = await db.crew_applications.find_one({"id": app_id}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Candidatura non trovata")
@@ -573,7 +627,7 @@ async def admin_application(app_id: str, admin=Depends(require_admin)):
 
 
 @api_router.patch("/admin/applications/{app_id}")
-async def admin_edit_application(app_id: str, body: ApplicationEdit, admin=Depends(require_admin)):
+async def admin_edit_application(app_id: str, body: ApplicationEdit, admin=Depends(require_perm("team"))):
     updates = {k: v for k, v in body.model_dump(exclude_unset=True).items()}
     if not updates:
         return {"ok": True}
@@ -597,7 +651,7 @@ async def admin_edit_application(app_id: str, body: ApplicationEdit, admin=Depen
 
 
 @api_router.post("/admin/applications/{app_id}/approve")
-async def admin_approve(app_id: str, admin=Depends(require_admin)):
+async def admin_approve(app_id: str, admin=Depends(require_perm("team"))):
     a = await db.crew_applications.find_one({"id": app_id})
     if not a:
         raise HTTPException(status_code=404, detail="Candidatura non trovata")
@@ -614,7 +668,7 @@ async def admin_approve(app_id: str, admin=Depends(require_admin)):
 
 
 @api_router.post("/admin/applications/{app_id}/reject")
-async def admin_reject(app_id: str, admin=Depends(require_admin)):
+async def admin_reject(app_id: str, admin=Depends(require_perm("team"))):
     a = await db.crew_applications.find_one({"id": app_id})
     if not a:
         raise HTTPException(status_code=404, detail="Candidatura non trovata")
@@ -625,7 +679,7 @@ async def admin_reject(app_id: str, admin=Depends(require_admin)):
 
 
 @api_router.delete("/admin/applications/{app_id}")
-async def admin_delete_application(app_id: str, admin=Depends(require_admin)):
+async def admin_delete_application(app_id: str, admin=Depends(require_perm("team"))):
     a = await db.crew_applications.find_one({"id": app_id})
     if a and a.get("crew_id"):
         await db.crew.delete_one({"id": a["crew_id"]})
@@ -634,13 +688,13 @@ async def admin_delete_application(app_id: str, admin=Depends(require_admin)):
 
 
 @api_router.get("/admin/crew")
-async def admin_crew(admin=Depends(require_admin)):
+async def admin_crew(admin=Depends(require_perm("team"))):
     docs = await db.crew.find({}, {"_id": 0}).sort("order", 1).to_list(500)
     return docs
 
 
 @api_router.patch("/admin/crew/{member_id}")
-async def admin_edit_crew(member_id: str, body: CrewEdit, admin=Depends(require_admin)):
+async def admin_edit_crew(member_id: str, body: CrewEdit, admin=Depends(require_perm("team"))):
     updates = {k: v for k, v in body.model_dump(exclude_unset=True).items()}
     if "portrait" in updates:
         updates["portrait_key"] = None
@@ -651,13 +705,13 @@ async def admin_edit_crew(member_id: str, body: CrewEdit, admin=Depends(require_
 
 
 @api_router.post("/admin/crew/{member_id}/portrait")
-async def admin_crew_portrait(member_id: str, body: PortraitIn, admin=Depends(require_admin)):
+async def admin_crew_portrait(member_id: str, body: PortraitIn, admin=Depends(require_perm("team"))):
     await db.crew.update_one({"id": member_id}, {"$set": {"portrait": body.portrait, "portrait_key": None, "poster": False}})
     return {"ok": True}
 
 
 @api_router.delete("/admin/crew/{member_id}")
-async def admin_delete_crew(member_id: str, admin=Depends(require_admin)):
+async def admin_delete_crew(member_id: str, admin=Depends(require_perm("team"))):
     await db.crew.delete_one({"id": member_id})
     await db.crew_applications.update_many({"crew_id": member_id}, {"$set": {"crew_id": None}})
     return {"ok": True}
@@ -719,6 +773,7 @@ async def admin_create_podcast(body: PodcastIn, admin=Depends(require_perm("podc
         doc["publish_date"] = now_utc().isoformat()
     await db.podcasts.insert_one(dict(doc))
     doc.pop("_id", None)
+    await log_activity(admin, f"ha caricato il podcast \"{doc.get('title', '')}\"", "podcasts", {"id": doc["id"]})
     return {"ok": True, "id": doc["id"]}
 
 
@@ -789,6 +844,7 @@ async def admin_create_news(body: NewsIn, admin=Depends(require_perm("news"))):
     if not doc.get("date"):
         doc["date"] = now_utc().isoformat()
     await db.news.insert_one(dict(doc))
+    await log_activity(admin, f"ha pubblicato la news \"{doc.get('title', '')}\"", "news", {"id": doc["id"]})
     return {"ok": True, "id": doc["id"]}
 
 
@@ -928,21 +984,35 @@ async def admin_delete_message(mid: str, admin=Depends(require_perm("messages"))
 
 # ---------------- Admin: Users ----------------
 @api_router.get("/admin/users")
-async def admin_users(search: Optional[str] = None, admin=Depends(require_admin)):
+async def admin_users(search: Optional[str] = None, role: Optional[str] = None,
+                      status: Optional[str] = None, sort: Optional[str] = "recent",
+                      admin=Depends(require_admin)):
     query = {}
     if search:
         query["$or"] = [{"name": {"$regex": search, "$options": "i"}}, {"email": {"$regex": search, "$options": "i"}}]
-    docs = await db.users.find(query, {"_id": 0, "password": 0}).sort("created_at", -1).to_list(2000)
+    if status in ("active", "suspended"):
+        query["status"] = status if status == "suspended" else {"$ne": "suspended"}
+    sort_field, sort_dir = ("created_at", -1)
+    if sort == "name":
+        sort_field, sort_dir = ("name", 1)
+    elif sort == "last_login":
+        sort_field, sort_dir = ("last_login", -1)
+    docs = await db.users.find(query, {"_id": 0, "password": 0}).sort(sort_field, sort_dir).to_list(2000)
+    out = []
     for d in docs:
         email_l = (d.get("email") or "").lower()
         d["is_admin"] = email_l in ADMIN_EMAILS
         d["role"] = ROLE_ADMIN if email_l in ADMIN_EMAILS else (d.get("role") or ROLE_LISTENER)
         d["permissions"] = d.get("permissions") or []
-    return docs
+        d["status"] = d.get("status") or "active"
+        if role and d["role"] != role:
+            continue
+        out.append(d)
+    return out
 
 
 class UserRoleIn(BaseModel):
-    role: str  # administrator | collaborator | listener
+    role: str  # collaborator | listener  (administrator is allowlist-only)
     permissions: Optional[List[str]] = None
 
 
@@ -953,13 +1023,39 @@ async def admin_set_user_role(uid: str, body: UserRoleIn, admin=Depends(require_
         raise HTTPException(status_code=404, detail="Utente non trovato")
     if (u.get("email") or "").lower() in ADMIN_EMAILS:
         raise HTTPException(status_code=400, detail="Il ruolo degli amministratori è gestito dall'allowlist")
-    if body.role not in (ROLE_ADMIN, ROLE_COLLAB, ROLE_LISTENER):
+    if body.role == ROLE_ADMIN:
+        raise HTTPException(status_code=400, detail="Il ruolo Amministratore si assegna solo dall'allowlist email")
+    if body.role not in (ROLE_COLLAB, ROLE_LISTENER):
         raise HTTPException(status_code=400, detail="Ruolo non valido")
     perms = []
     if body.role == ROLE_COLLAB:
         perms = [p for p in (body.permissions or []) if p in PERM_SECTIONS]
     await db.users.update_one({"user_id": uid}, {"$set": {"role": body.role, "permissions": perms}})
+    label = "Collaboratore" if body.role == ROLE_COLLAB else "Ascoltatore"
+    await log_activity(admin, f"ha impostato {u.get('name') or u.get('email')} come {label}", "utenti",
+                       {"user_id": uid, "role": body.role, "permissions": perms})
     return {"ok": True, "role": body.role, "permissions": perms}
+
+
+class UserStatusIn(BaseModel):
+    status: str  # active | suspended
+
+
+@api_router.put("/admin/users/{uid}/status")
+async def admin_set_user_status(uid: str, body: UserStatusIn, admin=Depends(require_admin)):
+    u = await db.users.find_one({"user_id": uid})
+    if not u:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    if (u.get("email") or "").lower() in ADMIN_EMAILS:
+        raise HTTPException(status_code=400, detail="Non puoi sospendere un amministratore")
+    if body.status not in ("active", "suspended"):
+        raise HTTPException(status_code=400, detail="Stato non valido")
+    await db.users.update_one({"user_id": uid}, {"$set": {"status": body.status}})
+    if body.status == "suspended":
+        await db.user_sessions.delete_many({"user_id": uid})  # force logout
+    verb = "ha sospeso" if body.status == "suspended" else "ha riattivato"
+    await log_activity(admin, f"{verb} l'account di {u.get('name') or u.get('email')}", "utenti", {"user_id": uid})
+    return {"ok": True, "status": body.status}
 
 
 @api_router.delete("/admin/users/{uid}")
@@ -971,7 +1067,129 @@ async def admin_delete_user(uid: str, admin=Depends(require_admin)):
         raise HTTPException(status_code=400, detail="Non puoi eliminare un amministratore")
     await db.users.delete_one({"user_id": uid})
     await db.user_sessions.delete_many({"user_id": uid})
+    await log_activity(admin, f"ha eliminato l'utente {u.get('name') or u.get('email')}", "utenti", {"user_id": uid})
     return {"ok": True}
+
+
+# ---------------- Admin: Invitations ----------------
+class InvitationIn(BaseModel):
+    email: EmailStr
+    role: str = ROLE_COLLAB  # collaborator | listener
+    permissions: Optional[List[str]] = None
+
+
+@api_router.get("/admin/invitations")
+async def admin_invitations(admin=Depends(require_admin)):
+    docs = await db.invitations.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    for d in docs:
+        d["accept_url"] = f"{APP_BASE_URL}/invite?token={d['token']}" if APP_BASE_URL else f"/invite?token={d['token']}"
+    return docs
+
+
+@api_router.post("/admin/invitations", status_code=201)
+async def admin_create_invitation(body: InvitationIn, admin=Depends(require_admin)):
+    email_l = body.email.lower()
+    existing_user = await db.users.find_one({"email": email_l})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Esiste già un utente con questa email")
+    role = body.role if body.role in (ROLE_COLLAB, ROLE_LISTENER) else ROLE_COLLAB
+    perms = [p for p in (body.permissions or []) if p in PERM_SECTIONS] if role == ROLE_COLLAB else []
+    token = uuid.uuid4().hex + uuid.uuid4().hex
+    inv = {
+        "id": new_id("inv"),
+        "email": email_l,
+        "role": role,
+        "permissions": perms,
+        "token": token,
+        "status": "pending",
+        "invited_by": admin.get("name") or admin.get("email"),
+        "created_at": now_utc(),
+        "expires_at": now_utc() + timedelta(days=7),
+    }
+    # Replace any previous pending invite for the same email.
+    await db.invitations.delete_many({"email": email_l, "status": "pending"})
+    await db.invitations.insert_one(dict(inv))
+    accept_url = f"{APP_BASE_URL}/invite?token={token}" if APP_BASE_URL else f"/invite?token={token}"
+    label = "Collaboratore" if role == ROLE_COLLAB else "Ascoltatore"
+    html = f"""
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#0A1128;padding:32px 0;font-family:Arial,Helvetica,sans-serif">
+      <tr><td align="center">
+        <table width="480" cellpadding="0" cellspacing="0" style="background:#16213E;border-radius:16px;padding:32px">
+          <tr><td style="color:#ffffff;font-size:22px;font-weight:bold;padding-bottom:8px">Pescatori di Uomini</td></tr>
+          <tr><td style="color:#94A3B8;font-size:14px;padding-bottom:24px">Sei stato invitato come <b style="color:#0EA5E9">{label}</b></td></tr>
+          <tr><td style="color:#E2E8F0;font-size:15px;line-height:22px;padding-bottom:24px">Ciao! {inv['invited_by']} ti ha invitato a collaborare alla gestione della radio evangelica <b>Pescatori di Uomini</b>. Clicca il pulsante qui sotto per creare il tuo account e attivare i permessi.</td></tr>
+          <tr><td align="center" style="padding-bottom:24px"><a href="{accept_url}" style="background:#0EA5E9;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:999px;font-weight:bold;font-size:15px;display:inline-block">Accetta l'invito</a></td></tr>
+          <tr><td style="color:#64748B;font-size:12px">Se il pulsante non funziona, copia questo link: {accept_url}</td></tr>
+          <tr><td style="color:#64748B;font-size:12px;padding-top:8px">L'invito scade tra 7 giorni.</td></tr>
+        </table>
+      </td></tr>
+    </table>
+    """
+    sent = await send_email(email_l, "Invito a collaborare · Pescatori di Uomini", html)
+    await log_activity(admin, f"ha invitato {email_l} come {label}", "inviti", {"email": email_l, "role": role})
+    return {"ok": True, "invitation": {**inv, "created_at": inv["created_at"].isoformat(), "expires_at": inv["expires_at"].isoformat()},
+            "accept_url": accept_url, "email_sent": sent}
+
+
+@api_router.delete("/admin/invitations/{inv_id}")
+async def admin_delete_invitation(inv_id: str, admin=Depends(require_admin)):
+    await db.invitations.delete_one({"id": inv_id})
+    return {"ok": True}
+
+
+@api_router.get("/invitations/{token}")
+async def get_invitation(token: str):
+    inv = await db.invitations.find_one({"token": token}, {"_id": 0})
+    if not inv or inv.get("status") != "pending":
+        raise HTTPException(status_code=404, detail="Invito non valido o già utilizzato")
+    exp = inv.get("expires_at")
+    if exp and (exp.replace(tzinfo=timezone.utc) if exp.tzinfo is None else exp) < now_utc():
+        raise HTTPException(status_code=400, detail="Invito scaduto")
+    return {"email": inv["email"], "role": inv["role"], "permissions": inv.get("permissions") or [], "invited_by": inv.get("invited_by")}
+
+
+class AcceptInvitationIn(BaseModel):
+    name: str
+    password: str
+
+
+@api_router.post("/invitations/{token}/accept")
+async def accept_invitation(token: str, body: AcceptInvitationIn):
+    inv = await db.invitations.find_one({"token": token})
+    if not inv or inv.get("status") != "pending":
+        raise HTTPException(status_code=404, detail="Invito non valido o già utilizzato")
+    exp = inv.get("expires_at")
+    if exp and (exp.replace(tzinfo=timezone.utc) if exp.tzinfo is None else exp) < now_utc():
+        raise HTTPException(status_code=400, detail="Invito scaduto")
+    email_l = inv["email"].lower()
+    if await db.users.find_one({"email": email_l}):
+        raise HTTPException(status_code=400, detail="Email già registrata")
+    uid = new_id("user")
+    role = ROLE_ADMIN if email_l in ADMIN_EMAILS else inv.get("role", ROLE_COLLAB)
+    perms = inv.get("permissions") or []
+    await db.users.insert_one({
+        "user_id": uid,
+        "email": email_l,
+        "name": body.name,
+        "password": hash_pw(body.password),
+        "picture": None,
+        "provider": "email",
+        "role": role,
+        "permissions": perms,
+        "status": "active",
+        "created_at": now_utc(),
+        "last_login": now_utc(),
+    })
+    await db.invitations.update_one({"token": token}, {"$set": {"status": "accepted", "accepted_at": now_utc()}})
+    session_token = await create_session(uid)
+    return {"token": session_token, "user": {"user_id": uid, "email": email_l, "name": body.name, "picture": None, "role": role, "permissions": perms}}
+
+
+# ---------------- Admin: Activity log ----------------
+@api_router.get("/admin/activity")
+async def admin_activity(limit: int = 100, admin=Depends(require_admin)):
+    docs = await db.activity_log.find({}, {"_id": 0}).sort("created_at", -1).to_list(min(max(limit, 1), 500))
+    return docs
 
 
 # ---------------- Admin: Programs (Palinsesto) ----------------
@@ -1002,6 +1220,7 @@ async def admin_create_program(body: ProgramIn, admin=Depends(require_perm("sche
     doc = body.model_dump()
     doc["id"] = new_id("prog")
     await db.programs.insert_one(dict(doc))
+    await log_activity(admin, f"ha aggiunto il programma \"{doc.get('name', '')}\" al palinsesto", "schedule", {"id": doc["id"]})
     return {"ok": True, "id": doc["id"]}
 
 
@@ -1010,6 +1229,7 @@ async def admin_edit_program(prog_id: str, body: ProgramEdit, admin=Depends(requ
     updates = body.model_dump(exclude_unset=True)
     if updates:
         await db.programs.update_one({"id": prog_id}, {"$set": updates})
+    await log_activity(admin, "ha aggiornato il palinsesto", "schedule", {"id": prog_id})
     return {"ok": True}
 
 
@@ -1178,6 +1398,7 @@ async def admin_create_product(body: ProductIn, admin=Depends(require_perm("merc
     doc["created_at"] = now_utc()
     doc["order"] = await db.products.count_documents({})
     await db.products.insert_one(dict(doc))
+    await log_activity(admin, f"ha aggiunto il prodotto \"{doc.get('name', '')}\" al merchandising", "merch", {"id": doc["id"]})
     return {"ok": True, "id": doc["id"]}
 
 
@@ -1188,6 +1409,7 @@ async def admin_edit_product(product_id: str, body: ProductEdit, admin=Depends(r
         raise HTTPException(status_code=400, detail="Disponibilità non valida")
     if updates:
         await db.products.update_one({"id": product_id}, {"$set": updates})
+    await log_activity(admin, "ha modificato un prodotto del merchandising", "merch", {"id": product_id})
     return {"ok": True}
 
 
@@ -1222,6 +1444,9 @@ async def startup():
     await db.users.create_index("user_id", unique=True)
     await db.user_sessions.create_index("session_token", unique=True)
     await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
+    await db.invitations.create_index("token", unique=True)
+    await db.invitations.create_index("email")
+    await db.activity_log.create_index("created_at")
 
     if not await db.live_status.find_one({"_id": "current"}):
         await db.live_status.insert_one({

@@ -1,0 +1,43 @@
+{
+  "summary": "Full-stack testing of the professional User & Roles Management System. Backend: 17/17 pytest cases PASS in /app/backend/tests/test_rbac_v2.py covering: GET /admin/users filters (role/status/sort=name|last_login|recent) + fields (role, status, permissions, is_admin, created_at); PUT /admin/users/{uid}/status suspend + login blocked (403 'Account sospeso') + reactivate restores login + sessions revoked; non-admin 403 on suspend endpoint; PUT /admin/users/{uid}/role rejects 'administrator' (400) but accepts collaborator/listener (perms filtered against PERM_SECTIONS) + activity logged; POST /admin/invitations (admin-only, 403 for non-admin) returns 201 with accept_url + email_sent=false (EMERGENT_EMAIL_KEY empty in dev — expected); GET /admin/invitations lists pending; DELETE /admin/invitations/{id} revokes; GET /invitations/{token} (public) exposes email/role/permissions; POST /invitations/{token}/accept creates account with invited role+permissions and returns session token; token cannot be reused (second accept -> 404); GET /admin/activity returns audit entries with actor_name+action+created_at (admin-only, 403 for others); RBAC 'team' collaborator can GET /admin/crew (200) but not /admin/users or /admin/activity (403); public regression /live/status, /podcasts, /news, /products all 200; /auth/me still returns role+permissions. Frontend (mobile viewport 390x844): /welcome shows exactly 3 cards (Accedi, Registrati, Continua come Ospite) and NO 'Amministrazione' text anywhere; admin email/password login redirects to /admin; /admin/users renders search box, role filter chips (Tutti/Admin/Collaboratori/Ascoltatori), status filter chips, sort chips, 21 user cards with avatar+name+email+role badge+status badge+last_login+created date+kebab menu; Invite modal opens, sends invite, shows 'Invito creato. L\\'email non è ancora attiva: copia il link dall\\'elenco qui sotto' banner + revocable pending invites list with copy/trash icons; /admin/activity groups entries by day with actor+action+time; /invite?token=INVALID shows 'Invito non valido' error page with 'Vai alla Home' CTA; /invite?token=VALID renders acceptance form with email, role label, permission chips, name+password inputs; submitting form creates the collaborator account and lands on /admin/podcasts (first permitted section).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "shadow* style props deprecation", "issue": "Console warning '\"shadow*\" style props are deprecated. Use \"boxShadow\"' still emitted on multiple screens (persistent from prior iterations). Non-blocking on web preview."},
+      {"component": "props.pointerEvents deprecation", "issue": "'props.pointerEvents is deprecated. Use style.pointerEvents' warning still present. Non-blocking."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_rbac_v2.py",
+    "/app/test_reports/pytest/iteration_9_results.xml"
+  ],
+  "action_items": [
+    "(carry-over) Migrate shadow* StyleSheet props to boxShadow and props.pointerEvents to style.pointerEvents to silence RN 0.76+ warnings.",
+    "(carry-over) Consider splitting server.py (1600+ lines) into APIRouter modules (auth/admin/users/invitations/content/merch)."
+  ],
+  "critical_code_review_comments": [
+    "PUT /admin/users/{uid}/status correctly revokes sessions on suspend (db.user_sessions.delete_many) — verified: old bearer token returns 401 after suspend.",
+    "POST /admin/invitations replaces any previous pending invite for the same email (delete_many status=pending) — prevents multiple tokens per invitee. Good.",
+    "GET /invitations/{token} + accept both reject non-pending or expired tokens correctly.",
+    "accept_invitation() reads invited role+permissions from the invitation, applies ROLE_ADMIN override if email in ADMIN_EMAILS, hashes password, marks invite accepted (single-use), returns session token — clean.",
+    "PERM_SECTIONS = [podcasts, news, merch, schedule, prayers, messages, team, radio]; require_perm('team') is used on all /admin/crew endpoints (verified test collab-with-team gets 200 on GET /admin/crew).",
+    "log_activity() correctly writes actor_name/action/target/meta/created_at. Sorted DESC in GET /admin/activity.",
+    "server.py is now 1601 lines — splitting is overdue but non-blocking.",
+    "send_email() gracefully returns False when EMERGENT_EMAIL_KEY is empty (dev). No exceptions raised."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_rbac_v2.py (new — 17 pytest cases covering the new user/roles/invitations/activity system)"
+  ],
+  "success_rate": {
+    "backend": "100% (17/17)",
+    "frontend": "100% (welcome cards, admin login redirect, /admin/users list+search+filters+sort+kebab, invite modal create+link, /admin/activity list, /invite invalid page, /invite valid accept -> logged-in collaborator)"
+  },
+  "seed_data_creation": "Tests create TEST_-prefixed users and invitations via /api/auth/register and /api/admin/invitations, then teardown via DELETE /api/admin/users/{uid} (admin token) + DELETE /api/admin/invitations/{id}. Additional cleanup script ran post-frontend testing: removed 10 TEST_ users and stray test invitations. No residual test data remains.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Admin credentials: pescatoridiuomini@outlook.it / Admin1234! (email in ADMIN_EMAILS allowlist). Frontend testIDs verified: welcome-card-{login,register,guest}, auth-{email,password,submit,toggle,google,back}, user-search, invite-open, filter-role-{all,administrator,collaborator,listener}, filter-status-{all,active,suspended}, sort-{recent,name,last_login}, user-row-{uid}, user-actions-{uid}, act-{promote,perms,demote,suspend,reactivate,delete}, perms-{close,save}, perm-{section}, invite-{close,email,send,copy-{id},revoke-{id}}, inv-role-{k}, inv-perm-{section}, activity-{id}, invite-{name,password,submit,home}. EMERGENT_EMAIL_KEY is intentionally empty in dev; email_sent=false and accept_url is returned (this is EXPECTED, not a bug). Root gate correctly auto-redirects admins to /admin; a freshly accepted collaborator lands on /admin (first permitted section).",
+  "rca_of_issue": "N/A — no bugs found. All 14 backend + frontend acceptance items from the review request are verified."
+}

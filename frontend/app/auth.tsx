@@ -14,7 +14,6 @@ export default function Auth() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{ mode?: string }>();
-  const isAdmin = params.mode === "admin";
   const { loginEmail, register, loginGoogle } = useAuth();
   const [mode, setMode] = useState<"login" | "register">(params.mode === "register" ? "register" : "login");
   const [name, setName] = useState("");
@@ -23,17 +22,12 @@ export default function Auth() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const goAfterAuth = () => {
-    if (isAdmin) router.replace("/admin");
-    else router.replace("/(tabs)");
-  };
-
   const submit = async () => {
     setError(""); setBusy(true);
     try {
       if (mode === "register") await register(name.trim(), email.trim(), password);
       else await loginEmail(email.trim(), password);
-      goAfterAuth();
+      // Root gate redirects (admin -> /admin, others -> /(tabs)) once `user` is set.
     } catch (e: any) {
       setError(e.message || "Errore");
     } finally {
@@ -45,8 +39,7 @@ export default function Auth() {
     setError(""); setBusy(true);
     try {
       await loginGoogle();
-      // On web this triggers a full-page redirect; on native we continue here.
-      if (Platform.OS !== "web") goAfterAuth();
+      // Web triggers a full-page redirect; native returns here and the gate routes.
     } catch (e: any) {
       setError(e.message || "Errore accesso Google");
     } finally {
@@ -54,10 +47,8 @@ export default function Auth() {
     }
   };
 
-  const title = isAdmin ? "Area Amministrazione" : mode === "login" ? "Bentornato" : "Crea un account";
-  const sub = isAdmin
-    ? "Accesso riservato agli amministratori e collaboratori autorizzati."
-    : "Accedi per salvare preferiti, cronologia, richieste di preghiera e ricevere aggiornamenti.";
+  const title = mode === "login" ? "Bentornato" : "Crea un account";
+  const sub = "Accedi per salvare preferiti, cronologia, richieste di preghiera e ricevere aggiornamenti.";
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
@@ -66,8 +57,8 @@ export default function Auth() {
           <Ionicons name="arrow-back" size={26} color={colors.onSurface} />
         </Pressable>
 
-        <View style={[styles.logoBadge, isAdmin && { backgroundColor: "#7C3AED22", borderColor: "#7C3AED44" }]}>
-          {isAdmin ? <Ionicons name="shield-checkmark" size={34} color="#7C3AED" /> : <Image source={LOGO} style={styles.logoImg} contentFit="contain" />}
+        <View style={styles.logoBadge}>
+          <Image source={LOGO} style={styles.logoImg} contentFit="contain" />
         </View>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.sub}>{sub}</Text>
@@ -91,21 +82,12 @@ export default function Auth() {
           {busy ? <ActivityIndicator color={colors.white} /> : <Text style={styles.primaryText}>{mode === "login" ? "Accedi" : "Registrati"}</Text>}
         </PressableScale>
 
-        {!isAdmin && (
-          <Pressable testID="auth-toggle" onPress={() => setMode(mode === "login" ? "register" : "login")} style={{ marginTop: spacing.lg }}>
-            <Text style={styles.toggle}>
-              {mode === "login" ? "Non hai un account? " : "Hai già un account? "}
-              <Text style={{ color: colors.brandPrimary, fontWeight: "700" }}>{mode === "login" ? "Registrati" : "Accedi"}</Text>
-            </Text>
-          </Pressable>
-        )}
-
-        {isAdmin && (
-          <View style={styles.adminNote}>
-            <Ionicons name="information-circle-outline" size={18} color={colors.onSurfaceSecondary} />
-            <Text style={styles.adminNoteText}>Se non disponi dei permessi, verrà mostrata la pagina "Accesso Negato".</Text>
-          </View>
-        )}
+        <Pressable testID="auth-toggle" onPress={() => setMode(mode === "login" ? "register" : "login")} style={{ marginTop: spacing.lg }}>
+          <Text style={styles.toggle}>
+            {mode === "login" ? "Non hai un account? " : "Hai già un account? "}
+            <Text style={{ color: colors.brandPrimary, fontWeight: "700" }}>{mode === "login" ? "Registrati" : "Accedi"}</Text>
+          </Text>
+        </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>
   );
