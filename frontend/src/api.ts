@@ -97,9 +97,49 @@ export const api = {
   adminCreateNews: (body: any) => request("/admin/news", { method: "POST", body: JSON.stringify(body) }, true),
   adminEditNews: (id: string, body: any) => request(`/admin/news/${id}`, { method: "PATCH", body: JSON.stringify(body) }, true),
   adminDeleteNews: (id: string) => request(`/admin/news/${id}`, { method: "DELETE" }, true),
+  // admin prayers
+  adminPrayers: (status?: string, search?: string) => {
+    const q = new URLSearchParams();
+    if (status) q.set("status", status);
+    if (search) q.set("search", search);
+    return request(`/admin/prayers?${q.toString()}`, {}, true);
+  },
+  adminPrayer: (id: string) => request(`/admin/prayers/${id}`, {}, true),
+  adminEditPrayer: (id: string, body: any) => request(`/admin/prayers/${id}`, { method: "PATCH", body: JSON.stringify(body) }, true),
+  adminDeletePrayer: (id: string) => request(`/admin/prayers/${id}`, { method: "DELETE" }, true),
+  // admin messages & testimonies
+  adminMessages: (status?: string, type?: string, search?: string) => {
+    const q = new URLSearchParams();
+    if (status) q.set("status", status);
+    if (type) q.set("type", type);
+    if (search) q.set("search", search);
+    return request(`/admin/messages?${q.toString()}`, {}, true);
+  },
+  adminMessage: (id: string) => request(`/admin/messages/${id}`, {}, true),
+  adminEditMessage: (id: string, body: any) => request(`/admin/messages/${id}`, { method: "PATCH", body: JSON.stringify(body) }, true),
+  adminDeleteMessage: (id: string) => request(`/admin/messages/${id}`, { method: "DELETE" }, true),
+  // admin users
+  adminUsers: (search?: string) => {
+    const q = new URLSearchParams();
+    if (search) q.set("search", search);
+    return request(`/admin/users?${q.toString()}`, {}, true);
+  },
+  adminDeleteUser: (id: string) => request(`/admin/users/${id}`, { method: "DELETE" }, true),
+  // admin programs
+  adminPrograms: () => request("/admin/programs", {}, true),
+  adminCreateProgram: (body: any) => request("/admin/programs", { method: "POST", body: JSON.stringify(body) }, true),
+  adminEditProgram: (id: string, body: any) => request(`/admin/programs/${id}`, { method: "PATCH", body: JSON.stringify(body) }, true),
+  adminDeleteProgram: (id: string) => request(`/admin/programs/${id}`, { method: "DELETE" }, true),
+  // admin radio & settings
+  adminRadio: () => request("/admin/radio", {}, true),
+  adminUpdateRadio: (body: any) => request("/admin/radio", { method: "PUT", body: JSON.stringify(body) }, true),
+  adminSettings: () => request("/admin/settings", {}, true),
+  adminUpdateSettings: (body: any) => request("/admin/settings", { method: "PUT", body: JSON.stringify(body) }, true),
   // public content
   podcast: (id: string) => request(`/podcasts/${id}`),
   featuredPodcasts: () => request("/podcasts/featured"),
   featuredNews: () => request("/news/featured"),
   newsCategories: () => request("/news/categories"),
+  testimonies: () => request("/testimonies"),
+  settings: () => request("/settings"),
 };

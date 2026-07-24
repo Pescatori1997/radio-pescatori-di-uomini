@@ -11,8 +11,11 @@ import { colors, spacing, radius } from "@/src/theme";
 const CARDS = [
   { key: "pending_applications", label: "Candidature in attesa", icon: "account-clock", color: "#F59E0B", route: "/admin/team" },
   { key: "approved_members", label: "Membri approvati", icon: "anchor", color: colors.brandPrimary, route: "/admin/team" },
-  { key: "total_users", label: "Utenti totali", icon: "account-group", color: "#8B5CF6", route: "/admin/soon?s=Utenti" },
-  { key: "prayer_requests", label: "Richieste di preghiera", icon: "hands-pray", color: "#10B981", route: "/admin/soon?s=Preghiere" },
+  { key: "total_users", label: "Utenti totali", icon: "account-group", color: "#8B5CF6", route: "/admin/users" },
+  { key: "prayer_requests", label: "Richieste di preghiera", icon: "hands-pray", color: "#10B981", route: "/admin/prayers" },
+  { key: "testimonies", label: "Testimonianze", icon: "message-star", color: "#EC4899", route: "/admin/messages" },
+  { key: "messages", label: "Messaggi", icon: "message-text", color: "#F97316", route: "/admin/messages" },
+  { key: "programs", label: "Programmi", icon: "calendar-month", color: "#14B8A6", route: "/admin/schedule" },
   { key: "news", label: "Articoli News", icon: "newspaper-variant", color: "#38BDF8", route: "/admin/news" },
   { key: "podcasts", label: "Podcast", icon: "microphone", color: "#EF4444", route: "/admin/podcasts" },
 ];

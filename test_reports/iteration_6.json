@@ -1,0 +1,37 @@
+{
+  "summary": "Backend-only iteration for the NEW admin endpoints (Prayers, Messages/Testimonies, Programs, Radio, Settings, Users) plus HTTP 201 quick fix. All 26 pytest cases in /app/backend/tests/test_new_admin.py PASS (26/26 = 100%). Verified: (1) Auth guard on the 6 new /api/admin/* GETs -> 401 without token, 403 for non-admin registered user, 200 with seeded ADMINTESTTOKEN123. (2) Prayers: created via public POST /api/prayer-requests (defaults status=new), admin list with status+search filter, GET by id, PATCH invalid status -> 400, PATCH valid status(in_progress/prayed/archived)+admin_notes persists on re-GET, DELETE -> subsequent GET 404. (3) Messages/Testimonies: created via public POST /api/messages for both types, admin list with status/type/search filters, GET by id, PATCH invalid -> 400, PATCH status=published sets published_at, PATCH updates text/name/admin_notes. Public GET /api/testimonies returns ONLY published testimonies, excludes non-published, and never leaks admin_notes. (4) Programs: POST /api/admin/programs returns 201 with id; GET lists; PATCH updates name/time and persists; DELETE removes. (5) Radio: GET/PUT round-trip persists station_name/stream_url/backup_url/metadata_url/is_live/title/artist/artwork; public GET /api/live/status reflects updated stream_url/is_live/title. Original values restored. (6) Settings: GET/PUT persists contact_email/phone/address/facebook/instagram/youtube/whatsapp/about_short and public GET /api/settings mirrors admin. Original restored. (7) Users: list includes is_admin flag and never returns password; search works; DELETE on admin -> 400; DELETE on normal user -> 200 and user disappears. (8) HTTP 201: POST /api/admin/podcasts and POST /api/admin/news both return 201.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_new_admin.py",
+    "/app/test_reports/pytest/iteration_6_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:807-814 PATCH /admin/prayers validates status against PRAYER_STATUSES and rejects with 400 before update - good defensive check.",
+    "server.py:859-869 PATCH /admin/messages sets published_at = now_utc().isoformat() only when status transitions to 'published' - matches spec. Note: transitioning away from published (e.g., archived) does NOT clear published_at; low priority, matches typical CMS behavior.",
+    "server.py:759-765 GET /api/testimonies uses Mongo projection {\"admin_notes\": 0} to strip admin_notes from public responses - clean.",
+    "server.py:879-887 GET /admin/users projection excludes password and computes is_admin against ADMIN_EMAILS env allowlist - correct and safe.",
+    "server.py:890-899 DELETE /admin/users blocks admin deletion with 400 and cascades user_sessions cleanup - correct.",
+    "server.py:966-973 PUT /admin/radio uses upsert on live_status _id='current'; GET /api/live/status falls back to seeded doc from startup - consistent state.",
+    "server.py:925-930 POST /admin/programs is decorated with status_code=201 (matches spec). Same pattern applied to /admin/podcasts and /admin/news creates.",
+    "conftest.py:38 uses `asyncio.get_event_loop().run_until_complete(_seed()) if False else asyncio.new_event_loop().run_until_complete(_seed())` — the `if False` branch is dead code, could be simplified to just `asyncio.new_event_loop().run_until_complete(_seed())`. Non-blocking."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_new_admin.py (new, 26 tests covering all new endpoints + 201 fix)"
+  ],
+  "success_rate": {"backend": "100% (26/26 new tests pass)", "frontend": "N/A (backend-only per request)"},
+  "seed_data_creation": "Ephemeral only: created TEST_-prefixed prayer, messages (message + 2 testimonies), a program, a podcast, a news item, and two throwaway TEST_ users. Prayer, messages, program, podcast, news, and the deletable user were all removed at end of their tests. Two auto-registered TEST_user_<hex>@example.com and TEST_del_<hex>@example.com accounts are created per session (the _del one is deleted; the auth-guard user remains for the session and is harmless - can be cleaned up manually if desired). Radio and Settings were restored to their original values via a follow-up PUT.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All NEW admin endpoints are functional and correctly guarded. Seeded admin token: ADMINTESTTOKEN123 (Authorization: Bearer). Public exposure of testimonies is correctly filtered (status=published only) and admin_notes is stripped. Radio/Settings PUTs use upsert on singleton _id docs and are reflected by their public GETs. User deletion is blocked for any email in ADMIN_EMAILS env (pescatoridiuomini@outlook.it, lui.volpe97@gmail.com). Frontend was NOT tested this iteration per request - previous iteration_5 already validated CMS UI flows.",
+  "rca_of_issue": "N/A - no bugs found this iteration."
+}

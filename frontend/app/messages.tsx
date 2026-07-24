@@ -1,7 +1,7 @@
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/src/api";
 import { colors, spacing, radius } from "@/src/theme";
@@ -14,6 +14,12 @@ export default function Messages() {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
+  const [testimonies, setTestimonies] = useState<any[]>([]);
+
+  const loadTestimonies = useCallback(() => {
+    api.testimonies().then(setTestimonies).catch(() => {});
+  }, []);
+  useFocusEffect(useCallback(() => { loadTestimonies(); }, [loadTestimonies]));
 
   const submit = async () => {
     if (text.trim().length < 3) return;
@@ -58,6 +64,21 @@ export default function Messages() {
         <Pressable testID="msg-submit" style={[styles.primaryBtn, busy && { opacity: 0.6 }]} onPress={submit} disabled={busy}>
           <Text style={styles.primaryText}>{busy ? "Invio..." : "Invia"}</Text>
         </Pressable>
+
+        {testimonies.length > 0 && (
+          <View style={styles.testiSection}>
+            <Text style={styles.testiTitle}>Testimonianze della comunità</Text>
+            {testimonies.map((t) => (
+              <View key={t.id} testID={`testimony-${t.id}`} style={styles.testiCard}>
+                <Ionicons name="chatbubble-ellipses" size={18} color={colors.brandPrimary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.testiText}>{t.text}</Text>
+                  <Text style={styles.testiName}>— {t.name || "Anonimo"}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -80,4 +101,9 @@ const styles = StyleSheet.create({
   voiceText: { flex: 1, fontSize: 13, color: colors.onBrandTertiary },
   primaryBtn: { backgroundColor: colors.navy, paddingVertical: spacing.md, borderRadius: radius.pill, alignItems: "center", marginTop: spacing.xl },
   primaryText: { color: colors.white, fontSize: 16, fontWeight: "800" },
+  testiSection: { marginTop: spacing["2xl"] },
+  testiTitle: { fontSize: 18, fontWeight: "800", color: colors.onSurface, marginBottom: spacing.md },
+  testiCard: { flexDirection: "row", gap: spacing.md, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.lg, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.border },
+  testiText: { color: colors.onSurfaceSecondary, fontSize: 14, lineHeight: 20 },
+  testiName: { color: colors.brandPrimary, fontSize: 13, fontWeight: "700", marginTop: spacing.sm },
 });

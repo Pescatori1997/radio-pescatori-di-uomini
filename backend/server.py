@@ -486,6 +486,11 @@ async def admin_stats(admin=Depends(require_admin)):
         "approved_members": await db.crew.count_documents({"published": True}),
         "total_users": await db.users.count_documents({}),
         "prayer_requests": await db.prayer_requests.count_documents({}),
+        "new_prayers": await db.prayer_requests.count_documents({"status": "new"}),
+        "messages": await db.messages.count_documents({"type": "message"}),
+        "testimonies": await db.messages.count_documents({"type": "testimony"}),
+        "new_messages": await db.messages.count_documents({"status": "new"}),
+        "programs": await db.programs.count_documents({}),
         "news": await db.news.count_documents({}),
         "podcasts": await db.podcasts.count_documents({}),
     }
@@ -653,7 +658,7 @@ async def admin_podcasts(status: Optional[str] = None, search: Optional[str] = N
     return docs
 
 
-@api_router.post("/admin/podcasts")
+@api_router.post("/admin/podcasts", status_code=201)
 async def admin_create_podcast(body: PodcastIn, admin=Depends(require_admin)):
     doc = body.model_dump()
     doc["id"] = new_id("pod")
@@ -726,7 +731,7 @@ async def admin_news(status: Optional[str] = None, search: Optional[str] = None,
     return docs
 
 
-@api_router.post("/admin/news")
+@api_router.post("/admin/news", status_code=201)
 async def admin_create_news(body: NewsIn, admin=Depends(require_admin)):
     doc = body.model_dump()
     doc["id"] = new_id("news")
@@ -748,6 +753,253 @@ async def admin_edit_news(nid: str, body: NewsEdit, admin=Depends(require_admin)
 async def admin_delete_news(nid: str, admin=Depends(require_admin)):
     await db.news.delete_one({"id": nid})
     return {"ok": True}
+
+
+# ---------------- Public: Testimonies ----------------
+@api_router.get("/testimonies")
+async def get_testimonies():
+    docs = await db.messages.find(
+        {"type": "testimony", "status": "published"},
+        {"_id": 0, "admin_notes": 0},
+    ).sort("published_at", -1).to_list(200)
+    return docs
+
+
+# ---------------- Public: Settings ----------------
+@api_router.get("/settings")
+async def get_public_settings():
+    doc = await db.settings.find_one({"_id": "general"}) or {}
+    doc.pop("_id", None)
+    return doc
+
+
+# ---------------- Admin: Prayer Requests ----------------
+PRAYER_STATUSES = ["new", "in_progress", "prayed", "archived"]
+
+
+class PrayerEdit(BaseModel):
+    status: Optional[str] = None
+    admin_notes: Optional[str] = None
+
+
+@api_router.get("/admin/prayers")
+async def admin_prayers(status: Optional[str] = None, search: Optional[str] = None, admin=Depends(require_admin)):
+    query = {}
+    if status and status in PRAYER_STATUSES:
+        query["status"] = status
+    if search:
+        query["$or"] = [{"text": {"$regex": search, "$options": "i"}}, {"name": {"$regex": search, "$options": "i"}}]
+    docs = await db.prayer_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    for d in docs:
+        d.setdefault("status", "new")
+    return docs
+
+
+@api_router.get("/admin/prayers/{pid}")
+async def admin_prayer(pid: str, admin=Depends(require_admin)):
+    doc = await db.prayer_requests.find_one({"id": pid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Richiesta non trovata")
+    doc.setdefault("status", "new")
+    return doc
+
+
+@api_router.patch("/admin/prayers/{pid}")
+async def admin_edit_prayer(pid: str, body: PrayerEdit, admin=Depends(require_admin)):
+    updates = body.model_dump(exclude_unset=True)
+    if "status" in updates and updates["status"] not in PRAYER_STATUSES:
+        raise HTTPException(status_code=400, detail="Stato non valido")
+    if updates:
+        await db.prayer_requests.update_one({"id": pid}, {"$set": updates})
+    return {"ok": True}
+
+
+@api_router.delete("/admin/prayers/{pid}")
+async def admin_delete_prayer(pid: str, admin=Depends(require_admin)):
+    await db.prayer_requests.delete_one({"id": pid})
+    return {"ok": True}
+
+
+# ---------------- Admin: Messages & Testimonies ----------------
+MESSAGE_STATUSES = ["new", "reviewed", "published", "archived"]
+
+
+class MessageEdit(BaseModel):
+    status: Optional[str] = None
+    admin_notes: Optional[str] = None
+    text: Optional[str] = None
+    name: Optional[str] = None
+
+
+@api_router.get("/admin/messages")
+async def admin_messages(status: Optional[str] = None, type: Optional[str] = None,
+                         search: Optional[str] = None, admin=Depends(require_admin)):
+    query = {}
+    if status and status in MESSAGE_STATUSES:
+        query["status"] = status
+    if type in ("message", "testimony"):
+        query["type"] = type
+    if search:
+        query["$or"] = [{"text": {"$regex": search, "$options": "i"}}, {"name": {"$regex": search, "$options": "i"}}]
+    docs = await db.messages.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    for d in docs:
+        d.setdefault("status", "new")
+    return docs
+
+
+@api_router.get("/admin/messages/{mid}")
+async def admin_message(mid: str, admin=Depends(require_admin)):
+    doc = await db.messages.find_one({"id": mid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Messaggio non trovato")
+    doc.setdefault("status", "new")
+    return doc
+
+
+@api_router.patch("/admin/messages/{mid}")
+async def admin_edit_message(mid: str, body: MessageEdit, admin=Depends(require_admin)):
+    updates = body.model_dump(exclude_unset=True)
+    if "status" in updates:
+        if updates["status"] not in MESSAGE_STATUSES:
+            raise HTTPException(status_code=400, detail="Stato non valido")
+        if updates["status"] == "published":
+            updates["published_at"] = now_utc().isoformat()
+    if updates:
+        await db.messages.update_one({"id": mid}, {"$set": updates})
+    return {"ok": True}
+
+
+@api_router.delete("/admin/messages/{mid}")
+async def admin_delete_message(mid: str, admin=Depends(require_admin)):
+    await db.messages.delete_one({"id": mid})
+    return {"ok": True}
+
+
+# ---------------- Admin: Users ----------------
+@api_router.get("/admin/users")
+async def admin_users(search: Optional[str] = None, admin=Depends(require_admin)):
+    query = {}
+    if search:
+        query["$or"] = [{"name": {"$regex": search, "$options": "i"}}, {"email": {"$regex": search, "$options": "i"}}]
+    docs = await db.users.find(query, {"_id": 0, "password": 0}).sort("created_at", -1).to_list(2000)
+    for d in docs:
+        d["is_admin"] = (d.get("email") or "").lower() in ADMIN_EMAILS
+    return docs
+
+
+@api_router.delete("/admin/users/{uid}")
+async def admin_delete_user(uid: str, admin=Depends(require_admin)):
+    u = await db.users.find_one({"user_id": uid})
+    if not u:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    if (u.get("email") or "").lower() in ADMIN_EMAILS:
+        raise HTTPException(status_code=400, detail="Non puoi eliminare un amministratore")
+    await db.users.delete_one({"user_id": uid})
+    await db.user_sessions.delete_many({"user_id": uid})
+    return {"ok": True}
+
+
+# ---------------- Admin: Programs (Palinsesto) ----------------
+class ProgramIn(BaseModel):
+    name: str
+    time: str
+    day: str
+    host: Optional[str] = ""
+    description: Optional[str] = ""
+
+
+class ProgramEdit(BaseModel):
+    name: Optional[str] = None
+    time: Optional[str] = None
+    day: Optional[str] = None
+    host: Optional[str] = None
+    description: Optional[str] = None
+
+
+@api_router.get("/admin/programs")
+async def admin_programs(admin=Depends(require_admin)):
+    docs = await db.programs.find({}, {"_id": 0}).to_list(500)
+    return docs
+
+
+@api_router.post("/admin/programs", status_code=201)
+async def admin_create_program(body: ProgramIn, admin=Depends(require_admin)):
+    doc = body.model_dump()
+    doc["id"] = new_id("prog")
+    await db.programs.insert_one(dict(doc))
+    return {"ok": True, "id": doc["id"]}
+
+
+@api_router.patch("/admin/programs/{prog_id}")
+async def admin_edit_program(prog_id: str, body: ProgramEdit, admin=Depends(require_admin)):
+    updates = body.model_dump(exclude_unset=True)
+    if updates:
+        await db.programs.update_one({"id": prog_id}, {"$set": updates})
+    return {"ok": True}
+
+
+@api_router.delete("/admin/programs/{prog_id}")
+async def admin_delete_program(prog_id: str, admin=Depends(require_admin)):
+    await db.programs.delete_one({"id": prog_id})
+    return {"ok": True}
+
+
+# ---------------- Admin: Radio Settings ----------------
+class RadioSettings(BaseModel):
+    station_name: Optional[str] = None
+    stream_url: Optional[str] = None
+    backup_url: Optional[str] = None
+    metadata_url: Optional[str] = None
+    is_live: Optional[bool] = None
+    title: Optional[str] = None
+    artist: Optional[str] = None
+    artwork: Optional[str] = None
+
+
+@api_router.get("/admin/radio")
+async def admin_get_radio(admin=Depends(require_admin)):
+    doc = await db.live_status.find_one({"_id": "current"}) or {}
+    doc.pop("_id", None)
+    return doc
+
+
+@api_router.put("/admin/radio")
+async def admin_update_radio(body: RadioSettings, admin=Depends(require_admin)):
+    updates = body.model_dump(exclude_unset=True)
+    if updates:
+        await db.live_status.update_one({"_id": "current"}, {"$set": updates}, upsert=True)
+    doc = await db.live_status.find_one({"_id": "current"}) or {}
+    doc.pop("_id", None)
+    return doc
+
+
+# ---------------- Admin: General Settings ----------------
+class GeneralSettings(BaseModel):
+    contact_email: Optional[str] = None
+    contact_phone: Optional[str] = None
+    address: Optional[str] = None
+    facebook: Optional[str] = None
+    instagram: Optional[str] = None
+    youtube: Optional[str] = None
+    whatsapp: Optional[str] = None
+    about_short: Optional[str] = None
+
+
+@api_router.get("/admin/settings")
+async def admin_get_settings(admin=Depends(require_admin)):
+    doc = await db.settings.find_one({"_id": "general"}) or {}
+    doc.pop("_id", None)
+    return doc
+
+
+@api_router.put("/admin/settings")
+async def admin_update_settings(body: GeneralSettings, admin=Depends(require_admin)):
+    updates = body.model_dump(exclude_unset=True)
+    if updates:
+        await db.settings.update_one({"_id": "general"}, {"$set": updates}, upsert=True)
+    doc = await db.settings.find_one({"_id": "general"}) or {}
+    doc.pop("_id", None)
+    return doc
 
 
 app.include_router(api_router)
@@ -774,6 +1026,22 @@ async def startup():
             "title": "Lode e Adorazione", "artist": "Pescatori di Uomini",
             "artwork": "https://images.unsplash.com/photo-1592818868295-f527dbac420d?w=600&q=85",
             "stream_url": DEMO_STREAM,
+            "station_name": "Pescatori di Uomini",
+            "backup_url": "",
+            "metadata_url": "",
+        })
+
+    if not await db.settings.find_one({"_id": "general"}):
+        await db.settings.insert_one({
+            "_id": "general",
+            "contact_email": "info@pescatoridiuomini.it",
+            "contact_phone": "",
+            "address": "",
+            "facebook": "",
+            "instagram": "",
+            "youtube": "",
+            "whatsapp": "",
+            "about_short": "Radio evangelica cristiana. Annunciamo Cristo attraverso la radio e i nuovi media.",
         })
 
     if await db.podcasts.count_documents({}) == 0:
@@ -892,6 +1160,10 @@ async def startup():
         fn = await db.news.find_one({}, sort=[("date", -1)])
         if fn:
             await db.news.update_one({"id": fn["id"]}, {"$set": {"featured": True}})
+
+    # --- Workflow status migration (idempotent) ---
+    await db.prayer_requests.update_many({"status": {"$exists": False}}, {"$set": {"status": "new"}})
+    await db.messages.update_many({"status": {"$exists": False}}, {"$set": {"status": "new"}})
     logger.info("Seed complete")
 
 

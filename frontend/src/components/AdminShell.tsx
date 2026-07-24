@@ -11,11 +11,12 @@ const NAV = [
   { key: "team", label: "Team", icon: "anchor", route: "/admin/team" },
   { key: "podcast", label: "Podcast", icon: "microphone", route: "/admin/podcasts" },
   { key: "news", label: "News", icon: "newspaper-variant", route: "/admin/news" },
-  { key: "schedule", label: "Palinsesto", icon: "calendar-month", route: "/admin/soon?s=Palinsesto" },
-  { key: "radio", label: "Radio", icon: "radio", route: "/admin/soon?s=Radio" },
-  { key: "prayer", label: "Richieste di Preghiera", icon: "hands-pray", route: "/admin/soon?s=Preghiere" },
-  { key: "users", label: "Utenti", icon: "account-group", route: "/admin/soon?s=Utenti" },
-  { key: "settings", label: "Impostazioni", icon: "cog", route: "/admin/soon?s=Impostazioni" },
+  { key: "schedule", label: "Palinsesto", icon: "calendar-month", route: "/admin/schedule" },
+  { key: "radio", label: "Radio", icon: "radio", route: "/admin/radio" },
+  { key: "prayer", label: "Richieste di Preghiera", icon: "hands-pray", route: "/admin/prayers" },
+  { key: "messages", label: "Messaggi & Testimonianze", icon: "message-text", route: "/admin/messages" },
+  { key: "users", label: "Utenti", icon: "account-group", route: "/admin/users" },
+  { key: "settings", label: "Impostazioni", icon: "cog", route: "/admin/settings" },
 ];
 
 const ADMIN = {
