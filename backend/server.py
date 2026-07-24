@@ -110,6 +110,13 @@ async def get_current_user(authorization: Optional[str]):
     user = await db.users.find_one({"user_id": sess["user_id"]}, {"_id": 0, "password": 0})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
+    # Normalize RBAC fields (admins from allowlist always win)
+    email = (user.get("email") or "").lower()
+    if email in ADMIN_EMAILS:
+        user["role"] = ROLE_ADMIN
+    elif not user.get("role"):
+        user["role"] = ROLE_LISTENER
+    user["permissions"] = user.get("permissions") or []
     return user
 
 
@@ -120,17 +127,21 @@ async def register(body: RegisterIn):
     if existing:
         raise HTTPException(status_code=400, detail="Email già registrata")
     uid = new_id("user")
+    email_l = body.email.lower()
+    role = ROLE_ADMIN if email_l in ADMIN_EMAILS else ROLE_LISTENER
     await db.users.insert_one({
         "user_id": uid,
-        "email": body.email.lower(),
+        "email": email_l,
         "name": body.name,
         "password": hash_pw(body.password),
         "picture": None,
         "provider": "email",
+        "role": role,
+        "permissions": [],
         "created_at": now_utc(),
     })
     token = await create_session(uid)
-    return {"token": token, "user": {"user_id": uid, "email": body.email.lower(), "name": body.name, "picture": None}}
+    return {"token": token, "user": {"user_id": uid, "email": email_l, "name": body.name, "picture": None, "role": role, "permissions": []}}
 
 
 @api_router.post("/auth/login")
@@ -139,7 +150,9 @@ async def login(body: LoginIn):
     if not user or not user.get("password") or not check_pw(body.password, user["password"]):
         raise HTTPException(status_code=401, detail="Credenziali non valide")
     token = await create_session(user["user_id"])
-    return {"token": token, "user": {"user_id": user["user_id"], "email": user["email"], "name": user["name"], "picture": user.get("picture")}}
+    email_l = (user.get("email") or "").lower()
+    role = ROLE_ADMIN if email_l in ADMIN_EMAILS else (user.get("role") or ROLE_LISTENER)
+    return {"token": token, "user": {"user_id": user["user_id"], "email": user["email"], "name": user["name"], "picture": user.get("picture"), "role": role, "permissions": user.get("permissions") or []}}
 
 
 @api_router.post("/auth/session")
@@ -153,21 +166,30 @@ async def auth_session(body: SessionIn):
         raise HTTPException(status_code=401, detail="Sessione OAuth non valida")
     data = r.json()
     email = data["email"].lower()
+    role = ROLE_ADMIN if email in ADMIN_EMAILS else ROLE_LISTENER
     user = await db.users.find_one({"email": email})
     if user:
         uid = user["user_id"]
+        # Keep admin role in sync with allowlist; otherwise preserve stored role
+        if email in ADMIN_EMAILS and user.get("role") != ROLE_ADMIN:
+            await db.users.update_one({"user_id": uid}, {"$set": {"role": ROLE_ADMIN}})
+        role = ROLE_ADMIN if email in ADMIN_EMAILS else (user.get("role") or ROLE_LISTENER)
+        permissions = user.get("permissions") or []
     else:
         uid = new_id("user")
+        permissions = []
         await db.users.insert_one({
             "user_id": uid,
             "email": email,
             "name": data.get("name"),
             "picture": data.get("picture"),
             "provider": "google",
+            "role": role,
+            "permissions": [],
             "created_at": now_utc(),
         })
     token = await create_session(uid)
-    return {"token": token, "user": {"user_id": uid, "email": email, "name": data.get("name"), "picture": data.get("picture")}}
+    return {"token": token, "user": {"user_id": uid, "email": email, "name": data.get("name"), "picture": data.get("picture"), "role": role, "permissions": permissions}}
 
 
 @api_router.get("/auth/me")
@@ -494,8 +516,17 @@ def build_crew_from_app(a: dict, order: int) -> dict:
 
 
 @api_router.get("/admin/me")
-async def admin_me(admin=Depends(require_admin)):
-    return {"is_admin": True, "user": {"email": admin.get("email"), "name": admin.get("name"), "picture": admin.get("picture")}}
+async def admin_me(authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    email = (user.get("email") or "").lower()
+    role = user.get("role")
+    if role == ROLE_ADMIN or email in ADMIN_EMAILS:
+        return {"is_admin": True, "role": ROLE_ADMIN, "permissions": PERM_SECTIONS,
+                "user": {"email": user.get("email"), "name": user.get("name"), "picture": user.get("picture")}}
+    if role == ROLE_COLLAB and (user.get("permissions") or []):
+        return {"is_admin": False, "role": ROLE_COLLAB, "permissions": user.get("permissions") or [],
+                "user": {"email": user.get("email"), "name": user.get("name"), "picture": user.get("picture")}}
+    raise HTTPException(status_code=403, detail="Accesso negato: non hai i permessi per il pannello")
 
 
 @api_router.get("/admin/stats")
@@ -666,7 +697,7 @@ class PodcastEdit(BaseModel):
 
 
 @api_router.get("/admin/podcasts")
-async def admin_podcasts(status: Optional[str] = None, search: Optional[str] = None, admin=Depends(require_admin)):
+async def admin_podcasts(status: Optional[str] = None, search: Optional[str] = None, admin=Depends(require_perm("podcasts"))):
     query = {}
     if status == "published":
         query["published"] = True
@@ -679,7 +710,7 @@ async def admin_podcasts(status: Optional[str] = None, search: Optional[str] = N
 
 
 @api_router.post("/admin/podcasts", status_code=201)
-async def admin_create_podcast(body: PodcastIn, admin=Depends(require_admin)):
+async def admin_create_podcast(body: PodcastIn, admin=Depends(require_perm("podcasts"))):
     doc = body.model_dump()
     doc["id"] = new_id("pod")
     doc["created_at"] = now_utc()
@@ -692,7 +723,7 @@ async def admin_create_podcast(body: PodcastIn, admin=Depends(require_admin)):
 
 
 @api_router.patch("/admin/podcasts/{pid}")
-async def admin_edit_podcast(pid: str, body: PodcastEdit, admin=Depends(require_admin)):
+async def admin_edit_podcast(pid: str, body: PodcastEdit, admin=Depends(require_perm("podcasts"))):
     updates = body.model_dump(exclude_unset=True)
     if updates:
         await db.podcasts.update_one({"id": pid}, {"$set": updates})
@@ -700,13 +731,13 @@ async def admin_edit_podcast(pid: str, body: PodcastEdit, admin=Depends(require_
 
 
 @api_router.delete("/admin/podcasts/{pid}")
-async def admin_delete_podcast(pid: str, admin=Depends(require_admin)):
+async def admin_delete_podcast(pid: str, admin=Depends(require_perm("podcasts"))):
     await db.podcasts.delete_one({"id": pid})
     return {"ok": True}
 
 
 @api_router.post("/admin/podcasts/featured-order")
-async def admin_podcast_featured_order(body: dict, admin=Depends(require_admin)):
+async def admin_podcast_featured_order(body: dict, admin=Depends(require_perm("podcasts"))):
     ids = body.get("ids", [])
     for i, pid in enumerate(ids):
         await db.podcasts.update_one({"id": pid}, {"$set": {"featured_order": i}})
@@ -739,7 +770,7 @@ class NewsEdit(BaseModel):
 
 
 @api_router.get("/admin/news")
-async def admin_news(status: Optional[str] = None, search: Optional[str] = None, admin=Depends(require_admin)):
+async def admin_news(status: Optional[str] = None, search: Optional[str] = None, admin=Depends(require_perm("news"))):
     query = {}
     if status == "published":
         query["published"] = True
@@ -752,7 +783,7 @@ async def admin_news(status: Optional[str] = None, search: Optional[str] = None,
 
 
 @api_router.post("/admin/news", status_code=201)
-async def admin_create_news(body: NewsIn, admin=Depends(require_admin)):
+async def admin_create_news(body: NewsIn, admin=Depends(require_perm("news"))):
     doc = body.model_dump()
     doc["id"] = new_id("news")
     if not doc.get("date"):
@@ -762,7 +793,7 @@ async def admin_create_news(body: NewsIn, admin=Depends(require_admin)):
 
 
 @api_router.patch("/admin/news/{nid}")
-async def admin_edit_news(nid: str, body: NewsEdit, admin=Depends(require_admin)):
+async def admin_edit_news(nid: str, body: NewsEdit, admin=Depends(require_perm("news"))):
     updates = body.model_dump(exclude_unset=True)
     if updates:
         await db.news.update_one({"id": nid}, {"$set": updates})
@@ -770,7 +801,7 @@ async def admin_edit_news(nid: str, body: NewsEdit, admin=Depends(require_admin)
 
 
 @api_router.delete("/admin/news/{nid}")
-async def admin_delete_news(nid: str, admin=Depends(require_admin)):
+async def admin_delete_news(nid: str, admin=Depends(require_perm("news"))):
     await db.news.delete_one({"id": nid})
     return {"ok": True}
 
@@ -803,7 +834,7 @@ class PrayerEdit(BaseModel):
 
 
 @api_router.get("/admin/prayers")
-async def admin_prayers(status: Optional[str] = None, search: Optional[str] = None, admin=Depends(require_admin)):
+async def admin_prayers(status: Optional[str] = None, search: Optional[str] = None, admin=Depends(require_perm("prayers"))):
     query = {}
     if status and status in PRAYER_STATUSES:
         query["status"] = status
@@ -816,7 +847,7 @@ async def admin_prayers(status: Optional[str] = None, search: Optional[str] = No
 
 
 @api_router.get("/admin/prayers/{pid}")
-async def admin_prayer(pid: str, admin=Depends(require_admin)):
+async def admin_prayer(pid: str, admin=Depends(require_perm("prayers"))):
     doc = await db.prayer_requests.find_one({"id": pid}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Richiesta non trovata")
@@ -825,7 +856,7 @@ async def admin_prayer(pid: str, admin=Depends(require_admin)):
 
 
 @api_router.patch("/admin/prayers/{pid}")
-async def admin_edit_prayer(pid: str, body: PrayerEdit, admin=Depends(require_admin)):
+async def admin_edit_prayer(pid: str, body: PrayerEdit, admin=Depends(require_perm("prayers"))):
     updates = body.model_dump(exclude_unset=True)
     if "status" in updates and updates["status"] not in PRAYER_STATUSES:
         raise HTTPException(status_code=400, detail="Stato non valido")
@@ -835,7 +866,7 @@ async def admin_edit_prayer(pid: str, body: PrayerEdit, admin=Depends(require_ad
 
 
 @api_router.delete("/admin/prayers/{pid}")
-async def admin_delete_prayer(pid: str, admin=Depends(require_admin)):
+async def admin_delete_prayer(pid: str, admin=Depends(require_perm("prayers"))):
     await db.prayer_requests.delete_one({"id": pid})
     return {"ok": True}
 
@@ -853,7 +884,7 @@ class MessageEdit(BaseModel):
 
 @api_router.get("/admin/messages")
 async def admin_messages(status: Optional[str] = None, type: Optional[str] = None,
-                         search: Optional[str] = None, admin=Depends(require_admin)):
+                         search: Optional[str] = None, admin=Depends(require_perm("messages"))):
     query = {}
     if status and status in MESSAGE_STATUSES:
         query["status"] = status
@@ -868,7 +899,7 @@ async def admin_messages(status: Optional[str] = None, type: Optional[str] = Non
 
 
 @api_router.get("/admin/messages/{mid}")
-async def admin_message(mid: str, admin=Depends(require_admin)):
+async def admin_message(mid: str, admin=Depends(require_perm("messages"))):
     doc = await db.messages.find_one({"id": mid}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Messaggio non trovato")
@@ -877,7 +908,7 @@ async def admin_message(mid: str, admin=Depends(require_admin)):
 
 
 @api_router.patch("/admin/messages/{mid}")
-async def admin_edit_message(mid: str, body: MessageEdit, admin=Depends(require_admin)):
+async def admin_edit_message(mid: str, body: MessageEdit, admin=Depends(require_perm("messages"))):
     updates = body.model_dump(exclude_unset=True)
     if "status" in updates:
         if updates["status"] not in MESSAGE_STATUSES:
@@ -890,7 +921,7 @@ async def admin_edit_message(mid: str, body: MessageEdit, admin=Depends(require_
 
 
 @api_router.delete("/admin/messages/{mid}")
-async def admin_delete_message(mid: str, admin=Depends(require_admin)):
+async def admin_delete_message(mid: str, admin=Depends(require_perm("messages"))):
     await db.messages.delete_one({"id": mid})
     return {"ok": True}
 
@@ -903,8 +934,32 @@ async def admin_users(search: Optional[str] = None, admin=Depends(require_admin)
         query["$or"] = [{"name": {"$regex": search, "$options": "i"}}, {"email": {"$regex": search, "$options": "i"}}]
     docs = await db.users.find(query, {"_id": 0, "password": 0}).sort("created_at", -1).to_list(2000)
     for d in docs:
-        d["is_admin"] = (d.get("email") or "").lower() in ADMIN_EMAILS
+        email_l = (d.get("email") or "").lower()
+        d["is_admin"] = email_l in ADMIN_EMAILS
+        d["role"] = ROLE_ADMIN if email_l in ADMIN_EMAILS else (d.get("role") or ROLE_LISTENER)
+        d["permissions"] = d.get("permissions") or []
     return docs
+
+
+class UserRoleIn(BaseModel):
+    role: str  # administrator | collaborator | listener
+    permissions: Optional[List[str]] = None
+
+
+@api_router.put("/admin/users/{uid}/role")
+async def admin_set_user_role(uid: str, body: UserRoleIn, admin=Depends(require_admin)):
+    u = await db.users.find_one({"user_id": uid})
+    if not u:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    if (u.get("email") or "").lower() in ADMIN_EMAILS:
+        raise HTTPException(status_code=400, detail="Il ruolo degli amministratori è gestito dall'allowlist")
+    if body.role not in (ROLE_ADMIN, ROLE_COLLAB, ROLE_LISTENER):
+        raise HTTPException(status_code=400, detail="Ruolo non valido")
+    perms = []
+    if body.role == ROLE_COLLAB:
+        perms = [p for p in (body.permissions or []) if p in PERM_SECTIONS]
+    await db.users.update_one({"user_id": uid}, {"$set": {"role": body.role, "permissions": perms}})
+    return {"ok": True, "role": body.role, "permissions": perms}
 
 
 @api_router.delete("/admin/users/{uid}")
@@ -937,13 +992,13 @@ class ProgramEdit(BaseModel):
 
 
 @api_router.get("/admin/programs")
-async def admin_programs(admin=Depends(require_admin)):
+async def admin_programs(admin=Depends(require_perm("schedule"))):
     docs = await db.programs.find({}, {"_id": 0}).to_list(500)
     return docs
 
 
 @api_router.post("/admin/programs", status_code=201)
-async def admin_create_program(body: ProgramIn, admin=Depends(require_admin)):
+async def admin_create_program(body: ProgramIn, admin=Depends(require_perm("schedule"))):
     doc = body.model_dump()
     doc["id"] = new_id("prog")
     await db.programs.insert_one(dict(doc))
@@ -951,7 +1006,7 @@ async def admin_create_program(body: ProgramIn, admin=Depends(require_admin)):
 
 
 @api_router.patch("/admin/programs/{prog_id}")
-async def admin_edit_program(prog_id: str, body: ProgramEdit, admin=Depends(require_admin)):
+async def admin_edit_program(prog_id: str, body: ProgramEdit, admin=Depends(require_perm("schedule"))):
     updates = body.model_dump(exclude_unset=True)
     if updates:
         await db.programs.update_one({"id": prog_id}, {"$set": updates})
@@ -959,7 +1014,7 @@ async def admin_edit_program(prog_id: str, body: ProgramEdit, admin=Depends(requ
 
 
 @api_router.delete("/admin/programs/{prog_id}")
-async def admin_delete_program(prog_id: str, admin=Depends(require_admin)):
+async def admin_delete_program(prog_id: str, admin=Depends(require_perm("schedule"))):
     await db.programs.delete_one({"id": prog_id})
     return {"ok": True}
 
@@ -977,14 +1032,14 @@ class RadioSettings(BaseModel):
 
 
 @api_router.get("/admin/radio")
-async def admin_get_radio(admin=Depends(require_admin)):
+async def admin_get_radio(admin=Depends(require_perm("radio"))):
     doc = await db.live_status.find_one({"_id": "current"}) or {}
     doc.pop("_id", None)
     return doc
 
 
 @api_router.put("/admin/radio")
-async def admin_update_radio(body: RadioSettings, admin=Depends(require_admin)):
+async def admin_update_radio(body: RadioSettings, admin=Depends(require_perm("radio"))):
     updates = body.model_dump(exclude_unset=True)
     if updates:
         await db.live_status.update_one({"_id": "current"}, {"$set": updates}, upsert=True)
@@ -1087,7 +1142,7 @@ async def get_product(product_id: str):
 # ---- Admin ----
 @api_router.get("/admin/products")
 async def admin_products(status: Optional[str] = None, category: Optional[str] = None,
-                         search: Optional[str] = None, admin=Depends(require_admin)):
+                         search: Optional[str] = None, admin=Depends(require_perm("merch"))):
     query = {}
     if status == "published":
         query["published"] = True
@@ -1107,7 +1162,7 @@ async def admin_products(status: Optional[str] = None, category: Optional[str] =
 
 
 @api_router.get("/admin/products/{product_id}")
-async def admin_get_product(product_id: str, admin=Depends(require_admin)):
+async def admin_get_product(product_id: str, admin=Depends(require_perm("merch"))):
     doc = await db.products.find_one({"id": product_id}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Prodotto non trovato")
@@ -1115,7 +1170,7 @@ async def admin_get_product(product_id: str, admin=Depends(require_admin)):
 
 
 @api_router.post("/admin/products", status_code=201)
-async def admin_create_product(body: ProductIn, admin=Depends(require_admin)):
+async def admin_create_product(body: ProductIn, admin=Depends(require_perm("merch"))):
     if body.availability not in PRODUCT_AVAILABILITY:
         raise HTTPException(status_code=400, detail="Disponibilità non valida")
     doc = body.model_dump()
@@ -1127,7 +1182,7 @@ async def admin_create_product(body: ProductIn, admin=Depends(require_admin)):
 
 
 @api_router.patch("/admin/products/{product_id}")
-async def admin_edit_product(product_id: str, body: ProductEdit, admin=Depends(require_admin)):
+async def admin_edit_product(product_id: str, body: ProductEdit, admin=Depends(require_perm("merch"))):
     updates = body.model_dump(exclude_unset=True)
     if "availability" in updates and updates["availability"] not in PRODUCT_AVAILABILITY:
         raise HTTPException(status_code=400, detail="Disponibilità non valida")
@@ -1137,13 +1192,13 @@ async def admin_edit_product(product_id: str, body: ProductEdit, admin=Depends(r
 
 
 @api_router.delete("/admin/products/{product_id}")
-async def admin_delete_product(product_id: str, admin=Depends(require_admin)):
+async def admin_delete_product(product_id: str, admin=Depends(require_perm("merch"))):
     await db.products.delete_one({"id": product_id})
     return {"ok": True}
 
 
 @api_router.post("/admin/products/reorder")
-async def admin_reorder_products(body: dict, admin=Depends(require_admin)):
+async def admin_reorder_products(body: dict, admin=Depends(require_perm("merch"))):
     ids = body.get("ids", [])
     for i, pid in enumerate(ids):
         await db.products.update_one({"id": pid}, {"$set": {"order": i}})

@@ -1,4 +1,4 @@
-import { Stack } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { LogBox } from "react-native";
@@ -8,7 +8,7 @@ import { StatusBar } from "expo-status-bar";
 
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { ensureIconFontFaces } from "@/src/iconFonts";
-import { AuthProvider } from "@/src/context/AuthContext";
+import { AuthProvider, useAuth } from "@/src/context/AuthContext";
 import { PlayerProvider } from "@/src/context/PlayerContext";
 
 LogBox.ignoreAllLogs(true);
@@ -18,6 +18,26 @@ SplashScreen.preventAutoHideAsync();
 // fontfaceobserver 6000ms-timeout polyfill never runs (prevents a hard crash on some
 // Chromium browsers / slow networks). No-op on native. See src/iconFonts.ts.
 ensureIconFontFaces();
+
+// Root auth gate: force the welcome screen until the user logs in or chooses guest mode.
+function AuthGate() {
+  const { loading, user, guestChosen } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (loading) return;
+    const inWelcome = segments[0] === "welcome";
+    const decided = !!user || guestChosen;
+    if (!decided && !inWelcome) {
+      router.replace("/welcome");
+    } else if (decided && inWelcome) {
+      router.replace("/(tabs)");
+    }
+  }, [loading, user, guestChosen, segments, router]);
+
+  return null;
+}
 
 export default function RootLayout() {
   const [loaded, error] = useIconFonts();
@@ -36,7 +56,9 @@ export default function RootLayout() {
         <AuthProvider>
           <PlayerProvider>
             <StatusBar style="light" />
+            <AuthGate />
             <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#FFFFFF" } }}>
+              <Stack.Screen name="welcome" />
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="player" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
               <Stack.Screen name="login" options={{ presentation: "modal" }} />

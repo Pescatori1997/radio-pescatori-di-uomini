@@ -1,23 +1,24 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView, Dimensions } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter, usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { SlideInLeft } from "react-native-reanimated";
+import { api } from "@/src/api";
 import { colors, spacing, radius } from "@/src/theme";
 
 const NAV = [
-  { key: "dash", label: "Dashboard", icon: "view-dashboard", route: "/admin" },
-  { key: "team", label: "Team", icon: "anchor", route: "/admin/team" },
-  { key: "podcast", label: "Podcast", icon: "microphone", route: "/admin/podcasts" },
-  { key: "news", label: "News", icon: "newspaper-variant", route: "/admin/news" },
-  { key: "merch", label: "Merchandising", icon: "storefront", route: "/admin/products" },
-  { key: "schedule", label: "Palinsesto", icon: "calendar-month", route: "/admin/schedule" },
-  { key: "radio", label: "Radio", icon: "radio", route: "/admin/radio" },
-  { key: "prayer", label: "Richieste di Preghiera", icon: "hands-pray", route: "/admin/prayers" },
-  { key: "messages", label: "Messaggi & Testimonianze", icon: "message-text", route: "/admin/messages" },
-  { key: "users", label: "Utenti", icon: "account-group", route: "/admin/users" },
-  { key: "settings", label: "Impostazioni", icon: "cog", route: "/admin/settings" },
+  { key: "dash", label: "Dashboard", icon: "view-dashboard", route: "/admin", perm: null },
+  { key: "team", label: "Team", icon: "anchor", route: "/admin/team", perm: null },
+  { key: "podcast", label: "Podcast", icon: "microphone", route: "/admin/podcasts", perm: "podcasts" },
+  { key: "news", label: "News", icon: "newspaper-variant", route: "/admin/news", perm: "news" },
+  { key: "merch", label: "Merchandising", icon: "storefront", route: "/admin/products", perm: "merch" },
+  { key: "schedule", label: "Palinsesto", icon: "calendar-month", route: "/admin/schedule", perm: "schedule" },
+  { key: "radio", label: "Radio", icon: "radio", route: "/admin/radio", perm: "radio" },
+  { key: "prayer", label: "Richieste di Preghiera", icon: "hands-pray", route: "/admin/prayers", perm: "prayers" },
+  { key: "messages", label: "Messaggi & Testimonianze", icon: "message-text", route: "/admin/messages", perm: "messages" },
+  { key: "users", label: "Utenti", icon: "account-group", route: "/admin/users", perm: null },
+  { key: "settings", label: "Impostazioni", icon: "cog", route: "/admin/settings", perm: null },
 ];
 
 const ADMIN = {
@@ -29,7 +30,30 @@ export default function AdminShell({ title, activeKey, children }: { title: stri
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
+  const [perms, setPerms] = useState<string[]>([]);
   const wide = Dimensions.get("window").width >= 900;
+
+  useEffect(() => {
+    let cancelled = false;
+    api.adminMe()
+      .then((r: any) => { if (!cancelled) { setRole(r.role); setPerms(r.permissions || []); } })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  const isCollab = role === "collaborator";
+  const navItems = isCollab ? NAV.filter((n) => n.perm && perms.includes(n.perm)) : NAV;
+
+  // Collaborators that land on an admin-only section get redirected to their first allowed one.
+  useEffect(() => {
+    if (!isCollab) return;
+    const current = NAV.find((n) => n.key === activeKey);
+    const allowed = current && current.perm && perms.includes(current.perm);
+    if (!allowed && navItems.length > 0) {
+      router.replace(navItems[0].route as any);
+    }
+  }, [isCollab, activeKey, perms, navItems, router]);
 
   const Sidebar = ({ onNav }: { onNav?: () => void }) => (
     <View style={[styles.sidebar, { paddingTop: wide ? insets.top + spacing.lg : spacing.lg }]}>
@@ -37,11 +61,11 @@ export default function AdminShell({ title, activeKey, children }: { title: stri
         <View style={styles.brandBadge}><MaterialCommunityIcons name="anchor" size={20} color={colors.white} /></View>
         <View>
           <Text style={styles.brandName}>Admin Panel</Text>
-          <Text style={styles.brandSub}>Pescatori di Uomini</Text>
+          <Text style={styles.brandSub}>{isCollab ? "Collaboratore" : "Pescatori di Uomini"}</Text>
         </View>
       </View>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {NAV.map((n) => {
+        {navItems.map((n) => {
           const active = n.key === activeKey;
           return (
             <Pressable

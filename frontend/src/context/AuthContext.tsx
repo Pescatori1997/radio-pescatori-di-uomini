@@ -7,17 +7,36 @@ import { storage } from "@/src/utils/storage";
 
 WebBrowser.maybeCompleteAuthSession();
 
+const GUEST_KEY = "pdu_guest_mode";
+
+export const ROLE_ADMIN = "administrator";
+export const ROLE_COLLAB = "collaborator";
+export const ROLE_LISTENER = "listener";
+export type PermSection = "podcasts" | "news" | "merch" | "schedule" | "prayers" | "messages" | "radio" | "users";
+
 function extractSessionId(url?: string | null): string | null {
   if (!url) return null;
   const m = url.match(/[#?&]session_id=([^&]+)/);
   return m ? decodeURIComponent(m[1]) : null;
 }
 
-type User = { user_id: string; email: string; name: string; picture?: string | null };
+type User = {
+  user_id: string;
+  email: string;
+  name: string;
+  picture?: string | null;
+  role?: string;
+  permissions?: string[];
+};
 
 type AuthState = {
   user: User | null;
   loading: boolean;
+  guestChosen: boolean;
+  isAdmin: boolean;
+  isCollaborator: boolean;
+  can: (section: PermSection) => boolean;
+  continueAsGuest: () => Promise<void>;
   loginGoogle: () => Promise<void>;
   loginEmail: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
@@ -30,6 +49,7 @@ export const useAuth = () => useContext(AuthCtx);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [guestChosen, setGuestChosen] = useState(false);
 
   const setToken = async (token: string) => storage.secureSet(TOKEN_KEY, token);
 
@@ -47,6 +67,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const res = await api.session(sessionId);
     await setToken(res.token);
     setUser(res.user);
+    setGuestChosen(false);
+    await storage.removeItem(GUEST_KEY);
   };
 
   useEffect(() => {
@@ -78,6 +100,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         });
       }
+      const guest = await storage.getItem<boolean>(GUEST_KEY, false);
+      if (guest) setGuestChosen(true);
       const token = await storage.secureGet<string>(TOKEN_KEY, "");
       if (token) await loadMe();
       setLoading(false);
@@ -85,6 +109,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => { urlSub?.remove(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const continueAsGuest = async () => {
+    await storage.setItem(GUEST_KEY, true);
+    setGuestChosen(true);
+  };
 
   const loginGoogle = async () => {
     if (Platform.OS === "web" && typeof window !== "undefined") {
@@ -117,12 +146,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const res = await api.login({ email, password });
     await setToken(res.token);
     setUser(res.user);
+    setGuestChosen(false);
+    await storage.removeItem(GUEST_KEY);
   };
 
   const register = async (name: string, email: string, password: string) => {
     const res = await api.register({ name, email, password });
     await setToken(res.token);
     setUser(res.user);
+    setGuestChosen(false);
+    await storage.removeItem(GUEST_KEY);
   };
 
   const logout = async () => {
@@ -133,8 +166,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   };
 
+  const role = user?.role;
+  const isAdmin = role === ROLE_ADMIN;
+  const isCollaborator = role === ROLE_COLLAB;
+  const can = (section: PermSection) =>
+    isAdmin || (isCollaborator && (user?.permissions || []).includes(section));
+
   return (
-    <AuthCtx.Provider value={{ user, loading, loginGoogle, loginEmail, register, logout }}>
+    <AuthCtx.Provider
+      value={{
+        user,
+        loading,
+        guestChosen,
+        isAdmin,
+        isCollaborator,
+        can,
+        continueAsGuest,
+        loginGoogle,
+        loginEmail,
+        register,
+        logout,
+      }}
+    >
       {children}
     </AuthCtx.Provider>
   );

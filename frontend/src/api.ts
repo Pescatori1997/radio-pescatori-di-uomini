@@ -125,6 +125,8 @@ export const api = {
     return request(`/admin/users?${q.toString()}`, {}, true);
   },
   adminDeleteUser: (id: string) => request(`/admin/users/${id}`, { method: "DELETE" }, true),
+  adminSetUserRole: (id: string, body: { role: string; permissions?: string[] }) =>
+    request(`/admin/users/${id}/role`, { method: "PUT", body: JSON.stringify(body) }, true),
   // admin programs
   adminPrograms: () => request("/admin/programs", {}, true),
   adminCreateProgram: (body: any) => request("/admin/programs", { method: "POST", body: JSON.stringify(body) }, true),

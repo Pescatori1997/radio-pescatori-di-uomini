@@ -4,11 +4,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/src/api";
+import { useAuth } from "@/src/context/AuthContext";
 import { colors, spacing, radius } from "@/src/theme";
 
 export default function Messages() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { user } = useAuth();
   const [type, setType] = useState<"message" | "testimony">("message");
   const [text, setText] = useState("");
   const [name, setName] = useState("");
@@ -22,6 +24,7 @@ export default function Messages() {
   useFocusEffect(useCallback(() => { loadTestimonies(); }, [loadTestimonies]));
 
   const submit = async () => {
+    if (!user) { router.push("/login"); return; }
     if (text.trim().length < 3) return;
     setBusy(true);
     try {
@@ -39,6 +42,14 @@ export default function Messages() {
       </View>
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }} keyboardShouldPersistTaps="handled">
         <Text style={styles.intro}>Invia un messaggio o una testimonianza: la leggeremo durante le dirette.</Text>
+
+        {!user && (
+          <Pressable testID="msg-login-prompt" style={styles.guestPrompt} onPress={() => router.push("/login")}>
+            <Ionicons name="lock-closed-outline" size={18} color={colors.brandPrimary} />
+            <Text style={styles.guestPromptText}>Accedi o registrati per inviare il tuo messaggio.</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.brandPrimary} />
+          </Pressable>
+        )}
 
         <View style={styles.toggle}>
           {(["message", "testimony"] as const).map((t) => (
@@ -62,7 +73,7 @@ export default function Messages() {
         </View>
 
         <Pressable testID="msg-submit" style={[styles.primaryBtn, busy && { opacity: 0.6 }]} onPress={submit} disabled={busy}>
-          <Text style={styles.primaryText}>{busy ? "Invio..." : "Invia"}</Text>
+          <Text style={styles.primaryText}>{!user ? "Accedi per inviare" : busy ? "Invio..." : "Invia"}</Text>
         </Pressable>
 
         {testimonies.length > 0 && (
@@ -89,6 +100,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
   headerTitle: { fontSize: 17, fontWeight: "800", color: colors.onSurface },
   intro: { fontSize: 15, color: colors.onSurfaceSecondary, lineHeight: 22 },
+  guestPrompt: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.brandTertiary, padding: spacing.md, borderRadius: radius.md, marginTop: spacing.lg },
+  guestPromptText: { flex: 1, fontSize: 13, fontWeight: "600", color: colors.onBrandTertiary },
   toggle: { flexDirection: "row", backgroundColor: colors.surfaceTertiary, borderRadius: radius.pill, padding: 4, marginTop: spacing.lg },
   toggleBtn: { flex: 1, paddingVertical: spacing.sm, borderRadius: radius.pill, alignItems: "center" },
   toggleActive: { backgroundColor: colors.navy },

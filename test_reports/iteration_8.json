@@ -1,0 +1,40 @@
+{
+  "summary": "Full-stack RBAC testing (backend + frontend). Backend: 23/23 pytest cases PASS in /app/backend/tests/test_rbac.py covering register/login/me returning role+permissions, /admin/me 403-for-listener + 200-for-admin, admin-only PUT /admin/users/{uid}/role (with 403 guard for non-admin token), collaborator flow (podcasts perm allows GET+POST /admin/podcasts but /admin/users and /admin/settings return 403 as expected), admin endpoints (stats/applications/users/settings) still work, and public regression (/live/status, /podcasts, /news, /products all 200). Frontend: welcome gate loads on first visit with login form + 'Continua con Google' + 'Continua come Ospite'; guest button persists pdu_guest_mode=true and enters tabs; /prayer shows msg-login-prompt banner and submit text becomes 'Accedi per inviare' routing guest to /login; /messages behaves identically (testIDs are 'msg-login-prompt' + 'msg-submit'); podcast detail favorite button (pod-detail-fav) routes guest to /login; email registration from welcome logs the user in and Profilo screen shows the registered name + email.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "shadow* style props deprecation", "issue": "Console warning 'shadow* style props are deprecated. Use boxShadow' repeatedly logged on Home/other screens (web preview). Not blocking but should migrate shadowColor/shadowOffset/... to boxShadow for RN Web / RN 0.76+ compatibility."},
+      {"component": "props.pointerEvents deprecation", "issue": "Console warning 'props.pointerEvents is deprecated. Use style.pointerEvents'. Non-blocking; migrate to style.pointerEvents."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_rbac.py",
+    "/app/test_reports/pytest/iteration_8_results.xml"
+  ],
+  "action_items": [
+    "Migrate any remaining `shadow*` StyleSheet props to `boxShadow` and `props.pointerEvents` -> `style.pointerEvents` to silence RN 0.76+ deprecation warnings (non-blocking).",
+    "Consider splitting server.py (1375 lines) into routers (auth/admin/rbac/content/merch) for maintainability."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 1375 lines; splitting into APIRouter modules is now overdue.",
+    "get_current_user correctly re-reads role/permissions from db.users on every request, so promotions/demotions take effect immediately without re-login. Verified via test_10_admin_me_for_collaborator (collab token issued before promotion sees the new role/permissions).",
+    "require_perm short-circuits for administrator/allowlist users - good.",
+    "PUT /admin/users/{uid}/role correctly protects the ADMIN_EMAILS allowlist (returns 400 if trying to change an admin's role) and filters permissions against PERM_SECTIONS.",
+    "Frontend AuthContext.can() correctly composes admin OR (collaborator AND permission in user.permissions)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_rbac.py (new - 23 pytest cases, uses ADMINTESTTOKEN123 seeded by conftest.py)"
+  ],
+  "success_rate": {"backend": "100% (23/23)", "frontend": "100% (6/6 flows validated: welcome gate, guest continue, guest prayer gate, guest messages gate, guest podcast fav gate, email registration -> profile)"},
+  "seed_data_creation": "Tests create TEST_-prefixed users via /api/auth/register and clean them up in the final teardown step via DELETE /api/admin/users/{uid} (admin token). One test podcast is created and immediately deleted. Verified no TEST_-prefixed users remain post-run.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "RBAC endpoints verified: /api/auth/{register,login,me} now include role+permissions; /api/admin/me returns 200 for admin (is_admin=true, role=administrator, permissions=all 8 sections) and for collaborators with permissions (is_admin=false, role=collaborator, permissions=[assigned]); PUT /api/admin/users/{uid}/role assigns role+filtered permissions (admin-only, 403 for others, 400 for admin-allowlist targets); require_perm(section) authorizes both admins and collaborators-with-section, denies others 403. Frontend testIDs verified: welcome-{google,name,email,password,submit,toggle,guest}, prayer-{login-prompt,submit}, msg-{login-prompt,submit,type-*,name,text}, pod-detail-{back,play,fav,share}. Guest flag key = 'pdu_guest_mode' (localStorage on web).",
+  "rca_of_issue": "N/A - no bugs found."
+}
