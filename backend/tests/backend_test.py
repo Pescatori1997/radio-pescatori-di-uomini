@@ -164,6 +164,16 @@ def test_me_unauth():
     assert r.status_code == 401
 
 
+def test_auth_session_invalid_token():
+    """POST /api/auth/session with fake token should return 401, not 500."""
+    r = session.post(f"{API}/auth/session",
+                     json={"session_token": "obviously_fake_session_token_xyz_123"},
+                     timeout=20)
+    assert r.status_code == 401, f"expected 401, got {r.status_code}: {r.text}"
+    assert "detail" in r.json()
+
+
+
 # --- Favorites & History ---
 def test_favorite_toggle_on():
     pid = state["pod_id"]

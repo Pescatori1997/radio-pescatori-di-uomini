@@ -5,6 +5,14 @@ import * as Linking from "expo-linking";
 import { api, TOKEN_KEY } from "@/src/api";
 import { storage } from "@/src/utils/storage";
 
+WebBrowser.maybeCompleteAuthSession();
+
+function extractSessionId(url?: string | null): string | null {
+  if (!url) return null;
+  const m = url.match(/[#?&]session_id=([^&]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
 type User = { user_id: string; email: string; name: string; picture?: string | null };
 
 type AuthState = {
@@ -42,42 +50,66 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    let urlSub: { remove: () => void } | undefined;
     (async () => {
       // Web: check for session_id in URL fragment/query first
       if (Platform.OS === "web" && typeof window !== "undefined") {
-        const hash = window.location.hash || "";
-        const search = window.location.search || "";
-        const match = hash.match(/session_id=([^&]+)/) || search.match(/session_id=([^&]+)/);
-        if (match) {
+        const sid = extractSessionId(window.location.hash) || extractSessionId(window.location.search);
+        if (sid) {
           try {
-            await processSessionId(decodeURIComponent(match[1]));
+            await processSessionId(sid);
             window.history.replaceState(null, "", window.location.pathname);
           } catch {}
           setLoading(false);
           return;
         }
+      } else {
+        // Native cold-start: app opened via deep link carrying session_id
+        const initialUrl = await Linking.getInitialURL();
+        const sid = extractSessionId(initialUrl);
+        if (sid) {
+          try { await processSessionId(sid); } catch {}
+        }
+        // Hot deep-link listener (fallback to openAuthSessionAsync result)
+        urlSub = Linking.addEventListener("url", async ({ url }) => {
+          const s = extractSessionId(url);
+          if (s) {
+            try { await processSessionId(s); } catch {}
+          }
+        });
       }
       const token = await storage.secureGet<string>(TOKEN_KEY, "");
       if (token) await loadMe();
       setLoading(false);
     })();
+    return () => { urlSub?.remove(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loginGoogle = async () => {
-    const redirectUrl =
-      Platform.OS === "web" && typeof window !== "undefined"
-        ? window.location.origin + "/"
-        : Linking.createURL("");
-    const authUrl = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
     if (Platform.OS === "web" && typeof window !== "undefined") {
+      const redirectUrl = window.location.origin + "/";
+      const authUrl = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+      // Break out of the preview iframe if embedded (OAuth cannot run inside a cross-origin iframe).
+      try {
+        if (window.top && window.top !== window.self) {
+          window.top.location.href = authUrl;
+          return;
+        }
+      } catch {
+        // Cross-origin iframe: cannot access window.top -> open OAuth in a new top-level tab.
+        window.open(authUrl, "_blank");
+        return;
+      }
       window.location.href = authUrl;
       return;
     }
+    const redirectUrl = Linking.createURL("");
+    const authUrl = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
     const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
-    if (result.type === "success" && result.url) {
-      const match =
-        result.url.match(/session_id=([^&]+)/) || result.url.match(/#session_id=([^&]+)/);
-      if (match) await processSessionId(decodeURIComponent(match[1]));
+    if (result.type === "success") {
+      const sid = extractSessionId(result.url);
+      if (sid) await processSessionId(sid);
     }
   };
 
