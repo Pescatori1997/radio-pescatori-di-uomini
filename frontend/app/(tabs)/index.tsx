@@ -8,7 +8,7 @@ import { useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { api } from "@/src/api";
-import { usePlayer, Track } from "@/src/context/PlayerContext";
+import { usePlayer } from "@/src/context/PlayerContext";
 import Collaborators from "@/src/components/Collaborators";
 import WhatsAppSection from "@/src/components/WhatsAppSection";
 import PressableScale from "@/src/components/PressableScale";
@@ -20,8 +20,7 @@ const STUDIO = require("@/assets/images/studio.png");
 export default function Home() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { playTrack, track, isPlaying, togglePlay } = usePlayer();
-  const [live, setLive] = useState<any>(null);
+  const { playLive, track, isPlaying, liveInfo } = usePlayer();
   const [podcasts, setPodcasts] = useState<any[]>([]);
   const [news, setNews] = useState<any[]>([]);
   const [programs, setPrograms] = useState<any[]>([]);
@@ -30,13 +29,11 @@ export default function Home() {
 
   const load = useCallback(async () => {
     try {
-      const [l, p, n, pr] = await Promise.all([
-        api.liveStatus(),
+      const [p, n, pr] = await Promise.all([
         api.podcasts(),
         api.news(),
         api.programs(),
       ]);
-      setLive(l);
       setPodcasts(p);
       setNews(n);
       setPrograms(pr);
@@ -49,16 +46,11 @@ export default function Home() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const liveTrack: Track | null = live
-    ? { id: "live", title: live.title, artist: live.artist, artwork: live.artwork, url: live.stream_url, isLive: true }
-    : null;
-
+  const live = liveInfo;
   const isLivePlaying = track?.id === "live" && isPlaying;
 
   const onListen = () => {
-    if (!liveTrack) return;
-    if (track?.id === "live") togglePlay();
-    else playTrack(liveTrack);
+    playLive();
   };
 
   if (loading) {

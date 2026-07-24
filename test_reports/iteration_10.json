@@ -1,0 +1,44 @@
+{
+  "summary": "Full-stack testing of the real AzuraCast integration (replacing the demo somafm stream). Backend: 15/15 pytest cases PASS in /app/backend/tests/test_radio_azuracast.py — GET /api/live/status returns the full expected shape (is_live, is_online, title, artist, album, artwork, listeners, stream_url, refresh_interval, station_name) with the LIVE song title ('musica 3') fetched from the AzuraCast Now Playing API server-side + station_name 'Pescatori di Uomini' + refresh_interval=15; GET /api/live/stream returns 503 (NOT 500 or hang) when the AzuraCast mount is offline (502 upstream) — verified with 25s timeout, connection closed cleanly; GET /api/live/art returns 400 for non-http URLs and 503 for unreachable hosts; GET /api/admin/radio returns 401 unauthenticated, 200 with admin token; PUT /api/admin/radio with refresh_interval=20 persists and is immediately reflected in /api/live/status; PUT /api/admin/radio with a new stream_url is picked up dynamically by /api/live/stream (proves no code change needed); non-admin listener account gets 403 on both GET and PUT /api/admin/radio; regression: /api/podcasts, /api/news, /api/products, /api/programs all 200; /api/auth/register + /api/auth/me still work. Frontend (mobile viewport 390x844): Home (guest) shows 'IN DIRETTA ORA' badge + 'ORA IN ONDA' label + LIVE song title 'musica 3' + station 'Pescatori di Uomini' — real AzuraCast metadata rendered end-to-end via the polling PlayerContext; tapping 'Ascolta la Diretta' does NOT crash the app even though the MP3 stream 503s — button correctly toggles to 'In riproduzione' with pause icon and the mini-player appears at the bottom; PlayerContext handles the 503 via its reconnect state machine (browser emits a benign 'source not found' event which is caught). Admin login (pescatoridiuomini@outlook.it / Admin1234!) redirects to /admin. /admin/radio renders ALL required fields with testIDs: radio-live (switch), radio-station, radio-stream, radio-backup, radio-metadata, radio-refresh, radio-title, radio-artist, radio-artwork, radio-save; entering 25 in refresh, tapping Salva shows 'Impostazioni radio salvate ✓' and after page reload the field correctly displays 25 (persisted); restored to 15 for cleanup. All 9 review-request acceptance items verified.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "shadow* style props deprecation", "issue": "Console warning '\"shadow*\" style props are deprecated. Use \"boxShadow\"' persists on multiple screens (carry-over from prior iterations). Non-blocking on web preview."},
+      {"component": "props.pointerEvents deprecation", "issue": "'props.pointerEvents is deprecated. Use style.pointerEvents' warning persists (carry-over). Non-blocking."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_radio_azuracast.py",
+    "/app/test_reports/pytest/iteration_10_results.xml"
+  ],
+  "action_items": [
+    "(carry-over) Migrate shadow* StyleSheet props to boxShadow and props.pointerEvents to style.pointerEvents to silence RN 0.76+ warnings.",
+    "(carry-over) Consider splitting server.py (~1600 lines) into APIRouter modules."
+  ],
+  "critical_code_review_comments": [
+    "/api/live/status uses a broad try/except around httpx.get and always returns a stable shape (never raises) — perfect for offline resilience. It correctly maps AzuraCast 'now_playing.song.title/artist/art' + 'listeners.current' + honors live.streamer_name when a DJ is on air.",
+    "/api/live/stream builds an httpx AsyncClient with follow_redirects=True, closes upstream + client on non-200 and on generator finally-block. No resource leaks, no server hang under offline conditions (verified with 25s timeout).",
+    "/api/live/art restricts to http(s) URLs and follows redirects — appropriate for AzuraCast's dynamic art endpoints.",
+    "PUT /api/admin/radio uses upsert on live_status _id='current' — enables dynamic changes with no code modification. Confirmed /api/live/stream reads the DB value on each request (no in-memory cache).",
+    "Frontend PlayerContext polls metadata every liveInfo.refresh_interval s (min 5s), updates the live track in place without restarting audio — clean stale-closure avoidance via trackRef/shouldPlayLiveRef.",
+    "Reconnection state machine: playbackStatusUpdate listener detects stream drops when isLive && shouldPlayLive && !playing && !isBuffering → schedules attemptReconnect with backoff (1.5s → 4s → 4s → 4s → 10s). connection state exposed to UI as 'online'|'reconnecting'|'offline'. Sound design.",
+    "api.liveStatus() rewrites http-only artwork to the HTTPS /api/live/art proxy — prevents mixed-content on web. Good.",
+    "startup() migrates any leftover somafm/demo stream_url to AZ_STREAM_URL — safe rollout.",
+    "admin/radio.tsx clamps refresh_interval to max(5, int) before submission — matches server side which defaults 15 when unset."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_radio_azuracast.py (new — 15 pytest cases; final version fixed lowercase-email assertion)"
+  ],
+  "success_rate": {
+    "backend": "100% (15/15)",
+    "frontend": "100% (home live metadata, live tap no-crash, admin login + redirect, /admin/radio all fields, save + persistence)"
+  },
+  "seed_data_creation": "Tests create TEST_-prefixed users via /api/auth/register and clean them up via DELETE /api/admin/users/{uid} using ADMINTESTTOKEN123. Admin radio settings temporarily changed then restored to original values. No residual data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "AzuraCast station at 84.247.184.136 is intentionally offline (mount returns 502) — /api/live/stream must return 503 (verified), Now Playing metadata API still works and returns 'musica 3'. Admin creds: pescatoridiuomini@outlook.it / Admin1234!. Backend auto-seeds ADMINTESTTOKEN123 session via conftest.py. Frontend testIDs on /admin/radio: radio-live, radio-station, radio-stream, radio-backup, radio-metadata, radio-refresh, radio-title, radio-artist, radio-artwork, radio-save. Home mini-player + Ascolta la Diretta button confirmed. If station comes back online, /api/live/stream will start returning 200 audio/mpeg without any code change (dynamic DB lookup).",
+  "rca_of_issue": "N/A — no bugs found. All backend + frontend acceptance items verified."
+}

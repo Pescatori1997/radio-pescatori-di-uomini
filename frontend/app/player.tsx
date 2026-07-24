@@ -34,7 +34,7 @@ function TouchBar({ value, onSeek, filled }: { value: number; onSeek: (v: number
 export default function PlayerScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { track, isPlaying, isBuffering, togglePlay, volume, setVolume, position, duration, seekTo } = usePlayer();
+  const { track, isPlaying, isBuffering, togglePlay, volume, setVolume, position, duration, seekTo, liveInfo, connection } = usePlayer();
 
   if (!track) {
     return (
@@ -76,7 +76,20 @@ export default function PlayerScreen() {
         <Text style={styles.artist}>{track.artist}</Text>
 
         {track.isLive ? (
-          <View style={styles.liveTag}><View style={styles.liveDotSm} /><Text style={styles.liveTagText}>IN DIRETTA</Text></View>
+          <View>
+            <View style={[styles.liveTag, connection === "reconnecting" ? styles.tagWarn : connection === "offline" ? styles.tagErr : null]}>
+              <View style={[styles.liveDotSm, connection === "reconnecting" ? { backgroundColor: colors.warning } : connection === "offline" ? { backgroundColor: colors.error } : null]} />
+              <Text style={[styles.liveTagText, connection === "reconnecting" ? { color: colors.warning } : connection === "offline" ? { color: colors.error } : null]}>
+                {connection === "reconnecting" ? "RICONNESSIONE..." : connection === "offline" ? "OFFLINE" : "IN DIRETTA"}
+              </Text>
+            </View>
+            {typeof liveInfo?.listeners === "number" && liveInfo.listeners > 0 && (
+              <View style={styles.listenersRow}>
+                <Ionicons name="people" size={15} color={colors.brandSecondary} />
+                <Text style={styles.listenersText}>{liveInfo.listeners} in ascolto</Text>
+              </View>
+            )}
+          </View>
         ) : (
           <View style={styles.progressWrap}>
             <TouchBar value={progress} filled={colors.brandPrimary} onSeek={(v) => seekTo(v * duration)} />
@@ -125,8 +138,12 @@ const styles = StyleSheet.create({
   title: { color: colors.white, fontSize: 26, fontWeight: "800", flex: 1 },
   artist: { color: colors.muted, fontSize: 16, marginTop: spacing.xs },
   liveTag: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", backgroundColor: "rgba(16,185,129,0.15)", paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radius.pill, marginTop: spacing.xl },
+  tagWarn: { backgroundColor: "rgba(245,158,11,0.15)" },
+  tagErr: { backgroundColor: "rgba(239,68,68,0.15)" },
   liveDotSm: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.success },
   liveTagText: { color: colors.success, fontSize: 12, fontWeight: "700" },
+  listenersRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: spacing.sm },
+  listenersText: { color: colors.brandSecondary, fontSize: 13, fontWeight: "600" },
   progressWrap: { marginTop: spacing.xl },
   timeRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 2 },
   timeText: { color: colors.muted, fontSize: 12 },

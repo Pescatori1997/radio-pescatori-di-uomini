@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { createAudioPlayer, setAudioModeAsync, AudioPlayer } from "expo-audio";
+import { api, liveStreamUrl } from "@/src/api";
 
 export type Track = {
   id: string;
@@ -10,6 +11,20 @@ export type Track = {
   isLive: boolean;
 };
 
+export type LiveInfo = {
+  is_live: boolean;
+  is_online: boolean;
+  title: string;
+  artist: string;
+  album?: string;
+  artwork: string;
+  listeners: number | null;
+  refresh_interval: number;
+  station_name?: string;
+};
+
+export type Connection = "online" | "offline" | "reconnecting";
+
 type PlayerState = {
   track: Track | null;
   isPlaying: boolean;
@@ -17,7 +32,10 @@ type PlayerState = {
   volume: number;
   position: number;
   duration: number;
+  liveInfo: LiveInfo | null;
+  connection: Connection;
   playTrack: (t: Track) => void;
+  playLive: () => void;
   togglePlay: () => void;
   setVolume: (v: number) => void;
   seekTo: (sec: number) => void;
@@ -35,6 +53,40 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [volume, setVolumeState] = useState(1);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [liveInfo, setLiveInfo] = useState<LiveInfo | null>(null);
+  const [connection, setConnection] = useState<Connection>("online");
+
+  // Refs for live reconnection logic (avoid stale closures inside the audio listener).
+  const trackRef = useRef<Track | null>(null);
+  const shouldPlayLiveRef = useRef(false);
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectAttempts = useRef(0);
+  trackRef.current = track;
+
+  const clearReconnect = () => {
+    if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null; }
+  };
+
+  const attemptReconnect = () => {
+    const player = playerRef.current;
+    const t = trackRef.current;
+    if (!player || !t || !t.isLive || !shouldPlayLiveRef.current) return;
+    reconnectAttempts.current += 1;
+    setConnection(reconnectAttempts.current > 3 ? "offline" : "reconnecting");
+    try {
+      // Re-open the stream from scratch; low-bandwidth friendly (server pass-through).
+      player.replace({ uri: `${liveStreamUrl()}?t=${Date.now()}` });
+      player.play();
+    } catch (e) {
+      console.log("[radio] reconnect error", e);
+    }
+    // Keep retrying with backoff while the user still wants live audio.
+    clearReconnect();
+    const delay = reconnectAttempts.current > 3 ? 10000 : 4000;
+    reconnectTimer.current = setTimeout(() => {
+      if (shouldPlayLiveRef.current && !playerRef.current?.playing) attemptReconnect();
+    }, delay);
+  };
 
   useEffect(() => {
     setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true }).catch(() => {});
@@ -42,20 +94,67 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     player.volume = 1;
     playerRef.current = player;
     const sub = player.addListener("playbackStatusUpdate", (status: any) => {
-      setIsPlaying(!!status.playing);
-      setIsBuffering(!!status.isBuffering && !status.playing);
+      const playing = !!status.playing;
+      setIsPlaying(playing);
+      setIsBuffering(!!status.isBuffering && !playing);
       if (typeof status.currentTime === "number") setPosition(status.currentTime);
       if (typeof status.duration === "number" && status.duration > 0) setDuration(status.duration);
+
+      const t = trackRef.current;
+      if (t?.isLive && shouldPlayLiveRef.current) {
+        if (playing) {
+          // Healthy stream
+          reconnectAttempts.current = 0;
+          clearReconnect();
+          setConnection("online");
+        } else if (!status.isBuffering && !reconnectTimer.current) {
+          // Stream dropped unexpectedly -> reconnect
+          console.log("[radio] stream dropped, reconnecting...");
+          setConnection("reconnecting");
+          reconnectTimer.current = setTimeout(attemptReconnect, 1500);
+        }
+      }
     });
     return () => {
       sub?.remove();
+      clearReconnect();
       player.release();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Poll live metadata every refresh_interval seconds (default 15). Never crashes.
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const tick = async () => {
+      try {
+        const info = await api.liveStatus();
+        if (cancelled) return;
+        setLiveInfo(info);
+        // Reflect the current song in the live track without restarting audio.
+        setTrack((cur) => (cur && cur.id === "live"
+          ? { ...cur, title: info.title, artist: info.artist, artwork: info.artwork }
+          : cur));
+      } catch (e) {
+        console.log("[radio] metadata poll failed", e);
+      } finally {
+        if (!cancelled) {
+          const secs = Math.max(5, (liveInfo?.refresh_interval || 15));
+          timer = setTimeout(tick, secs * 1000);
+        }
+      }
+    };
+    tick();
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveInfo?.refresh_interval]);
 
   const playTrack = (t: Track) => {
     const player = playerRef.current;
     if (!player) return;
+    shouldPlayLiveRef.current = t.isLive;
+    if (!t.isLive) { clearReconnect(); reconnectAttempts.current = 0; }
     if (track?.id !== t.id) {
       setTrack(t);
       setPosition(0);
@@ -64,15 +163,36 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }
     player.play();
     setIsPlaying(true);
+    if (t.isLive) setConnection("reconnecting");
+  };
+
+  const playLive = () => {
+    if (track?.id === "live") { togglePlay(); return; }
+    playTrack({
+      id: "live",
+      title: liveInfo?.title || "In Diretta",
+      artist: liveInfo?.artist || liveInfo?.station_name || "Pescatori di Uomini",
+      artwork: liveInfo?.artwork || "",
+      url: liveStreamUrl(),
+      isLive: true,
+    });
   };
 
   const togglePlay = () => {
     const player = playerRef.current;
     if (!player || !track) return;
     if (isPlaying) {
+      if (track.isLive) { shouldPlayLiveRef.current = false; clearReconnect(); }
       player.pause();
       setIsPlaying(false);
     } else {
+      if (track.isLive) {
+        shouldPlayLiveRef.current = true;
+        reconnectAttempts.current = 0;
+        // Re-open a fresh live connection on resume.
+        player.replace({ uri: `${liveStreamUrl()}?t=${Date.now()}` });
+        setConnection("reconnecting");
+      }
       player.play();
       setIsPlaying(true);
     }
@@ -88,6 +208,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   };
 
   const stop = () => {
+    shouldPlayLiveRef.current = false;
+    clearReconnect();
     playerRef.current?.pause();
     setIsPlaying(false);
     setTrack(null);
@@ -95,7 +217,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <PlayerCtx.Provider
-      value={{ track, isPlaying, isBuffering, volume, position, duration, playTrack, togglePlay, setVolume, seekTo, stop }}
+      value={{ track, isPlaying, isBuffering, volume, position, duration, liveInfo, connection, playTrack, playLive, togglePlay, setVolume, seekTo, stop }}
     >
       {children}
     </PlayerCtx.Provider>

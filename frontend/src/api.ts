@@ -27,7 +27,14 @@ async function request(path: string, options: RequestInit = {}, auth = false) {
 }
 
 export const api = {
-  liveStatus: () => request("/live/status"),
+  liveStatus: async () => {
+    const d = await request("/live/status");
+    // Proxy HTTP artwork through the HTTPS backend so it renders on web (no mixed content).
+    if (d && typeof d.artwork === "string" && d.artwork.startsWith("http://")) {
+      d.artwork = `${BASE}/api/live/art?u=${encodeURIComponent(d.artwork)}`;
+    }
+    return d;
+  },
   podcasts: (search?: string, category?: string) => {
     const q = new URLSearchParams();
     if (search) q.set("search", search);
@@ -187,3 +194,6 @@ export const api = {
   testimonies: () => request("/testimonies"),
   settings: () => request("/settings"),
 };
+
+// HTTPS pass-through URL for the live radio stream (works on web + native).
+export const liveStreamUrl = () => `${BASE}/api/live/stream`;

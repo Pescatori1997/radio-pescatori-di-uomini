@@ -1,4 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Header, Depends
+from fastapi.responses import StreamingResponse, Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -25,6 +26,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 DEMO_STREAM = "https://ice1.somafm.com/christmas-128-mp3"
+
+# ---------------- Real AzuraCast radio ----------------
+AZ_STREAM_URL = "http://84.247.184.136/listen/pescatori/radio.mp3"
+AZ_NOWPLAYING_URL = "http://84.247.184.136/api/nowplaying/pescatori"
+DEFAULT_ART = "https://images.unsplash.com/photo-1592818868295-f527dbac420d?w=600&q=85"
 
 
 def now_utc():
@@ -222,13 +228,100 @@ async def logout(authorization: Optional[str] = Header(None)):
 # ---------------- Live status ----------------
 @api_router.get("/live/status")
 async def live_status():
-    doc = await db.live_status.find_one({"_id": "current"})
-    if not doc:
-        return {"is_live": True, "title": "Lode e Adorazione", "artist": "Pescatori di Uomini",
-                "artwork": "https://images.unsplash.com/photo-1592818868295-f527dbac420d?w=600&q=85",
-                "stream_url": DEMO_STREAM}
-    doc.pop("_id", None)
-    return doc
+    """Live radio metadata proxied from AzuraCast (server-side to avoid CORS / mixed-content).
+    Never raises: if the Now Playing API is unreachable the stored fallback is returned and
+    the stream keeps playing with an "In Diretta" label."""
+    doc = await db.live_status.find_one({"_id": "current"}) or {}
+    meta_url = doc.get("metadata_url") or AZ_NOWPLAYING_URL
+    stream = doc.get("stream_url") or AZ_STREAM_URL
+    refresh = int(doc.get("refresh_interval") or 15)
+    result = {
+        "is_live": True,
+        "is_online": False,
+        "title": doc.get("title") or "In Diretta",
+        "artist": doc.get("artist") or doc.get("station_name") or "Pescatori di Uomini",
+        "album": "",
+        "artwork": doc.get("artwork") or DEFAULT_ART,
+        "listeners": None,
+        "stream_url": stream,
+        "refresh_interval": refresh if refresh > 0 else 15,
+        "station_name": doc.get("station_name") or "Pescatori di Uomini",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=8) as hc:
+            r = await hc.get(meta_url)
+            r.raise_for_status()
+            data = r.json()
+        np = data.get("now_playing") or {}
+        song = np.get("song") or {}
+        live = data.get("live") or {}
+        listeners = (data.get("listeners") or {}).get("current")
+        title = (song.get("title") or "").strip()
+        artist = (song.get("artist") or "").strip()
+        if live.get("is_live") and live.get("streamer_name"):
+            artist = live.get("streamer_name")
+        result.update({
+            "is_online": bool(data.get("is_online", True)),
+            "is_live": True,
+            "title": title or result["title"],
+            "artist": artist or result["artist"],
+            "album": (song.get("album") or ""),
+            "artwork": song.get("art") or result["artwork"],
+            "listeners": listeners,
+        })
+    except Exception as e:
+        logger.warning("Now Playing fetch failed: %s", e)
+    return result
+
+
+@api_router.get("/live/stream")
+async def live_stream():
+    """HTTPS pass-through proxy for the AzuraCast MP3 stream so it plays on web (no mixed
+    content) and native alike. Errors return 503 without crashing the app."""
+    doc = await db.live_status.find_one({"_id": "current"}) or {}
+    stream = doc.get("stream_url") or AZ_STREAM_URL
+    client = httpx.AsyncClient(timeout=httpx.Timeout(15.0, read=None), follow_redirects=True)
+    try:
+        req = client.build_request("GET", stream)
+        upstream = await client.send(req, stream=True)
+    except Exception as e:
+        await client.aclose()
+        logger.warning("Stream connect failed: %s", e)
+        raise HTTPException(status_code=503, detail="Stream non disponibile")
+    if upstream.status_code != 200:
+        code = upstream.status_code
+        await upstream.aclose()
+        await client.aclose()
+        logger.warning("Stream upstream status %s", code)
+        raise HTTPException(status_code=503, detail="Stream offline")
+
+    async def gen():
+        try:
+            async for chunk in upstream.aiter_bytes(chunk_size=16384):
+                yield chunk
+        except Exception as e:
+            logger.info("Stream ended: %s", e)
+        finally:
+            await upstream.aclose()
+            await client.aclose()
+
+    media = upstream.headers.get("content-type", "audio/mpeg")
+    return StreamingResponse(gen(), media_type=media, headers={"Cache-Control": "no-cache"})
+
+
+@api_router.get("/live/art")
+async def live_art(u: str):
+    """HTTPS proxy for now-playing artwork (AzuraCast serves it over HTTP)."""
+    if not u.startswith("http"):
+        raise HTTPException(status_code=400, detail="URL non valido")
+    try:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as hc:
+            r = await hc.get(u)
+            r.raise_for_status()
+    except Exception:
+        raise HTTPException(status_code=503, detail="Copertina non disponibile")
+    return Response(content=r.content, media_type=r.headers.get("content-type", "image/jpeg"),
+                    headers={"Cache-Control": "public, max-age=60"})
 
 
 # ---------------- Content routes ----------------
@@ -1245,6 +1338,7 @@ class RadioSettings(BaseModel):
     stream_url: Optional[str] = None
     backup_url: Optional[str] = None
     metadata_url: Optional[str] = None
+    refresh_interval: Optional[int] = None
     is_live: Optional[bool] = None
     title: Optional[str] = None
     artist: Optional[str] = None
@@ -1451,13 +1545,26 @@ async def startup():
     if not await db.live_status.find_one({"_id": "current"}):
         await db.live_status.insert_one({
             "_id": "current", "is_live": True,
-            "title": "Lode e Adorazione", "artist": "Pescatori di Uomini",
-            "artwork": "https://images.unsplash.com/photo-1592818868295-f527dbac420d?w=600&q=85",
-            "stream_url": DEMO_STREAM,
+            "title": "In Diretta", "artist": "Pescatori di Uomini",
+            "artwork": DEFAULT_ART,
+            "stream_url": AZ_STREAM_URL,
             "station_name": "Pescatori di Uomini",
             "backup_url": "",
-            "metadata_url": "",
+            "metadata_url": AZ_NOWPLAYING_URL,
+            "refresh_interval": 15,
         })
+    else:
+        # Migrate any leftover demo stream to the real AzuraCast endpoints.
+        cur = await db.live_status.find_one({"_id": "current"})
+        patch = {}
+        if not cur.get("stream_url") or "somafm" in (cur.get("stream_url") or "") or cur.get("stream_url") == DEMO_STREAM:
+            patch["stream_url"] = AZ_STREAM_URL
+        if not cur.get("metadata_url"):
+            patch["metadata_url"] = AZ_NOWPLAYING_URL
+        if not cur.get("refresh_interval"):
+            patch["refresh_interval"] = 15
+        if patch:
+            await db.live_status.update_one({"_id": "current"}, {"$set": patch})
 
     if not await db.settings.find_one({"_id": "general"}):
         await db.settings.insert_one({
