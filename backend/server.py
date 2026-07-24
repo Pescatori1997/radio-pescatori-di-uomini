@@ -405,13 +405,32 @@ async def get_history(authorization: Optional[str] = Header(None)):
 
 # ---------------- Admin (RBAC) ----------------
 ADMIN_EMAILS = [e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()]
+ROLE_ADMIN, ROLE_COLLAB, ROLE_LISTENER = "administrator", "collaborator", "listener"
+PERM_SECTIONS = ["podcasts", "news", "merch", "schedule", "prayers", "messages", "radio", "users"]
+
+
+def role_for_email(email: str) -> str:
+    return ROLE_ADMIN if (email or "").lower() in ADMIN_EMAILS else ROLE_LISTENER
 
 
 async def require_admin(authorization: Optional[str] = Header(None)):
     user = await get_current_user(authorization)
-    if (user.get("email") or "").lower() not in ADMIN_EMAILS:
-        raise HTTPException(status_code=403, detail="Accesso negato: non sei un amministratore")
-    return user
+    email = (user.get("email") or "").lower()
+    if user.get("role") == ROLE_ADMIN or email in ADMIN_EMAILS:
+        return user
+    raise HTTPException(status_code=403, detail="Accesso negato: non sei un amministratore")
+
+
+def require_perm(section: str):
+    async def dep(authorization: Optional[str] = Header(None)):
+        user = await get_current_user(authorization)
+        email = (user.get("email") or "").lower()
+        if user.get("role") == ROLE_ADMIN or email in ADMIN_EMAILS:
+            return user
+        if user.get("role") == ROLE_COLLAB and section in (user.get("permissions") or []):
+            return user
+        raise HTTPException(status_code=403, detail="Non hai i permessi per questa sezione")
+    return dep
 
 
 class ApplicationEdit(BaseModel):
