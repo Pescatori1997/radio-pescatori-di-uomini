@@ -41,3 +41,20 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 1. Wire real stream URL + metadata when provided.
 2. Add favorite/download actions to podcast cards + play-history recording.
 3. Build Admin panel + Merchandising + Stripe donations.
+
+## Implemented (2026-07-24, session 2 — Admin sections completed)
+- **Admin Palinsesto (Schedule)**: full CRUD of programs (`/api/admin/programs`, POST=201), day-based UI, editor screen.
+- **Admin Radio**: configurable stream settings (station_name, stream_url, backup_url, metadata_url, is_live, now-playing title/artist/artwork) persisted to `live_status`; ready to accept real stream URL without code changes. Public `/api/live/status` reflects it.
+- **Admin Prayer Requests**: workflow statuses new|in_progress|prayed|archived, internal admin_notes (private), list+search+filters, detail editor, delete. Public submission unchanged.
+- **Admin Messages & Testimonies**: statuses new|reviewed|published|archived, type filter, editable text, internal notes. Published testimonies auto-appear in public `messages.tsx` via `GET /api/testimonies` (admin_notes stripped).
+- **Admin Users**: list+search, is_admin flag, delete (admins protected, 400).
+- **Admin Settings**: general contact/social/about persisted (`/api/admin/settings`), public `GET /api/settings`.
+- **Quick fixes**: create_podcast/news/program return HTTP 201; testIDs on all new admin forms.
+- Dashboard cards now route to real sections + added testimonies/messages/programs metrics.
+- Tested: backend 26/26 new endpoints pass (iteration_6). Removed all "Coming Soon" placeholders.
+
+## Remaining Backlog (prioritized)
+- P1: Real Donations via Stripe (one-time + recurring, predefined + custom amounts, donation history, admin donations dashboard, test mode).
+- P1: Merchandising module (admin CRUD catalog with images/prices/categories/sizes/colors/stock; public catalog "Available Soon", payment-ready data model).
+- P2: Backend refactor server.py into feature routers/services/models.
+- P2: Real radio stream URL wiring (waiting on user URL).
