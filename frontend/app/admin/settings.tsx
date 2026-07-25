@@ -19,6 +19,7 @@ export default function AdminSettings() {
     api.adminSettings().then((d) => setF({
       contact_email: d.contact_email || "", contact_phone: d.contact_phone || "", address: d.address || "",
       facebook: d.facebook || "", instagram: d.instagram || "", youtube: d.youtube || "", whatsapp: d.whatsapp || "",
+      website: d.website || "",
       about_short: d.about_short || "",
       about_title: d.about_title || "", about_verse: d.about_verse || "", about_description: d.about_description || "",
       about_card1_title: d.about_card1_title || "", about_card1_text: d.about_card1_text || "",
@@ -49,6 +50,7 @@ export default function AdminSettings() {
           <AInput testID="set-instagram" label="Instagram" value={f.instagram} onChangeText={(v: string) => set("instagram", v)} placeholder="https://instagram.com/..." keyboardType="url" />
           <AInput testID="set-youtube" label="YouTube" value={f.youtube} onChangeText={(v: string) => set("youtube", v)} placeholder="https://youtube.com/..." keyboardType="url" />
           <AInput testID="set-whatsapp" label="WhatsApp" value={f.whatsapp} onChangeText={(v: string) => set("whatsapp", v)} placeholder="+39..." keyboardType="phone-pad" />
+          <AInput testID="set-website" label="Sito web" value={f.website} onChangeText={(v: string) => set("website", v)} placeholder="https://..." keyboardType="url" />
 
           <Text style={styles.section}>Info App</Text>
           <AInput testID="set-about" label="Descrizione breve" value={f.about_short} onChangeText={(v: string) => set("about_short", v)} multiline />

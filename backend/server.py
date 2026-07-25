@@ -1535,6 +1535,7 @@ class GeneralSettings(BaseModel):
     instagram: Optional[str] = None
     youtube: Optional[str] = None
     whatsapp: Optional[str] = None
+    website: Optional[str] = None
     about_short: Optional[str] = None
     # "Chi Siamo" page content (editable from Admin)
     about_title: Optional[str] = None
@@ -1961,6 +1962,7 @@ async def startup():
             "instagram": "",
             "youtube": "",
             "whatsapp": "",
+            "website": "",
             "about_short": "Radio evangelica cristiana. Annunciamo Cristo attraverso la radio e i nuovi media.",
         })
 

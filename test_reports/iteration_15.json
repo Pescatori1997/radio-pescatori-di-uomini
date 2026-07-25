@@ -1,0 +1,35 @@
+{
+  "summary": "Bugfix data-binding pagina Contatti validato end-to-end. Backend (pytest 8/8): GET /api/settings ritorna il nuovo campo `website` insieme a contact_email/contact_phone/whatsapp/address/facebook/instagram/youtube; PUT /api/admin/settings aggiorna tutti i campi e la GET pubblica li riflette immediatamente (assert su valori con UUID tag univoco); clearing dei social a stringa vuota persiste correttamente; POST /api/contact ritorna {ok:true} (200); guard admin PUT senza token restituisce 401/403; nessun _id Mongo nel payload pubblico. Frontend (Playwright mobile 390x844): login admin via /auth?mode=login (pescatoridiuomini@outlook.it / AdminTestPwd1!) OK -> redirect /admin -> /admin/settings; tutti i testID presenti (set-email, set-phone, set-address, set-facebook, set-instagram, set-youtube, set-whatsapp, set-website, set-save); compilazione + Salva -> 'Impostazioni salvate' visibile; apertura /contact mostra TUTTE le 8 righe con testID contact-Email, contact-Telefono, contact-WhatsApp, contact-Indirizzo, contact-'Sito web', contact-Facebook, contact-Instagram, contact-YouTube e i valori corrispondono ESATTAMENTE a quelli appena salvati; svuotando Facebook/Instagram/YouTube/Sito web in Admin le rispettive righe SPARISCONO da /contact (rendering condizionale OK) mentre Email/Telefono/WhatsApp/Indirizzo restano; form 'Scrivici un messaggio' invia con successo ('Messaggio inviato! Ti risponderemo presto.'). Nessun valore fittizio hardcoded residuo (info@pescatoridiuomini.it e +39 000 000 0000 assenti). Nessun red-screen, nessun errore console critico.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_contact_settings.py",
+    "/app/test_reports/pytest/iteration_15_results.xml"
+  ],
+  "action_items": [
+    "Nessuna azione richiesta: il bugfix funziona correttamente end-to-end.",
+    "OPZIONALE: aggiungere `-n0` (single-worker) al comando di esecuzione di test_contact_settings.py in CI o forzarlo via marker, perche' i test scrivono e leggono il documento settings condiviso e con pytest-xdist parallelo su 2 worker un solo test (test_put_all_contact_fields_and_verify_public) si sovrappone se eseguito in parallelo con test_get_public_settings_returns_dict_with_website_key_after_seed. Eseguendo tutta la suite del progetto con `-n auto` questo file va marcato @pytest.mark.serial oppure isolato."
+  ],
+  "critical_code_review_comments": [
+    "server.py:1530-1550 GeneralSettings include `website: Optional[str] = None`: modello corretto.",
+    "server.py:1580-1587 PUT /admin/settings usa model_dump(exclude_unset=True) + upsert=True: pattern corretto per aggiornamenti parziali senza cancellare campi non inviati.",
+    "server.py:1955-1967 Seed general include 'website': '' cosi' il campo appare sempre nella risposta pubblica anche prima della prima modifica admin.",
+    "contact.tsx:11-22 buildChannels costruisce dinamicamente le righe filtrando i campi vuoti (if s.contact_email, if s.website, ecc.): rendering condizionale corretto. testID `contact-${label}` coerente con la label mostrata.",
+    "contact.tsx:34-38 useFocusEffect ricarica /api/settings ogni volta che la pagina torna in focus: garantisce che modifiche Admin siano immediatamente visibili senza refresh manuale.",
+    "admin/settings.tsx:22 carica website dal doc e lo espone come AInput testID='set-website' — bind bidirezionale corretto."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_contact_settings.py (nuovo test suite E2E backend)"
+  ],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100% (E2E Admin -> pagina pubblica /contact + form contatto OK)"},
+  "seed_data_creation": "Durante i test i valori delle impostazioni contatti sono stati sovrascritti (ultimo stato lasciato in DB: Email/Telefono/WhatsApp/Indirizzo popolati con stamp UI, Facebook/Instagram/YouTube/Sito web SVUOTATI dall'ultimo step di rendering condizionale). Se il main agent vuole ripristinare valori di produzione dovra' reimpostarli da Admin > Impostazioni. Nessun altro dato di seed toccato.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Il file /app/backend/tests/test_contact_settings.py va eseguito con `-n0` (single-worker) perche' scrive/legge il documento settings condiviso. Uso di ADMINTESTTOKEN123 (header Authorization: Bearer) per il backend, mentre per il frontend admin serve login UI (pescatoridiuomini@outlook.it / AdminTestPwd1! - vedi /app/memory/test_credentials.md). Il testID per la riga Sito web contiene uno spazio: `[data-testid=\"contact-Sito web\"]` (corretto — matching per label). Se cambiate la label 'Sito web' aggiornate anche i selettori Playwright.",
+  "rca_of_issue": "Il bug originale (contatti hardcoded in /contact) era gia' stato corretto dal main agent: contact.tsx ora usa api.settings() + buildChannels() dinamico, e admin/settings.tsx espone un nuovo campo 'Sito web' (set-website). Il modello backend GeneralSettings include il nuovo campo 'website: Optional[str]' e il seed general lo inizializza a stringa vuota. Verificato che Admin PUT -> Public GET si sincronizzano immediatamente e che le righe con valore vuoto NON compaiono nella pagina Contatti."
+}

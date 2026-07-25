@@ -1,10 +1,25 @@
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform, Linking } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/src/api";
 import { colors, spacing, radius } from "@/src/theme";
+
+const digits = (s: string) => (s || "").replace(/[^\d+]/g, "").replace(/^\+/, "");
+
+function buildChannels(s: Record<string, string>) {
+  const list: { icon: string; label: string; value: string; action: () => void }[] = [];
+  if (s.contact_email) list.push({ icon: "mail", label: "Email", value: s.contact_email, action: () => Linking.openURL(`mailto:${s.contact_email}`) });
+  if (s.contact_phone) list.push({ icon: "call", label: "Telefono", value: s.contact_phone, action: () => Linking.openURL(`tel:${digits(s.contact_phone)}`) });
+  if (s.whatsapp) list.push({ icon: "logo-whatsapp", label: "WhatsApp", value: s.whatsapp, action: () => Linking.openURL(`https://wa.me/${digits(s.whatsapp)}`) });
+  if (s.address) list.push({ icon: "location", label: "Indirizzo", value: s.address, action: () => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.address)}`) });
+  if (s.website) list.push({ icon: "globe", label: "Sito web", value: s.website, action: () => Linking.openURL(s.website.startsWith("http") ? s.website : `https://${s.website}`) });
+  if (s.facebook) list.push({ icon: "logo-facebook", label: "Facebook", value: s.facebook, action: () => Linking.openURL(s.facebook.startsWith("http") ? s.facebook : `https://${s.facebook}`) });
+  if (s.instagram) list.push({ icon: "logo-instagram", label: "Instagram", value: s.instagram, action: () => Linking.openURL(s.instagram.startsWith("http") ? s.instagram : `https://${s.instagram}`) });
+  if (s.youtube) list.push({ icon: "logo-youtube", label: "YouTube", value: s.youtube, action: () => Linking.openURL(s.youtube.startsWith("http") ? s.youtube : `https://${s.youtube}`) });
+  return list;
+}
 
 export default function Contact() {
   const insets = useSafeAreaInsets();
@@ -14,13 +29,13 @@ export default function Contact() {
   const [message, setMessage] = useState("");
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [channels, setChannels] = useState<ReturnType<typeof buildChannels>>([]);
 
-  const channels = [
-    { icon: "mail", label: "Email", value: "info@pescatoridiuomini.it", action: () => Linking.openURL("mailto:info@pescatoridiuomini.it") },
-    { icon: "logo-whatsapp", label: "WhatsApp", value: "+39 000 000 0000", action: () => Linking.openURL("https://wa.me/390000000000") },
-    { icon: "logo-instagram", label: "Instagram", value: "@pescatoridiuomini", action: () => Linking.openURL("https://instagram.com") },
-    { icon: "logo-facebook", label: "Facebook", value: "Pescatori di Uomini", action: () => Linking.openURL("https://facebook.com") },
-  ];
+  useFocusEffect(
+    useCallback(() => {
+      api.settings().then((d: any) => setChannels(buildChannels(d || {}))).catch(() => {});
+    }, [])
+  );
 
   const submit = async () => {
     if (!name.trim() || !email.trim() || !message.trim()) return;
@@ -39,18 +54,20 @@ export default function Contact() {
         <View style={{ width: 24 }} />
       </View>
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }} keyboardShouldPersistTaps="handled">
-        <View style={styles.channels}>
-          {channels.map((c) => (
-            <Pressable key={c.label} testID={`contact-${c.label}`} style={styles.channelRow} onPress={c.action}>
-              <Ionicons name={c.icon as any} size={22} color={colors.brandPrimary} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.channelLabel}>{c.label}</Text>
-                <Text style={styles.channelValue}>{c.value}</Text>
-              </View>
-              <Ionicons name="open-outline" size={18} color={colors.muted} />
-            </Pressable>
-          ))}
-        </View>
+        {channels.length > 0 && (
+          <View style={styles.channels}>
+            {channels.map((c) => (
+              <Pressable key={c.label} testID={`contact-${c.label}`} style={styles.channelRow} onPress={c.action}>
+                <Ionicons name={c.icon as any} size={22} color={colors.brandPrimary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.channelLabel}>{c.label}</Text>
+                  <Text style={styles.channelValue}>{c.value}</Text>
+                </View>
+                <Ionicons name="open-outline" size={18} color={colors.muted} />
+              </Pressable>
+            ))}
+          </View>
+        )}
 
         <Text style={styles.formTitle}>Scrivici un messaggio</Text>
         {sent && <Text style={styles.success}>Messaggio inviato! Ti risponderemo presto.</Text>}
