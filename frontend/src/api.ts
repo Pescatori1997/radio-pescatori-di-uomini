@@ -203,6 +203,25 @@ export const api = {
   myDonations: () => request("/me/donations", {}, true),
   adminDonations: () => request("/admin/donations", {}, true),
   adminDonationStats: () => request("/admin/donations/stats", {}, true),
+  // account extras
+  forgotPassword: (email: string) => request("/auth/forgot-password", { method: "POST", body: JSON.stringify({ email }) }),
+  resetPassword: (body: { email: string; code: string; new_password: string }) =>
+    request("/auth/reset-password", { method: "POST", body: JSON.stringify(body) }),
+  changePassword: (body: { current_password?: string; new_password: string }) =>
+    request("/auth/change-password", { method: "POST", body: JSON.stringify(body) }, true),
+  updateProfile: (body: { name?: string; picture?: string }) =>
+    request("/auth/profile", { method: "PUT", body: JSON.stringify(body) }, true),
+  // notification preferences
+  getNotifPrefs: () => request("/me/notifications", {}, true),
+  setNotifPrefs: (prefs: Record<string, boolean>) =>
+    request("/me/notifications", { method: "PUT", body: JSON.stringify(prefs) }, true),
+  registerPush: (body: { user_id: string; platform: string; device_token: string }) =>
+    request("/register-push", { method: "POST", body: JSON.stringify(body) }),
+  // admin notifications
+  adminSendNotification: (body: { category: string; title: string; message: string; action_url?: string }) =>
+    request("/admin/notifications/send", { method: "POST", body: JSON.stringify(body) }, true),
+  adminNotificationsLog: () => request("/admin/notifications", {}, true),
+  adminNotificationAudience: () => request("/admin/notifications/audience", {}, true),
 };
 
 // HTTPS pass-through URL for the live radio stream (works on web + native).

@@ -38,6 +38,8 @@ export default function Profilo() {
     { icon: "information-circle-outline", label: "Chi Siamo", route: "/about" },
     { icon: "gift-outline", label: "Sostieni il progetto", route: "/donate" },
     ...(user ? [{ icon: "receipt-outline", label: "Le mie offerte", route: "/donations-history" }] : []),
+    ...(user ? [{ icon: "person-circle-outline", label: "Il mio account", route: "/account" }] : []),
+    ...(user ? [{ icon: "notifications-outline", label: "Notifiche", route: "/notifications-settings" }] : []),
     { icon: "mail-outline", label: "Contatti", route: "/contact" },
     { icon: "settings-outline", label: "Impostazioni", route: "/settings" },
   ];

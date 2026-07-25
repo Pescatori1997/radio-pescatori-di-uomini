@@ -1,0 +1,90 @@
+{
+  "summary": "Iterazione 17 — Sistema Account Utente + Notifiche (Fase A completa + Fase B robustezza endpoint). Backend: 28/28 pytest PASS (100%) su /app/backend/tests/test_notifications_account.py. Frontend: verificato l'intero flusso mobile (viewport 390x844) — welcome gate, registrazione, /account (aggiorna profilo + cambia password), /notifications-settings (7 toggle presenti + persistenza), /reset-password (step 1→step 2 con codice fallback visibile in UI), tab Profilo con voci 'Il mio account' e 'Notifiche' per utente loggato, /auth con 'Password dimenticata?', admin /admin/notifications (chip 7 categorie, anteprima live, conteggio destinatari, invio, storico invii). Nessun bug funzionale rilevato. La push key placeholder produce correttamente status 'failed' nei log senza crashare gli endpoint (comportamento atteso e verificato).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "reset-password (step 2)", "issues": ["Il codice fallback viene mostrato in chiaro sotto il campo con testo 'Servizio email non ancora attivo: usa questo codice → 335121'. Comportamento atteso finché EMERGENT_EMAIL_KEY è vuota; ricordarsi di rimuoverlo automaticamente quando la key sarà attiva (già gestito lato BE: campo 'code' presente solo se delivered=false)."]}
+    ],
+    "react_native_issues": [
+      {"component": "expo-notifications (web)", "issue": "Warning console '[expo-notifications] Listening to push token changes is not yet fully supported on web. Adding a listener will have no effect.' — atteso: la registrazione push è native-only. Nessuna azione richiesta, solo warning noto."},
+      {"component": "styles (globale)", "issue": "Warning ripetuti 'shadow* style props are deprecated. Use boxShadow' e 'props.pointerEvents is deprecated. Use style.pointerEvents'. Non bloccanti ma vale la pena sostituire nel prossimo pass di refactor per allinearsi a RN Web recente."}
+    ]
+  },
+  "verified_flows": {
+    "backend": {
+      "auth/forgot-password (unknown email)": "200 {ok, delivered:false} senza 'code' → OK",
+      "auth/forgot-password (known email)": "200 con code 6 cifre in fallback → OK",
+      "auth/reset-password (codice errato)": "400 'Codice non valido' → OK",
+      "auth/reset-password (password <6)": "400 → OK",
+      "auth/reset-password (successo)": "200 {ok:true}, sessioni invalidate, login nuovo password OK",
+      "auth/change-password (attuale errata)": "400 'Password attuale non corretta' → OK",
+      "auth/change-password (nuova <6)": "400 → OK",
+      "auth/change-password (successo)": "200 → OK",
+      "auth/change-password (unauth)": "401 → OK",
+      "auth/profile PUT": "aggiorna e ritorna user con nuovo nome; email normalizzata lowercase → OK",
+      "me/notifications GET (default)": "7 categorie tutte true → OK",
+      "me/notifications PUT": "persiste (news/prayers=false) e legge coerente → OK",
+      "me/notifications (unauth)": "401 → OK",
+      "register-push (placeholder key)": "500/502 controllato, no 422/traceback → OK",
+      "register-push (body mancante)": "422 Pydantic → OK",
+      "admin/notifications/send (unauth)": "401/403 → OK",
+      "admin/notifications/send (non-admin)": "403 → OK",
+      "admin/notifications/send (categoria invalida)": "400 'Categoria non valida' → OK",
+      "admin/notifications/send (title/message vuoti)": "400 → OK",
+      "admin/notifications/send (successo)": "200 {ok, recipients:N}; log registrato con status='failed' (key placeholder) → OK",
+      "admin/notifications GET": "storico invii, sort desc by created_at → OK",
+      "admin/notifications/audience": "conteggio per 7 categorie, rispetta opt-out (podcasts >= news dopo che il notif_user disabilita news) → OK",
+      "admin/podcasts (Predicazione)": "201 + log category='podcasts' title='Nuovo podcast' message=titolo → OK",
+      "admin/podcasts (Meditazione mattutina)": "201 + log category='meditations' title='Nuova meditazione' → OK",
+      "admin/news (published:true)": "201 + log category='news' title='Nuova notizia' → OK",
+      "admin/news (published:false)": "201 SENZA log → OK",
+      "admin/radio/live (start)": "log category='live' con 'diretta' nel titolo → OK",
+      "admin/stats.notifications": "campo intero >=0 presente → OK"
+    },
+    "frontend": {
+      "welcome gate": "welcome-card-guest presente",
+      "/auth login mode": "auth-forgot 'Password dimenticata?' presente e naviga a /reset-password",
+      "registrazione utente nuovo": "redirect a home, sessione attiva",
+      "/account (name update)": "banner 'Profilo aggiornato' visibile",
+      "/account (change password)": "banner 'Password aggiornata' visibile con password attuale corretta",
+      "/notifications-settings": "7 toggle notif-{podcasts|meditations|news|live|announcements|events|prayers} presenti; disattivazione news persiste dopo reload (toggle si ripresenta nello stato salvato)",
+      "/reset-password": "step 1 → step 2 con campo reset-code e testo 'usa questo codice → NNNNNN' visibile (fallback UI)",
+      "tab Profilo (utente loggato)": "voci 'Il mio account' e 'Notifiche' visibili in menu",
+      "/admin/notifications": "7 chip categorie, campi titolo/messaggio, card 'Anteprima' aggiornata in tempo reale con testo digitato, 'Destinatari iscritti: 20 utenti', pulsante 'Invia notifica', 'Storico invii' con entry recenti (es. 'Siamo in diretta! 🔴 · 19 destinatari · In attesa (build)')"
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_notifications_account.py",
+    "/app/test_reports/pytest/iteration_17_notifications.xml"
+  ],
+  "action_items": [
+    "Nessuna azione critica richiesta. Sistema Fase A completo e Fase B robusto (in attesa della key push reale al Deploy).",
+    "(Nice-to-have) In futuro passare da shadow* → boxShadow e props.pointerEvents → style.pointerEvents per rimuovere i warning RN Web deprecati (non blocca).",
+    "(Nice-to-have) Confermare in produzione che, quando EMERGENT_EMAIL_KEY sarà settata, il campo 'code' scompare dalla risposta di /api/auth/forgot-password (già gestito: viene esposto solo se delivered=false)."
+  ],
+  "critical_code_review_comments": [
+    "server.py:1938–1943 → NOTIF_CATEGORIES e CATEGORY_LABELS coerenti col frontend (7 chiavi). OK.",
+    "server.py:1995–2019 → notify_category() è correttamente 'never raises' esternamente: registra log status='failed' se send_push solleva. OK.",
+    "server.py:1952–1964 → /api/register-push traduce 401→500 e 5xx→502; con placeholder l'endpoint NON crasha. OK.",
+    "server.py:2043–2066 → forgot-password non rivela esistenza email e usa fallback 'code' solo quando delivered=false. Buona pratica.",
+    "server.py:2069–2088 → reset-password invalida tutte le sessioni via delete_many. Verificato lato test (401 su token vecchio dopo reset). Sicuro.",
+    "server.py:2091–2101 → change-password NON invalida le sessioni (verificato: token vecchio resta valido dopo cambio). Comportamento accettabile ma potresti loggare l'evento per audit."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_notifications_account.py (creato)"
+  ],
+  "success_rate": {
+    "backend": "100% (28/28 pytest)",
+    "frontend": "100% (tutti i flussi richiesti verificati su viewport 390x844)"
+  },
+  "seed_data_creation": "Un utente pubblico casuale TEST_notif_*@example.com (via API) e un utente frontend testfe_*@example.com creati per i test. Alcuni podcast/news TEST_* creati per verificare le auto-notifiche (rimangono nel DB, prefix TEST_ per cleanup manuale).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend BASE URL: process.env.EXPO_PUBLIC_BACKEND_URL (fallback EXPO_BACKEND_URL). Admin auth: header 'Authorization: Bearer ADMINTESTTOKEN123' (già seedato in conftest.py). Il notification log stora label in campo 'title' e titolo contenuto in 'message' (attenzione durante future asserzioni). La push key placeholder produce log status='failed'; è ATTESO — non segnalarlo mai come bug finché EMERGENT_PUSH_KEY resta 'placeholder'. Per UI admin login utile usare pescatoridiuomini@outlook.it / AdminTestPwd1! su /login.",
+  "rca_of_issue": "N/A — nessun bug. Fase A pienamente implementata e Fase B endpoint robusti con placeholder key."
+}

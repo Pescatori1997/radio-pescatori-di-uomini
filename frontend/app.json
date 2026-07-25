@@ -26,12 +26,14 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.emergent.evangelicstream.wwoeys",
+      "googleServicesFile": "./google-services.json",
       "permissions": [
         "FOREGROUND_SERVICE",
         "WAKE_LOCK",
         "READ_MEDIA_IMAGES",
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "POST_NOTIFICATIONS"
       ]
     },
     "web": {
@@ -50,7 +52,14 @@
           "backgroundColor": "#FFFFFF"
         }
       ],
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/logo.png",
+          "color": "#0A1128"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

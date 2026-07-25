@@ -4,6 +4,7 @@ import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import { api, TOKEN_KEY } from "@/src/api";
 import { storage } from "@/src/utils/storage";
+import { registerForPush } from "@/src/utils/push";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -41,6 +42,8 @@ type AuthState = {
   loginEmail: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   acceptInvite: (token: string, name: string, password: string) => Promise<User>;
+  updateProfile: (body: { name?: string; picture?: string }) => Promise<void>;
+  refreshUser: () => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -176,6 +179,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   };
 
+  const updateProfile = async (body: { name?: string; picture?: string }) => {
+    const updated = await api.updateProfile(body);
+    setUser(updated);
+  };
+
+  const refreshUser = async () => {
+    await loadMe();
+  };
+
+  // Register the device for push whenever a user becomes authenticated (native only, non-blocking).
+  useEffect(() => {
+    if (user?.user_id) registerForPush(user.user_id);
+  }, [user?.user_id]);
+
   const role = user?.role;
   const isAdmin = role === ROLE_ADMIN;
   const isCollaborator = role === ROLE_COLLAB;
@@ -196,6 +213,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loginEmail,
         register,
         acceptInvite,
+        updateProfile,
+        refreshUser,
         logout,
       }}
     >

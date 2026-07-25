@@ -1,10 +1,13 @@
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
-import { LogBox } from "react-native";
+import { LogBox, Platform, Alert } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
+import * as Notifications from "expo-notifications";
+import * as Linking from "expo-linking";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { ensureIconFontFaces } from "@/src/iconFonts";
@@ -14,6 +17,26 @@ import { WeatherProvider } from "@/src/weather/WeatherContext";
 
 LogBox.ignoreAllLogs(true);
 SplashScreen.preventAutoHideAsync();
+
+// --- Push notifications: module-scope config (must run before any component mounts) ---
+if (Platform.OS !== "web") {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+}
+if (Platform.OS === "android") {
+  Notifications.setNotificationChannelAsync("default", {
+    name: "Predefinito",
+    importance: Notifications.AndroidImportance.MAX,
+    sound: "default",
+  });
+}
 
 // Inject @expo/vector-icons @font-face rules on web before any icon mounts, so the
 // fontfaceobserver 6000ms-timeout polyfill never runs (prevents a hard crash on some
@@ -44,6 +67,43 @@ function AuthGate() {
   return null;
 }
 
+// Handles tapping a push notification (warm + cold start) and nudges denied users weekly.
+function PushListeners() {
+  const router = useRouter();
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    const open = (data: any) => {
+      const url = data?.deeplink || data?.action_url;
+      if (!url) return;
+      if (String(url).startsWith("http")) Linking.openURL(url);
+      else router.push(url);
+    };
+    const tapSub = Notifications.addNotificationResponseReceivedListener(
+      (r) => open(r.notification.request.content.data || {})
+    );
+    Notifications.getLastNotificationResponseAsync().then((r) => {
+      if (r) open(r.notification.request.content.data || {});
+    });
+    (async () => {
+      const { status, canAskAgain } = await Notifications.getPermissionsAsync();
+      if (status !== "denied" || canAskAgain) return;
+      const last = await AsyncStorage.getItem("pushNudgeAt");
+      const week = 7 * 24 * 60 * 60 * 1000;
+      if (last && Date.now() - Number(last) <= week) return;
+      Alert.alert(
+        "Notifiche disattivate",
+        "Attiva le notifiche per ricevere podcast, dirette e annunci di Pescatori di Uomini.",
+        [
+          { text: "Più tardi", style: "cancel", onPress: async () => { await AsyncStorage.setItem("pushNudgeAt", String(Date.now())); } },
+          { text: "Apri Impostazioni", onPress: async () => { await AsyncStorage.setItem("pushNudgeAt", String(Date.now())); Linking.openSettings(); } },
+        ]
+      );
+    })();
+    return () => { tapSub.remove(); };
+  }, [router]);
+  return null;
+}
+
 export default function RootLayout() {
   const [loaded, error] = useIconFonts();
 
@@ -63,6 +123,7 @@ export default function RootLayout() {
             <WeatherProvider>
             <StatusBar style="light" />
             <AuthGate />
+            <PushListeners />
             <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#FFFFFF" } }}>
               <Stack.Screen name="welcome" />
               <Stack.Screen name="auth" />
@@ -73,6 +134,9 @@ export default function RootLayout() {
               <Stack.Screen name="prayer" options={{ presentation: "card" }} />
               <Stack.Screen name="weather" options={{ presentation: "card", animation: "slide_from_right" }} />
               <Stack.Screen name="settings" options={{ presentation: "card" }} />
+              <Stack.Screen name="account" options={{ presentation: "card" }} />
+              <Stack.Screen name="notifications-settings" options={{ presentation: "card" }} />
+              <Stack.Screen name="reset-password" options={{ presentation: "card" }} />
               <Stack.Screen name="about" />
               <Stack.Screen name="contact" />
               <Stack.Screen name="donate" />

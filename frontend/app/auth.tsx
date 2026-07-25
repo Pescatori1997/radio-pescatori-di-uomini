@@ -82,6 +82,12 @@ export default function Auth() {
           {busy ? <ActivityIndicator color={colors.white} /> : <Text style={styles.primaryText}>{mode === "login" ? "Accedi" : "Registrati"}</Text>}
         </PressableScale>
 
+        {mode === "login" && (
+          <Pressable testID="auth-forgot" onPress={() => router.push("/reset-password" as any)} style={{ marginTop: spacing.md }}>
+            <Text style={styles.forgot}>Password dimenticata?</Text>
+          </Pressable>
+        )}
+
         <Pressable testID="auth-toggle" onPress={() => setMode(mode === "login" ? "register" : "login")} style={{ marginTop: spacing.lg }}>
           <Text style={styles.toggle}>
             {mode === "login" ? "Non hai un account? " : "Hai già un account? "}
@@ -109,6 +115,7 @@ const styles = StyleSheet.create({
   primaryBtn: { backgroundColor: colors.navy, paddingVertical: spacing.md, borderRadius: radius.pill, alignItems: "center", marginTop: spacing.sm },
   primaryText: { color: colors.white, fontSize: 16, fontWeight: "800" },
   toggle: { textAlign: "center", color: colors.onSurfaceSecondary, fontSize: 14 },
+  forgot: { textAlign: "center", color: colors.brandPrimary, fontSize: 14, fontWeight: "700" },
   adminNote: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.md, marginTop: spacing.lg },
   adminNoteText: { flex: 1, fontSize: 12, color: colors.onSurfaceSecondary, lineHeight: 17 },
 });

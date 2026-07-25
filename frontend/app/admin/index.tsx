@@ -20,6 +20,7 @@ const CARDS = [
   { key: "podcasts", label: "Podcast", icon: "microphone", color: "#EF4444", route: "/admin/podcasts" },
   { key: "products", label: "Prodotti", icon: "storefront", color: "#22C55E", route: "/admin/products" },
   { key: "donations", label: "Donazioni", icon: "gift", color: colors.success, route: "/admin/donations" },
+  { key: "notifications", label: "Notifiche", icon: "bell-ring", color: "#F59E0B", route: "/admin/notifications" },
 ];
 
 export default function AdminDashboard() {

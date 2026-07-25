@@ -5,6 +5,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import secrets
 import uuid
 import httpx
 from pathlib import Path
@@ -717,6 +718,7 @@ async def admin_stats(admin=Depends(require_admin)):
         "podcasts": await db.podcasts.count_documents({}),
         "products": await db.products.count_documents({}),
         "donations": await db.donation_transactions.count_documents({"payment_status": "paid"}),
+        "notifications": await db.notifications_log.count_documents({}),
     }
 
 
@@ -893,6 +895,13 @@ async def admin_create_podcast(body: PodcastIn, admin=Depends(require_perm("podc
     await db.podcasts.insert_one(dict(doc))
     doc.pop("_id", None)
     await log_activity(admin, f"ha caricato il podcast \"{doc.get('title', '')}\"", "podcasts", {"id": doc["id"]})
+    # Auto push: distinguish meditations from regular podcasts by category.
+    cat = (doc.get("category") or "").lower()
+    is_meditation = "meditaz" in cat
+    ntf_cat = "meditations" if is_meditation else "podcasts"
+    label = "Nuova meditazione" if is_meditation else "Nuovo podcast"
+    await notify_category(ntf_cat, label, doc.get("title", ""), action_url=f"/podcast/{doc['id']}",
+                          admin_email=admin.get("email"))
     return {"ok": True, "id": doc["id"]}
 
 
@@ -964,14 +973,23 @@ async def admin_create_news(body: NewsIn, admin=Depends(require_perm("news"))):
         doc["date"] = now_utc().isoformat()
     await db.news.insert_one(dict(doc))
     await log_activity(admin, f"ha pubblicato la news \"{doc.get('title', '')}\"", "news", {"id": doc["id"]})
+    if doc.get("published"):
+        await notify_category("news", "Nuova notizia", doc.get("title", ""),
+                              action_url=f"/news/{doc['id']}", admin_email=admin.get("email"))
     return {"ok": True, "id": doc["id"]}
 
 
 @api_router.patch("/admin/news/{nid}")
 async def admin_edit_news(nid: str, body: NewsEdit, admin=Depends(require_perm("news"))):
     updates = body.model_dump(exclude_unset=True)
+    prev = await db.news.find_one({"id": nid}, {"published": 1, "title": 1})
     if updates:
         await db.news.update_one({"id": nid}, {"$set": updates})
+    # Notify when a draft transitions to published.
+    if updates.get("published") is True and prev and not prev.get("published"):
+        title = updates.get("title") or (prev.get("title") if prev else "") or ""
+        await notify_category("news", "Nuova notizia", title,
+                              action_url=f"/news/{nid}", admin_email=admin.get("email"))
     return {"ok": True}
 
 
@@ -1513,6 +1531,9 @@ async def admin_radio_live(body: LiveModeIn, admin=Depends(require_perm("radio")
             updates["live_watch_url"] = body.watch_url.strip()
         await db.live_status.update_one({"_id": "current"}, {"$set": updates}, upsert=True)
         await log_activity(admin, "ha avviato la Diretta LIVE", "radio")
+        await notify_category("live", "Siamo in diretta! 🔴",
+                              "La radio è in diretta ora. Tocca per ascoltare o guardare.",
+                              action_url="/(tabs)", admin_email=admin.get("email"))
     elif body.action == "end":
         if key:
             try:
@@ -1904,6 +1925,245 @@ async def admin_donation_stats(admin=Depends(require_admin)):
         "currency": "eur",
     }
 
+
+
+
+# ==================== Notifications & Account extras ====================
+
+# ---- Emergent managed push relay (SuprSend) ----
+PUSH_BASE_URL = "https://integrations.emergentagent.com"
+PUSH_KEY = os.environ.get("EMERGENT_PUSH_KEY", "placeholder")
+push_client = httpx.AsyncClient(base_url=PUSH_BASE_URL, headers={"X-Push-Key": PUSH_KEY}, timeout=10.0)
+
+NOTIF_CATEGORIES = ["podcasts", "meditations", "news", "live", "announcements", "events", "prayers"]
+CATEGORY_LABELS = {
+    "podcasts": "Podcast", "meditations": "Meditazioni", "news": "Notizie",
+    "live": "Dirette", "announcements": "Annunci", "events": "Eventi in programma",
+    "prayers": "Richieste di preghiera",
+}
+
+
+class RegisterPushBody(BaseModel):
+    user_id: str
+    platform: str
+    device_token: str
+
+
+@api_router.post("/register-push", status_code=201)
+async def register_push(body: RegisterPushBody):
+    try:
+        resp = await push_client.post("/api/v1/push/users/register", json=body.model_dump())
+    except Exception as e:
+        logger.warning("register-push relay error: %s", e)
+        raise HTTPException(502, "Push provider non raggiungibile")
+    if resp.status_code == 401:
+        raise HTTPException(500, "EMERGENT_PUSH_KEY mancante o non valida")
+    if resp.status_code >= 500:
+        raise HTTPException(502, "Push provider non disponibile")
+    resp.raise_for_status()
+    return {"status": "registered"}
+
+
+async def send_push(recipients: List[str], data: dict, idempotency_key: Optional[str] = None) -> None:
+    """Relay a push to the Emergent managed service. Recipients are user_ids (max 100/call)."""
+    if not recipients:
+        return
+    if "title" not in data or "message" not in data:
+        raise ValueError("data must include title and message")
+    for i in range(0, len(recipients), 100):
+        chunk = recipients[i:i + 100]
+        payload: dict = {"recipients": chunk, "data": data}
+        if idempotency_key:
+            payload["$idempotency_key"] = f"{idempotency_key}:{i}"
+        resp = await push_client.post("/api/v1/push/trigger", json=payload)
+        if resp.status_code == 401:
+            raise HTTPException(500, "EMERGENT_PUSH_KEY mancante o non valida")
+        if resp.status_code >= 500:
+            raise HTTPException(502, "Push provider non disponibile")
+        resp.raise_for_status()
+
+
+async def _recipients_for_category(category: str) -> List[str]:
+    # Enabled by default: only exclude users who explicitly disabled the category or are suspended.
+    users = await db.users.find(
+        {"status": {"$ne": "suspended"}, f"notif_prefs.{category}": {"$ne": False}},
+        {"_id": 0, "user_id": 1},
+    ).to_list(10000)
+    return [u["user_id"] for u in users if u.get("user_id")]
+
+
+async def notify_category(category: str, title: str, message: str, action_url: Optional[str] = None,
+                          admin_email: Optional[str] = None) -> int:
+    """Send a category push to all opted-in users and record it in the log. Never raises."""
+    recipients = await _recipients_for_category(category)
+    data = {"title": title, "message": message}
+    if action_url:
+        data["action_url"] = action_url
+    status = "sent"
+    try:
+        await send_push(recipients, data, idempotency_key=new_id("ntf"))
+    except Exception as e:
+        logger.warning("Push non inviata (%s): %s", category, e)
+        status = "failed"
+    await db.notifications_log.insert_one({
+        "id": new_id("nlog"),
+        "category": category,
+        "title": title,
+        "message": message,
+        "action_url": action_url,
+        "recipients": len(recipients),
+        "status": status,
+        "sent_by": admin_email,
+        "created_at": now_utc(),
+    })
+    return len(recipients)
+
+
+# ---- Password reset (email fallback shows code in response until Resend key is active) ----
+class ForgotPwIn(BaseModel):
+    email: str
+
+
+class ResetPwIn(BaseModel):
+    email: str
+    code: str
+    new_password: str
+
+
+class ChangePwIn(BaseModel):
+    current_password: Optional[str] = None
+    new_password: str
+
+
+class ProfileIn(BaseModel):
+    name: Optional[str] = None
+    picture: Optional[str] = None
+
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(body: ForgotPwIn):
+    email = body.email.lower().strip()
+    user = await db.users.find_one({"email": email})
+    if not user:
+        # Do not reveal whether the email exists.
+        return {"ok": True, "delivered": False}
+    code = f"{secrets.randbelow(1000000):06d}"
+    await db.password_resets.update_one(
+        {"email": email},
+        {"$set": {"email": email, "code": code, "expires_at": now_utc() + timedelta(minutes=30),
+                  "created_at": now_utc()}},
+        upsert=True,
+    )
+    html = (f"<p>Ciao {user.get('name') or ''},</p>"
+            f"<p>Hai richiesto di reimpostare la password di <b>Pescatori di Uomini</b>.</p>"
+            f"<p>Il tuo codice di verifica è: <b style='font-size:22px'>{code}</b></p>"
+            f"<p>Il codice scade tra 30 minuti. Se non hai richiesto tu il reset, ignora questa email.</p>")
+    delivered = await send_email(email, "Reimposta la tua password", html)
+    # Fallback: expose the code in the response when email delivery is not configured.
+    resp = {"ok": True, "delivered": delivered}
+    if not delivered:
+        resp["code"] = code
+    return resp
+
+
+@api_router.post("/auth/reset-password")
+async def reset_password(body: ResetPwIn):
+    email = body.email.lower().strip()
+    rec = await db.password_resets.find_one({"email": email})
+    if not rec or rec.get("code") != body.code.strip():
+        raise HTTPException(status_code=400, detail="Codice non valido")
+    exp = rec["expires_at"]
+    if exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    if exp < now_utc():
+        raise HTTPException(status_code=400, detail="Codice scaduto. Richiedine uno nuovo.")
+    if len(body.new_password) < 6:
+        raise HTTPException(status_code=400, detail="La password deve avere almeno 6 caratteri")
+    await db.users.update_one({"email": email}, {"$set": {"password": hash_pw(body.new_password)}})
+    await db.password_resets.delete_one({"email": email})
+    # Invalidate existing sessions for safety.
+    user = await db.users.find_one({"email": email}, {"user_id": 1})
+    if user:
+        await db.user_sessions.delete_many({"user_id": user["user_id"]})
+    return {"ok": True}
+
+
+@api_router.post("/auth/change-password")
+async def change_password(body: ChangePwIn, authorization: Optional[str] = Header(None)):
+    current = await get_current_user(authorization)
+    full = await db.users.find_one({"user_id": current["user_id"]})
+    if len(body.new_password) < 6:
+        raise HTTPException(status_code=400, detail="La password deve avere almeno 6 caratteri")
+    if full.get("password"):
+        if not body.current_password or not check_pw(body.current_password, full["password"]):
+            raise HTTPException(status_code=400, detail="Password attuale non corretta")
+    await db.users.update_one({"user_id": current["user_id"]}, {"$set": {"password": hash_pw(body.new_password)}})
+    return {"ok": True}
+
+
+@api_router.put("/auth/profile")
+async def update_profile(body: ProfileIn, authorization: Optional[str] = Header(None)):
+    current = await get_current_user(authorization)
+    updates = {}
+    if body.name is not None and body.name.strip():
+        updates["name"] = body.name.strip()
+    if body.picture is not None:
+        updates["picture"] = body.picture
+    if updates:
+        await db.users.update_one({"user_id": current["user_id"]}, {"$set": updates})
+    user = await db.users.find_one({"user_id": current["user_id"]}, {"_id": 0, "password": 0})
+    return user
+
+
+# ---- Notification preferences ----
+@api_router.get("/me/notifications")
+async def get_notif_prefs(authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    prefs = user.get("notif_prefs") or {}
+    return {c: bool(prefs.get(c, True)) for c in NOTIF_CATEGORIES}
+
+
+@api_router.put("/me/notifications")
+async def set_notif_prefs(body: dict, authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    prefs = {c: bool(body.get(c, True)) for c in NOTIF_CATEGORIES}
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"notif_prefs": prefs}})
+    return prefs
+
+
+# ---- Admin: manual notifications + delivery log ----
+class AdminNotifyIn(BaseModel):
+    category: str = "announcements"
+    title: str
+    message: str
+    action_url: Optional[str] = None
+
+
+@api_router.post("/admin/notifications/send")
+async def admin_send_notification(body: AdminNotifyIn, admin=Depends(require_admin)):
+    if body.category not in NOTIF_CATEGORIES:
+        raise HTTPException(status_code=400, detail="Categoria non valida")
+    if not body.title.strip() or not body.message.strip():
+        raise HTTPException(status_code=400, detail="Titolo e messaggio sono obbligatori")
+    count = await notify_category(body.category, body.title.strip(), body.message.strip(),
+                                  body.action_url, admin_email=admin.get("email"))
+    await log_activity(admin, f"ha inviato una notifica \"{body.title.strip()}\"", "notifications")
+    return {"ok": True, "recipients": count}
+
+
+@api_router.get("/admin/notifications")
+async def admin_notifications_log(admin=Depends(require_admin)):
+    docs = await db.notifications_log.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return docs
+
+
+@api_router.get("/admin/notifications/audience")
+async def admin_notification_audience(admin=Depends(require_admin)):
+    """Recipient count per category for the admin preview."""
+    out = {}
+    for c in NOTIF_CATEGORIES:
+        out[c] = len(await _recipients_for_category(c))
+    return out
 
 
 
