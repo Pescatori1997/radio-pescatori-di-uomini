@@ -120,3 +120,8 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 ## Implemented (2026-06, session 10 — Chi Siamo editabile)
 - **Pagina "Chi Siamo"** aggiornata con i nuovi contenuti (titolo, versetto Matteo 4:19, descrizione a 4 paragrafi, 3 feature card, citazione finale) mantenendo layout/hero/animazioni/icone/responsività.
 - Tutti i testi ora provengono da `GET /api/settings` (con fallback ai default) e sono **editabili da Admin > Impostazioni** → sezione "Pagina Chi Siamo" (campi: titolo, sottotitolo, descrizione, 3 card titolo+testo, citazione). Modello `GeneralSettings` esteso con campi `about_*`; default seedati allo startup (merge solo delle chiavi mancanti, non sovrascrive gli edit admin). Aggiunta card citazione finale in fondo alla pagina.
+
+## Fixed (2026-06, session 11 — Contatti data-binding)
+- **BUG**: la pagina pubblica `/contact` mostrava contatti HARDCODED (email/whatsapp/instagram/facebook fittizi) e ignorava le modifiche fatte da Admin.
+- **FIX**: rimosso tutto l'hardcode; `/contact` ora costruisce dinamicamente le righe da `GET /api/settings` (email, telefono, whatsapp, indirizzo, sito web, facebook, instagram, youtube), mostrando solo i campi valorizzati. Azioni corrette (mailto/tel/wa.me/maps/URL). Aggiunto nuovo campo `website` al modello `GeneralSettings`, al seed e al form Admin > Impostazioni. UI/layout invariati.
+- Sincronizzazione Admin → pagina pubblica immediata dopo il salvataggio. Tested: backend 8/8 (test_contact_settings, `-n0`), frontend 100% (iteration_15).
