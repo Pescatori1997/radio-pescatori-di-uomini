@@ -100,3 +100,10 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - **App mobile**: con `live_mode=true` → banner rosso "LIVE NOW" + pulsante "Watch Live" (apre l'URL configurato) e la radio player viene nascosta/fermata; con `live_mode=false` → player ripristinato.
 - **Backend**: `GET /admin/radio/status`, `POST /admin/radio/control`, `POST /admin/radio/live` (require_perm radio); AzuraCast via `X-API-Key` (env `AZURACAST_API_KEY` + override da pannello); la key è mascherata nelle risposte (`has_api_key`). `/api/live/status` espone `live_mode` + `live_watch_url`. Azioni loggate nell'audit.
 - Tested: backend 18/18 (test_radio_control), frontend 100% (iteration_11). Stazione lasciata online, nessuna regressione.
+
+## Implemented (2026-07-25, session 8 — Multi-platform Live Streaming)
+- **Estensione Live Mode** (logica esistente invariata): sostituito il singolo "Watch Live URL" con più piattaforme.
+- **Nuova sezione admin `/admin/streaming` "Live Streaming"**: URL configurabili per YouTube, Facebook Live, TikTok Live, Instagram Live, Sito Web, Custom. Salvati in `live_status.live_links` via `PUT /api/admin/radio` (campi vuoti scartati). Il Control Center ora rimanda a questa sezione (rimosso l'input singolo).
+- **App mobile**: con Live Mode attivo, "Watch Live" apre un modal "Dove vuoi guardare la diretta?" con SOLO le piattaforme configurate; 1 sola → apertura diretta senza modal; 0 → fallback al vecchio `live_watch_url`. Componente riutilizzabile `WatchLiveModal` + config condivisa `src/livePlatforms.ts`.
+- `live_links` esposto in `/api/live/status` e `/admin/radio/status`.
+- Tested: backend 11/11 (test_live_streaming, run con `-n 0`), frontend 100%. Nessuna regressione.
