@@ -1,0 +1,42 @@
+{
+  "summary": "Iterazione 20 — RETEST FE del fix critico di iterazione 19. Il one-liner di _layout.tsx:57 (aggiunta di root === 'reset-password' all'allowlist inPublic) FUNZIONA correttamente. Tutti i 3 punti richiesti verificati con successo su viewport mobile 390x844, sessione fresca (localStorage svuotato prima di ogni scenario). Nessuna regressione: le altre rotte pubbliche del gate (welcome, auth, invite, donation-success, reset-password) restano raggiungibili non-loggati; le rotte protette (/account, /notifications-settings) restano correttamente bloccate e reindirizzate a /welcome. Zero errori JS rilevati; solo warning noti non-bloccanti (shadow*/expo-notifications web).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "styles (globale)", "issue": "Warning ripetuti '\"shadow*\" style props are deprecated. Use \"boxShadow\"' — non bloccante, ereditato. Reference: RN Web deprecation."},
+      {"component": "expo-notifications (web)", "issue": "Warning 'Listening to push token changes is not yet fully supported on web' — atteso, native-only."}
+    ]
+  },
+  "verified_flows": {
+    "frontend": {
+      "TEST 1 — /welcome → welcome-card-login → /auth?mode=login → tap auth-forgot": "URL finale = /reset-password (PASS, fix confermato)",
+      "TEST 1b — reset-email input visibile su /reset-password unauth": "PASS",
+      "TEST 2 — flusso completo reset: fill reset-email(notiftest@example.com) → submit → step 2 (reset-code + reset-newpw visibili) → codice fallback '008300' estratto dalla UI → fill code + password 'Reset1234!' → submit": "URL finale = /auth?mode=login (PASS)",
+      "TEST 3 — non-regressione /account unauth": "redirect a /welcome (PASS)",
+      "TEST 4 — non-regressione /notifications-settings unauth": "redirect a /welcome (PASS)",
+      "TEST 5 — pubbliche unauth raggiungibili": "/welcome, /auth, /invite, /donation-success, /reset-password tutte PASS (nessun redirect forzato)"
+    }
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_20.json",
+    "/app/test_reports/iteration_19.json (baseline pre-fix)"
+  ],
+  "action_items": [
+    "Nessuna azione bloccante. Il fix è verificato in produzione preview. Pronti al deploy dal lato reset-password.",
+    "(Nice-to-have ereditato) Migrare shadow*→boxShadow e props.pointerEvents→style.pointerEvents nel prossimo pass RN Web (non blocca)."
+  ],
+  "critical_code_review_comments": [
+    "_layout.tsx:57 — allowlist inPublic ora include correttamente 'reset-password'. La logica del gate resta coerente: welcome/auth reindirizzano gli utenti già decisi verso /admin o /(tabs), e le rotte non pubbliche continuano a forzare /welcome per gli utenti non decisi.",
+    "reset-password.tsx — step 1→step 2 gestisce correttamente il fallback code (mostrato in UI quando EMERGENT_EMAIL_KEY vuoto). Redirect finale a /auth?mode=login corretto e coerente con l'UX del login."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend only retest — 293/298 rimane baseline iter 19)", "frontend": "100% (5/5 scenari richiesti PASS)"},
+  "seed_data_creation": "La password dell'utente notiftest@example.com è stata reimpostata a 'Reset1234!' durante il TEST 2 (allineata al valore documentato in /app/memory/test_credentials.md).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Il fix del welcome gate per /reset-password è confermato funzionante. Non sono emersi altri bug FE. Se richiesta un'ulteriore verifica: rieseguire i 5 scenari sopra oppure procedere direttamente al deploy. La password di notiftest@example.com dopo questo test è 'Reset1234!' (coerente con test_credentials.md).",
+  "rca_of_issue": "Confermato: il fix in /app/frontend/app/_layout.tsx:57 (aggiunta di root === 'reset-password' all'espressione inPublic) risolve completamente il bug di iterazione 19. Sequenza post-fix ora verificata: welcome → Accedi → /auth?mode=login → 'Password dimenticata?' → /reset-password (senza redirect a /welcome). Nessuna regressione sulle rotte protette."
+}
