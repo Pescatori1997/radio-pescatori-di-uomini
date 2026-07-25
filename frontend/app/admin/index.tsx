@@ -22,6 +22,7 @@ const CARDS = [
   { key: "products", label: "Prodotti", icon: "storefront", color: "#22C55E", route: "/admin/products" },
   { key: "donations", label: "Donazioni", icon: "gift", color: colors.success, route: "/admin/donations" },
   { key: "notifications", label: "Notifiche", icon: "bell-ring", color: "#F59E0B", route: "/admin/notifications" },
+  { key: "reports", label: "Segnalazioni", icon: "message-alert", color: "#EF4444", route: "/admin/reports" },
 ];
 
 export default function AdminDashboard() {
@@ -54,6 +55,9 @@ export default function AdminDashboard() {
                   <View style={[styles.iconBox, { backgroundColor: c.color + "22" }]}>
                     <MaterialCommunityIcons name={c.icon as any} size={22} color={c.color} />
                   </View>
+                  {c.key === "reports" && (stats?.reports_new ?? 0) > 0 && (
+                    <View style={styles.newBadge}><Text style={styles.newBadgeText}>{stats.reports_new} nuove</Text></View>
+                  )}
                   <Text style={styles.cardValue}>{stats?.[c.key] ?? 0}</Text>
                   <Text style={styles.cardLabel}>{c.label}</Text>
                 </PressableScale>
@@ -73,6 +77,8 @@ const styles = StyleSheet.create({
   grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
   cardWrap: { width: "47%", flexGrow: 1 },
   card: { backgroundColor: ADMIN.card, borderRadius: radius.lg, padding: spacing.lg, borderWidth: 1, borderColor: ADMIN.border },
+  newBadge: { position: "absolute", top: spacing.md, right: spacing.md, backgroundColor: "#EF4444", paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill },
+  newBadgeText: { color: colors.white, fontSize: 10, fontWeight: "800" },
   iconBox: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center", marginBottom: spacing.md },
   cardValue: { color: colors.white, fontSize: 30, fontWeight: "800" },
   cardLabel: { color: ADMIN.muted, fontSize: 13, marginTop: 2 },

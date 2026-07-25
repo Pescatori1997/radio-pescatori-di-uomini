@@ -241,6 +241,21 @@ export const api = {
     request("/admin/notifications/send", { method: "POST", body: JSON.stringify(body) }, true),
   adminNotificationsLog: () => request("/admin/notifications", {}, true),
   adminNotificationAudience: () => request("/admin/notifications/audience", {}, true),
+  // reports / feedback
+  createReport: (body: { category: string; title: string; description: string; screenshot?: string | null; video?: string | null }) =>
+    request("/reports", { method: "POST", body: JSON.stringify(body) }, true),
+  adminReports: (params?: { status?: string; category?: string; search?: string; sort?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.category) q.set("category", params.category);
+    if (params?.search) q.set("search", params.search);
+    if (params?.sort) q.set("sort", params.sort);
+    return request(`/admin/reports?${q.toString()}`, {}, true);
+  },
+  adminReport: (id: string) => request(`/admin/reports/${id}`, {}, true),
+  adminReportsUnread: () => request("/admin/reports/unread-count", {}, true),
+  adminUpdateReport: (id: string, status: string) => request(`/admin/reports/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }, true),
+  adminDeleteReport: (id: string) => request(`/admin/reports/${id}`, { method: "DELETE" }, true),
 };
 
 // HTTPS pass-through URL for the live radio stream (works on web + native).

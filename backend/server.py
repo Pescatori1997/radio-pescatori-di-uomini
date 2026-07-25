@@ -720,6 +720,8 @@ async def admin_stats(admin=Depends(require_admin)):
         "products": await db.products.count_documents({}),
         "donations": await db.donation_transactions.count_documents({"payment_status": "paid"}),
         "notifications": await db.notifications_log.count_documents({}),
+        "reports": await db.reports.count_documents({}),
+        "reports_new": await db.reports.count_documents({"read": {"$ne": True}}),
     }
 
 
@@ -2308,6 +2310,112 @@ async def admin_edit_meditation(mid: str, body: MeditationEdit, admin=Depends(re
 @api_router.delete("/admin/meditations/{mid}")
 async def admin_delete_meditation(mid: str, admin=Depends(require_perm("meditations"))):
     await db.meditations.delete_one({"id": mid})
+    return {"ok": True}
+
+
+
+# ==================== Segnalazioni / Feedback ====================
+REPORT_CATEGORIES = ["bug", "suggestion", "technical", "other"]
+REPORT_STATUSES = ["new", "in_progress", "resolved", "closed"]
+
+
+class ReportIn(BaseModel):
+    category: str
+    title: str
+    description: str
+    screenshot: Optional[str] = None
+    video: Optional[str] = None
+
+
+class ReportStatusIn(BaseModel):
+    status: str
+
+
+@api_router.post("/reports", status_code=201)
+async def create_report(body: ReportIn, authorization: Optional[str] = Header(None)):
+    if body.category not in REPORT_CATEGORIES:
+        raise HTTPException(status_code=400, detail="Categoria non valida")
+    if not body.title.strip():
+        raise HTTPException(status_code=400, detail="Il titolo è obbligatorio")
+    if not body.description.strip():
+        raise HTTPException(status_code=400, detail="La descrizione è obbligatoria")
+    # Reject oversized attachments (base64) to stay within proxy limits (~8MB raw ≈ 11MB b64).
+    for att in (body.screenshot, body.video):
+        if att and len(att) > 12_000_000:
+            raise HTTPException(status_code=413, detail="Allegato troppo grande (max ~8MB)")
+    user = await get_optional_user(authorization)
+    doc = {
+        "id": new_id("rep"),
+        "category": body.category,
+        "title": body.title.strip(),
+        "description": body.description.strip(),
+        "screenshot": body.screenshot,
+        "video": body.video,
+        "status": "new",
+        "read": False,
+        "user_id": user["user_id"] if user else None,
+        "user_name": (user.get("name") if user else None),
+        "user_email": (user.get("email") if user else None),
+        "created_at": now_utc(),
+        "updated_at": now_utc(),
+    }
+    await db.reports.insert_one(dict(doc))
+    return {"ok": True, "id": doc["id"]}
+
+
+@api_router.get("/admin/reports")
+async def admin_reports(status: Optional[str] = None, category: Optional[str] = None,
+                        search: Optional[str] = None, sort: Optional[str] = "desc",
+                        admin=Depends(require_admin)):
+    query: dict = {}
+    if status and status in REPORT_STATUSES:
+        query["status"] = status
+    if category and category in REPORT_CATEGORIES:
+        query["category"] = category
+    if search:
+        query["$or"] = [
+            {"title": {"$regex": search, "$options": "i"}},
+            {"description": {"$regex": search, "$options": "i"}},
+            {"user_name": {"$regex": search, "$options": "i"}},
+            {"user_email": {"$regex": search, "$options": "i"}},
+        ]
+    order = 1 if sort == "asc" else -1
+    # Exclude heavy base64 attachments from the list payload.
+    docs = await db.reports.find(query, {"_id": 0, "screenshot": 0, "video": 0}).sort("created_at", order).to_list(500)
+    return docs
+
+
+@api_router.get("/admin/reports/unread-count")
+async def admin_reports_unread(admin=Depends(require_admin)):
+    return {"count": await db.reports.count_documents({"read": {"$ne": True}})}
+
+
+@api_router.get("/admin/reports/{rid}")
+async def admin_get_report(rid: str, admin=Depends(require_admin)):
+    doc = await db.reports.find_one({"id": rid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Segnalazione non trovata")
+    # Opening a report marks it as read.
+    if not doc.get("read"):
+        await db.reports.update_one({"id": rid}, {"$set": {"read": True}})
+        doc["read"] = True
+    return doc
+
+
+@api_router.patch("/admin/reports/{rid}")
+async def admin_update_report(rid: str, body: ReportStatusIn, admin=Depends(require_admin)):
+    if body.status not in REPORT_STATUSES:
+        raise HTTPException(status_code=400, detail="Stato non valido")
+    res = await db.reports.update_one({"id": rid}, {"$set": {"status": body.status, "read": True, "updated_at": now_utc()}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Segnalazione non trovata")
+    await log_activity(admin, f"ha aggiornato lo stato di una segnalazione a \"{body.status}\"", "reports")
+    return {"ok": True}
+
+
+@api_router.delete("/admin/reports/{rid}")
+async def admin_delete_report(rid: str, admin=Depends(require_admin)):
+    await db.reports.delete_one({"id": rid})
     return {"ok": True}
 
 
