@@ -229,6 +229,7 @@ export const api = {
     request("/auth/change-password", { method: "POST", body: JSON.stringify(body) }, true),
   updateProfile: (body: { name?: string; picture?: string }) =>
     request("/auth/profile", { method: "PUT", body: JSON.stringify(body) }, true),
+  deleteAccount: () => request("/auth/account", { method: "DELETE" }, true),
   // notification preferences
   getNotifPrefs: () => request("/me/notifications", {}, true),
   setNotifPrefs: (prefs: Record<string, boolean>) =>

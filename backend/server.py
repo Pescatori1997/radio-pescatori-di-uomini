@@ -2117,6 +2117,20 @@ async def update_profile(body: ProfileIn, authorization: Optional[str] = Header(
 
 
 # ---- Notification preferences ----
+@api_router.delete("/auth/account")
+async def delete_account(authorization: Optional[str] = Header(None)):
+    """User-initiated account deletion (App Store / Play requirement)."""
+    user = await get_current_user(authorization)
+    uid = user["user_id"]
+    # Preserve financial records but detach personal link.
+    await db.donation_transactions.update_many({"user_id": uid}, {"$set": {"user_id": None, "anonymous": True}})
+    await db.user_sessions.delete_many({"user_id": uid})
+    if user.get("email"):
+        await db.password_resets.delete_many({"email": user["email"].lower()})
+    await db.users.delete_one({"user_id": uid})
+    return {"ok": True}
+
+
 @api_router.get("/me/notifications")
 async def get_notif_prefs(authorization: Optional[str] = Header(None)):
     user = await get_current_user(authorization)

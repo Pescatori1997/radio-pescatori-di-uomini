@@ -13,7 +13,7 @@ import { colors, spacing, radius } from "@/src/theme";
 export default function Account() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, logout } = useAuth();
   const [name, setName] = useState(user?.name || "");
   const [picture, setPicture] = useState<string | null>(user?.picture || null);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -59,6 +59,21 @@ export default function Account() {
     } catch (e: any) {
       setPwErr(e.message || "Errore");
     } finally { setSavingPw(false); }
+  };
+
+  const remove = () => {
+    Alert.alert("Elimina account", "Questa azione è definitiva: il tuo account e i tuoi dati personali verranno eliminati e non potranno essere recuperati. Vuoi continuare?", [
+      { text: "Annulla", style: "cancel" },
+      { text: "Elimina account", style: "destructive", onPress: async () => {
+        try {
+          await api.deleteAccount();
+          await logout();
+          router.replace("/welcome" as any);
+        } catch (e: any) {
+          Alert.alert("Errore", e.message || "Eliminazione non riuscita");
+        }
+      } },
+    ]);
   };
 
   const initials = (user?.name || "?").slice(0, 1).toUpperCase();
@@ -107,6 +122,15 @@ export default function Account() {
             {savingPw ? <ActivityIndicator color={colors.white} /> : <Text style={styles.btnText}>{hasPassword ? "Aggiorna password" : "Imposta password"}</Text>}
           </PressableScale>
         </View>
+
+        <Text style={styles.section}>Zona pericolosa</Text>
+        <View style={styles.card}>
+          <Text style={styles.hint}>Eliminando l'account, i tuoi dati personali verranno rimossi in modo permanente.</Text>
+          <Pressable testID="account-delete" onPress={remove} style={styles.deleteBtn}>
+            <Ionicons name="trash-outline" size={18} color={colors.error} />
+            <Text style={styles.deleteText}>Elimina account</Text>
+          </Pressable>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -131,4 +155,6 @@ const styles = StyleSheet.create({
   err: { color: colors.error, fontSize: 13, marginTop: spacing.sm },
   btn: { backgroundColor: colors.navy, paddingVertical: spacing.md, borderRadius: radius.pill, alignItems: "center", marginTop: spacing.lg },
   btnText: { color: colors.white, fontSize: 15, fontWeight: "800" },
+  deleteBtn: { flexDirection: "row", gap: spacing.sm, alignItems: "center", justifyContent: "center", marginTop: spacing.md, paddingVertical: spacing.md, borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.error },
+  deleteText: { color: colors.error, fontSize: 15, fontWeight: "800" },
 });

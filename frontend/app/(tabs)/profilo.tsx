@@ -41,6 +41,7 @@ export default function Profilo() {
     ...(user ? [{ icon: "person-circle-outline", label: "Il mio account", route: "/account" }] : []),
     ...(user ? [{ icon: "notifications-outline", label: "Notifiche", route: "/notifications-settings" }] : []),
     { icon: "mail-outline", label: "Contatti", route: "/contact" },
+    { icon: "shield-checkmark-outline", label: "Privacy Policy", route: "/privacy" },
     { icon: "settings-outline", label: "Impostazioni", route: "/settings" },
   ];
 
