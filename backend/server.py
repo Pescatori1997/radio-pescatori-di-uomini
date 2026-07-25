@@ -29,14 +29,17 @@ logger = logging.getLogger(__name__)
 DEMO_STREAM = "https://ice1.somafm.com/christmas-128-mp3"
 
 # ---------------- Real AzuraCast radio ----------------
-AZ_STREAM_URL = "http://84.247.184.136/listen/pescatori/radio.mp3"
-AZ_NOWPLAYING_URL = "http://84.247.184.136/api/nowplaying/pescatori"
-DEFAULT_ART = "https://images.unsplash.com/photo-1592818868295-f527dbac420d?w=600&q=85"
-
 # AzuraCast control API (station lifecycle). Env is the secure default; DB can override from the panel.
 AZURACAST_BASE = os.environ.get("AZURACAST_BASE_URL", "http://84.247.184.136").rstrip("/")
 AZURACAST_STATION_ENV = os.environ.get("AZURACAST_STATION", "pescatori")
 AZURACAST_API_KEY_ENV = os.environ.get("AZURACAST_API_KEY", "")
+
+# Stream + now-playing defaults derived from the env-backed AzuraCast host/station.
+# NOTE: server-side defaults only — clients always receive the HTTPS proxies
+# /api/live/stream and /api/live/art, never this origin directly.
+AZ_STREAM_URL = os.environ.get("AZURACAST_STREAM_URL") or f"{AZURACAST_BASE}/listen/{AZURACAST_STATION_ENV}/radio.mp3"
+AZ_NOWPLAYING_URL = os.environ.get("AZURACAST_NOWPLAYING_URL") or f"{AZURACAST_BASE}/api/nowplaying/{AZURACAST_STATION_ENV}"
+DEFAULT_ART = "https://images.unsplash.com/photo-1592818868295-f527dbac420d?w=600&q=85"
 
 
 async def _az_conf():
