@@ -1,0 +1,45 @@
+{
+  "summary": "Segnalazioni / Feedback feature validated end-to-end. Backend: 19/19 tests pass covering create (guest + authenticated), validation (empty title/description, invalid category, 413 oversized attachment), admin list with status/category/search filters + sort asc/desc, unread-count, single GET (with attachments + auto mark-read + 404), PATCH status transitions + invalid + 404, DELETE, and /admin/stats reports/reports_new counts. Frontend: Public Ospite → Profilo → 'Segnala un problema' → fill category+title+description → submit flow works, success screen 'Segnalazione ricevuta!' renders. Verified the guest submission from UI persisted with user_id=null and correct category. Admin UI not tested via browser per request (Google gate + ADMINTESTTOKEN123 cannot pass welcome gate).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_reports.py",
+    "/app/test_reports/pytest/iteration_23_reports.xml"
+  ],
+  "action_items": [
+    "None blocking. Feature is production-ready from backend + public frontend perspective.",
+    "Optional: consider adding /api/admin/reports pagination + total count for large volumes (currently .to_list(500) hard cap).",
+    "Optional: PATCH status endpoint always sets read=True on update; if a workflow requires marking unread while updating status, this side-effect might be undesirable — currently acceptable.",
+    "Optional (perf): search regex on user_email/user_name/title/description is unindexed; if reports grow large, consider a text index."
+  ],
+  "critical_code_review_comments": [
+    "server.py: /api/reports POST correctly validates category, trims title/description, rejects >12MB base64 attachments (screenshot AND video), and captures optional auth user via get_optional_user — clean.",
+    "server.py: /api/admin/reports list correctly excludes screenshot/video from projection to keep list payload light; single GET returns full doc — good separation.",
+    "server.py: opening a report (GET single) auto-marks read=True — matches unread badge UX; PATCH also sets read=True.",
+    "server.py: _id excluded from all responses (find(..., {'_id':0}) / find_one(..., {'_id':0})) — no ObjectId serialization issue.",
+    "server.py: all response payloads pass through FastAPI's default jsonable encoder — datetime objects (created_at/updated_at) are serialized to ISO strings, so the sort comparison in tests works.",
+    "frontend/app/report.tsx: KeyboardAvoidingView + ScrollView keyboardShouldPersistTaps='handled' is correct; touch targets on chips + attach buttons are ≥44pt.",
+    "frontend/app/report.tsx: Videos are read as base64 blob via FileReader and guarded to 8MB before upload — matches backend's 12MB base64 limit.",
+    "frontend/app/(tabs)/profilo.tsx: 'Segnala un problema' menu entry is present and always visible (guest + authenticated) — good UX."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_reports.py (created)"
+  ],
+  "success_rate": {
+    "backend": "100% (19/19)",
+    "frontend": "100% (public flow: Welcome → Ospite → Profilo → Report → Success verified)"
+  },
+  "seed_data_creation": "Test file creates TEST_-prefixed reports and a TEST_reports_<uuid>@pescatoridiuomini.it user via /api/auth/register during the run. A session-scoped autouse cleanup fixture purges all TEST_-prefixed reports after the test session. UI-created report (rep_13c9b1a2a513) also manually deleted post-run.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend tests in /app/backend/tests/test_reports.py — reusable regression suite for the Segnalazioni feature. Uses ADMINTESTTOKEN123 (seeded by conftest.py). Frontend admin UI is behind Google welcome gate + admin allowlist, so admin browser automation is intentionally skipped; validate admin UI manually or via a real Google login. The parallel xdist workers can race on shared counters (unread-count), so avoid ==count-1 assertions across workers.",
+  "rca_of_issue": "N/A — no bugs found. During test authoring, two flakes were caught & fixed in the test itself (not product code): (1) a module-level teardown that wiped TEST_ reports mid-run on the first-finishing xdist worker → moved cleanup to a session-scope autouse fixture; (2) unread-count race between parallel workers → replaced count-arithmetic assertion with a per-report list lookup checking read flag transition."
+}

@@ -229,3 +229,41 @@ test_plan:
 agent_communication:
     -agent: "main"
     -message: "BACKEND-ONLY test the new Merchandising endpoints. Admin auth: Bearer ADMINTESTTOKEN123 (seeded by conftest). Verify: auth guard (401 no token, 403 non-admin, 200 admin) on /api/admin/products; create returns 201 + id; invalid availability on create AND patch returns 400; public GET /api/products returns only published products and NOT hidden ones; category + search filters; featured products sorted first; GET /api/products/{id} 404 for missing; reorder endpoint updates order and is reflected in list order; delete removes. Clean up TEST_-prefixed products. Products collection currently intentionally empty (empty-state feature)."
+
+## --- Segnalazioni / Feedback (session 16) ---
+backend:
+  - task: "Reports/Feedback: create + admin management (list/detail/status/delete/unread)"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "POST /api/reports (public, optional auth; category in [bug,suggestion,technical,other]; title+description required => 400 if empty; invalid category => 400; screenshot/video base64 => 413 if > 12MB; captures user_id/name/email if authed, else null=Ospite; status=new, read=false; returns 201 {ok,id}). Admin (require_admin): GET /api/admin/reports (filters status/category/search, sort asc|desc, excludes heavy base64 from list), GET /api/admin/reports/unread-count, GET /api/admin/reports/{id} (marks read=true on open, 404 if missing), PATCH /api/admin/reports/{id} {status in [new,in_progress,resolved,closed]} (invalid => 400, marks read, logs activity, 404 if missing), DELETE /api/admin/reports/{id}. /admin/stats includes reports + reports_new counts."
+
+frontend:
+  - task: "Reports/Feedback UI: public form + admin list/detail"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/report.tsx, frontend/app/admin/reports/*"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Public /report form (category chips, title/description validation, optional screenshot+video via image picker, success state). Entry link added to Profilo menu ('Segnala un problema'). Admin /admin/reports list (search, status+category filters, sort, unread dot/highlight) + /admin/reports/[id] detail (status change chips, screenshot/video render via VideoEmbed for base64, delete with confirmAsync). Added 'Segnalazioni' entry to AdminShell sidebar. Dashboard card with reports_new badge already present."
+
+test_plan:
+  current_focus:
+    - "Reports/Feedback: create + admin management (list/detail/status/delete/unread)"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    -agent: "main"
+    -message: "Test the new Segnalazioni/Feedback feature (backend + frontend). Backend admin auth: Bearer ADMINTESTTOKEN123 (seeded by conftest) for /api/admin/reports/*. Verify: POST /api/reports as guest (no token) and as authed user; validation (empty title/description => 400, invalid category => 400); admin list filters/search/sort + heavy base64 excluded from list; unread-count; GET detail marks read; PATCH status transitions + invalid status => 400 + 404 for missing; delete. Frontend: for admin UI login via Google gate is required (welcome gate blocks direct nav) — if not testable, focus on public /report flow (continue as Ospite → Profilo → Segnala un problema → fill form → submit → success). Clean up any TEST_-prefixed reports created."
