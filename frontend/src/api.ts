@@ -42,6 +42,24 @@ export const api = {
     return request(`/podcasts?${q.toString()}`);
   },
   categories: () => request("/podcasts/categories"),
+  meditations: (search?: string, category?: string) => {
+    const q = new URLSearchParams();
+    if (search) q.set("search", search);
+    if (category) q.set("category", category);
+    return request(`/meditations?${q.toString()}`);
+  },
+  meditationCategories: () => request("/meditations/categories"),
+  meditationItem: (id: string) => request(`/meditations/${id}`),
+  adminMeditations: (status?: string, search?: string) => {
+    const q = new URLSearchParams();
+    if (status) q.set("status", status);
+    if (search) q.set("search", search);
+    return request(`/admin/meditations?${q.toString()}`, {}, true);
+  },
+  adminMeditation: (id: string) => request(`/admin/meditations/${id}`, {}, true),
+  adminCreateMeditation: (body: any) => request("/admin/meditations", { method: "POST", body: JSON.stringify(body) }, true),
+  adminEditMeditation: (id: string, body: any) => request(`/admin/meditations/${id}`, { method: "PATCH", body: JSON.stringify(body) }, true),
+  adminDeleteMeditation: (id: string) => request(`/admin/meditations/${id}`, { method: "DELETE" }, true),
   news: () => request("/news"),
   newsItem: (id: string) => request(`/news/${id}`),
   programs: () => request("/programs"),

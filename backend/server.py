@@ -562,7 +562,7 @@ async def get_history(authorization: Optional[str] = Header(None)):
 ADMIN_EMAILS = [e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()]
 ROLE_ADMIN, ROLE_COLLAB, ROLE_LISTENER = "administrator", "collaborator", "listener"
 # Sections that can be delegated to a collaborator (each maps to an existing admin area).
-PERM_SECTIONS = ["podcasts", "news", "merch", "schedule", "prayers", "messages", "team", "radio"]
+PERM_SECTIONS = ["podcasts", "meditations", "news", "merch", "schedule", "prayers", "messages", "team", "radio"]
 
 # ---------------- Email (Emergent-managed Resend) ----------------
 EMAIL_BASE_URL = "https://integrations.emergentagent.com"
@@ -716,6 +716,7 @@ async def admin_stats(admin=Depends(require_admin)):
         "programs": await db.programs.count_documents({}),
         "news": await db.news.count_documents({}),
         "podcasts": await db.podcasts.count_documents({}),
+        "meditations": await db.meditations.count_documents({}),
         "products": await db.products.count_documents({}),
         "donations": await db.donation_transactions.count_documents({"payment_status": "paid"}),
         "notifications": await db.notifications_log.count_documents({}),
@@ -2164,6 +2165,136 @@ async def admin_notification_audience(admin=Depends(require_admin)):
     for c in NOTIF_CATEGORIES:
         out[c] = len(await _recipients_for_category(c))
     return out
+
+
+
+# ==================== Meditazioni (video meditations) ====================
+class MeditationIn(BaseModel):
+    title: str
+    speaker: Optional[str] = ""
+    verse: Optional[str] = ""
+    description: Optional[str] = ""
+    category: Optional[str] = "Generale"
+    video_url: Optional[str] = ""
+    thumbnail: Optional[str] = None
+    published: Optional[bool] = False
+    publish_date: Optional[str] = None  # ISO; future date = scheduled
+
+
+class MeditationEdit(BaseModel):
+    title: Optional[str] = None
+    speaker: Optional[str] = None
+    verse: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    video_url: Optional[str] = None
+    thumbnail: Optional[str] = None
+    published: Optional[bool] = None
+    publish_date: Optional[str] = None
+
+
+async def _flush_scheduled_meditations():
+    """Fire the push notification for meditations whose scheduled publish time has arrived."""
+    now_iso = now_utc().isoformat()
+    due = await db.meditations.find(
+        {"published": True, "notified": {"$ne": True}, "publish_date": {"$lte": now_iso}},
+        {"_id": 0, "id": 1, "title": 1},
+    ).to_list(50)
+    for m in due:
+        await db.meditations.update_one({"id": m["id"]}, {"$set": {"notified": True}})
+        await notify_category("meditations", "Nuova meditazione", m.get("title", ""),
+                              action_url=f"/meditazioni/{m['id']}")
+
+
+@api_router.get("/meditations")
+async def get_meditations(search: Optional[str] = None, category: Optional[str] = None):
+    await _flush_scheduled_meditations()
+    now_iso = now_utc().isoformat()
+    query: dict = {"published": True, "publish_date": {"$lte": now_iso}}
+    if category and category != "Tutti":
+        query["category"] = category
+    if search:
+        query["title"] = {"$regex": search, "$options": "i"}
+    docs = await db.meditations.find(query, {"_id": 0}).sort("publish_date", -1).to_list(300)
+    return docs
+
+
+@api_router.get("/meditations/categories")
+async def get_meditation_categories():
+    cats = await db.meditations.distinct("category", {"published": True})
+    return [c for c in cats if c]
+
+
+@api_router.get("/meditations/{mid}")
+async def get_meditation(mid: str):
+    doc = await db.meditations.find_one({"id": mid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Meditazione non trovata")
+    return doc
+
+
+@api_router.get("/admin/meditations")
+async def admin_meditations(status: Optional[str] = None, search: Optional[str] = None,
+                            admin=Depends(require_perm("meditations"))):
+    await _flush_scheduled_meditations()
+    query: dict = {}
+    if status == "published":
+        query["published"] = True
+    elif status == "draft":
+        query["published"] = {"$ne": True}
+    if search:
+        query["title"] = {"$regex": search, "$options": "i"}
+    docs = await db.meditations.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return docs
+
+
+@api_router.get("/admin/meditations/{mid}")
+async def admin_get_meditation(mid: str, admin=Depends(require_perm("meditations"))):
+    doc = await db.meditations.find_one({"id": mid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Meditazione non trovata")
+    return doc
+
+
+@api_router.post("/admin/meditations", status_code=201)
+async def admin_create_meditation(body: MeditationIn, admin=Depends(require_perm("meditations"))):
+    doc = body.model_dump()
+    doc["id"] = new_id("med")
+    doc["created_at"] = now_utc()
+    if not doc.get("publish_date"):
+        doc["publish_date"] = now_utc().isoformat()
+    doc["notified"] = False
+    await db.meditations.insert_one(dict(doc))
+    await log_activity(admin, f"ha creato la meditazione \"{doc.get('title', '')}\"", "meditations", {"id": doc["id"]})
+    # Notify immediately if published and the publish date is now/past; scheduled ones fire on flush.
+    if doc.get("published") and doc["publish_date"] <= now_utc().isoformat():
+        await db.meditations.update_one({"id": doc["id"]}, {"$set": {"notified": True}})
+        await notify_category("meditations", "Nuova meditazione", doc.get("title", ""),
+                              action_url=f"/meditazioni/{doc['id']}", admin_email=admin.get("email"))
+    return {"ok": True, "id": doc["id"]}
+
+
+@api_router.patch("/admin/meditations/{mid}")
+async def admin_edit_meditation(mid: str, body: MeditationEdit, admin=Depends(require_perm("meditations"))):
+    updates = body.model_dump(exclude_unset=True)
+    prev = await db.meditations.find_one({"id": mid}, {"published": 1, "notified": 1, "title": 1})
+    if updates:
+        await db.meditations.update_one({"id": mid}, {"$set": updates})
+    # Notify when a draft becomes published (and not already notified).
+    became_published = updates.get("published") is True and prev and not prev.get("published")
+    if became_published and prev and not prev.get("notified"):
+        m = await db.meditations.find_one({"id": mid}, {"title": 1, "publish_date": 1})
+        if m and (m.get("publish_date") or "") <= now_utc().isoformat():
+            await db.meditations.update_one({"id": mid}, {"$set": {"notified": True}})
+            await notify_category("meditations", "Nuova meditazione", m.get("title", ""),
+                                  action_url=f"/meditazioni/{mid}", admin_email=admin.get("email"))
+    return {"ok": True}
+
+
+@api_router.delete("/admin/meditations/{mid}")
+async def admin_delete_meditation(mid: str, admin=Depends(require_perm("meditations"))):
+    await db.meditations.delete_one({"id": mid})
+    return {"ok": True}
 
 
 

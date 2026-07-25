@@ -11,6 +11,7 @@ const NAV = [
   { key: "dash", label: "Dashboard", icon: "view-dashboard", route: "/admin", perm: null },
   { key: "team", label: "Team", icon: "anchor", route: "/admin/team", perm: null },
   { key: "podcast", label: "Podcast", icon: "microphone", route: "/admin/podcasts", perm: "podcasts" },
+  { key: "meditations", label: "Meditazioni", icon: "book-open-variant", route: "/admin/meditations", perm: "meditations" },
   { key: "news", label: "Notizie", icon: "newspaper-variant", route: "/admin/news", perm: "news" },
   { key: "merch", label: "Merchandising", icon: "storefront", route: "/admin/products", perm: "merch" },
   { key: "schedule", label: "Palinsesto", icon: "calendar-month", route: "/admin/schedule", perm: "schedule" },

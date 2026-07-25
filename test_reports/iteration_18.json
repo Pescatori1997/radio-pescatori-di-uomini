@@ -1,0 +1,72 @@
+{
+  "summary": "Iterazione 18 — Feature 'Meditazioni' (video meditazioni cristiane). Backend: 14/14 pytest PASS (100%) su /app/backend/tests/test_meditations.py. Frontend (viewport 390x844): tutti i flussi richiesti verificati con successo — welcome gate (Ospite/Login), tab pubblico /meditazioni (card con miniatura/titolo/oratore/versetto/data/descrizione, barra ricerca med-search, chip categorie med-cat-*, tap su med-card-<id> apre dettaglio), pagina di dettaglio /meditazioni/{id} (iframe YouTube in med-player con src corretto https://www.youtube.com/embed/..., med-share-btn, med-yt-btn), admin /admin/meditations (search med-admin-search, 3 filter chips med-filter-all/published/draft, med-create), editor /admin/meditations/new (tutti i campi con testID med-title/speaker/verse/category/video/desc/thumb/published/save presenti), sidebar admin + card dashboard 'Meditazioni' visibili. Flusso end-to-end verificato: meditazione creata da admin come pubblicata compare immediatamente nel tab pubblico /meditazioni. La notifica push effettiva risulta 'failed' (EMERGENT_PUSH_KEY=placeholder) come atteso, ma il record in notifications_log viene creato correttamente con category='meditations' e title='Nuova meditazione'. Il campo 'meditations' è presente in /api/admin/stats.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "styles (globale)", "issue": "Warning ripetuti '\"shadow*\" style props are deprecated. Use \"boxShadow\"' e 'props.pointerEvents is deprecated. Use style.pointerEvents' sul web preview. Non bloccanti, comportamento noto ereditato dalle iterazioni precedenti."},
+      {"component": "expo-notifications (web)", "issue": "Warning '[expo-notifications] Listening to push token changes is not yet fully supported on web' — atteso: la registrazione push è native-only."}
+    ]
+  },
+  "verified_flows": {
+    "backend": {
+      "GET /api/meditations (pubblico, solo published & publish_date<=now)": "200 lista, filtri ?search e ?category funzionanti — OK",
+      "GET /api/meditations/categories": "200 lista con categorie distinte published — OK",
+      "GET /api/meditations/{id}": "200 su id valido, 404 su id inesistente — OK",
+      "GET /api/admin/meditations (?status=published|draft, ?search)": "200, filtro corretto — OK",
+      "POST /api/admin/meditations (published:true, publish_date now)": "201 {ok,id}, appare in public list; log notifications_log 'meditations'/'Nuova meditazione' creato — OK",
+      "POST /api/admin/meditations (published:false)": "201, NON appare in public list, appare in admin ?status=draft; nessun log notifica — OK",
+      "POST /api/admin/meditations (published:true, publish_date futura)": "201, NON appare in public list (rispetta programmazione), appare in admin ?status=published — OK",
+      "PATCH /api/admin/meditations/{id}": "200 {ok}; GET verifica update persistito — OK",
+      "DELETE /api/admin/meditations/{id}": "200 {ok}; GET restituisce 404 dopo delete — OK",
+      "Auth: GET /api/admin/meditations senza token": "401/403 — OK",
+      "Auth: POST /api/admin/meditations senza token": "401/403 — OK",
+      "GET /api/admin/stats.meditations": "campo int presente (>=0) — OK",
+      "Push key placeholder": "log notifications_log scritto con status='failed', endpoint non crasha — comportamento atteso"
+    },
+    "frontend": {
+      "welcome gate → guest": "welcome-card-guest presente e funzionante",
+      "/meditazioni (public tab)": "med-search visibile, 2 chip med-cat-*, 1 card 'La grazia che trasforma' (seed) con thumbnail/titolo/oratore/versetto/data/descrizione",
+      "search 'grazia'": "card visibile dopo filtro — OK",
+      "tap card → /meditazioni/{id}": "player iframe YouTube (src=https://www.youtube.com/embed/dQw4w9WgXcQ?rel=0&playsinline=1), med-share-btn e med-yt-btn presenti",
+      "welcome-card-login → /auth login admin (pescatoridiuomini@outlook.it/AdminTestPwd1!)": "redirect a /admin dopo login — OK",
+      "/admin/meditations": "med-admin-search, med-create (+), 3 filter chips (med-filter-all/published/draft), med-row esistenti — OK",
+      "/admin/meditations/new editor": "campi med-title/speaker/verse/category/video/desc/thumb/published/save tutti presenti; toggle Pubblica attivato",
+      "save → torna a /admin/meditations": "nuova meditazione TEST_UI_med_<time> creata",
+      "verifica public list": "TEST_UI_med_<time> visibile immediatamente in /meditazioni (flusso E2E OK)",
+      "admin dashboard": "voce/card 'Meditazioni' presente"
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_meditations.py",
+    "/app/test_reports/pytest/iteration_18_meditations.xml"
+  ],
+  "action_items": [
+    "Nessuna azione richiesta: feature Meditazioni pienamente funzionante lato BE e FE.",
+    "(Nice-to-have, ereditato) In un futuro refactor sostituire shadow* → boxShadow e props.pointerEvents → style.pointerEvents per rimuovere i warning RN Web deprecati (non blocca)."
+  ],
+  "critical_code_review_comments": [
+    "server.py:2171-2297 → blocco Meditazioni ben strutturato: MeditationIn/MeditationEdit Pydantic, _flush_scheduled_meditations() usato sia in GET pubblico che admin per programmazione, notify_category chiamato solo se published & publish_date<=now, notified flag correttamente gestito per evitare notifiche duplicate — OK.",
+    "server.py:565 → PERM_SECTIONS include 'meditations' come sezione delegabile ai collaboratori — coerente col frontend.",
+    "server.py:719 → admin_stats espone conteggio meditations — OK.",
+    "server.py:899-903 → il vecchio blocco podcasts riclassifica automaticamente le 'Meditazione mattutina' come categoria meditations nei log (compatibilità retroattiva) — buona attenzione al retro-compatibilità.",
+    "Nota: PATCH quando si passa da draft→published rifà notify_category. Se la meditazione era stata creata con publish_date FUTURA e viene pubblicata in seguito quando la data è ancora futura, il flag notified NON viene settato (perché condizione publish_date<=now è falsa) → verrà notificata correttamente al successivo flush. Comportamento corretto."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_meditations.py (creato — 14 test)"
+  ],
+  "success_rate": {
+    "backend": "100% (14/14 pytest)",
+    "frontend": "100% (tutti i flussi richiesti verificati su viewport 390x844)"
+  },
+  "seed_data_creation": "Durante i test pytest sono state create alcune meditazioni con prefisso TEST_ e sono state cleanate dal fixture. Una meditazione TEST_UI_med_111013 creata durante i test frontend è stata cancellata manualmente al termine. La meditazione seed demo 'La grazia che trasforma' (med_2a1f82f6f373) è stata verificata come presente e funzionante.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend BASE URL: process.env.EXPO_PUBLIC_BACKEND_URL. Admin auth: 'Authorization: Bearer ADMINTESTTOKEN123' (seedato in conftest.py). UI admin login: pescatoridiuomini@outlook.it / AdminTestPwd1!. Feature Meditazioni completa: le rotte admin sono /api/admin/meditations (CRUD), pubbliche /api/meditations (list/search/category), /api/meditations/categories, /api/meditations/{id}. Frontend testIDs principali: med-search, med-cat-*, med-card-<id>, med-player (iframe YouTube), med-share-btn, med-yt-btn, med-admin-search, med-create, med-filter-{all|published|draft}, med-row-<id>, med-title/speaker/verse/category/video/desc/thumb/published/schedule/save/delete. La push notifica reale è 'failed' finché EMERGENT_PUSH_KEY resta 'placeholder' — atteso, non è un bug.",
+  "rca_of_issue": "N/A — nessun bug rilevato. Feature 'Meditazioni' completa e coerente con la richiesta iniziale."
+}

@@ -13,7 +13,7 @@ const GUEST_KEY = "pdu_guest_mode";
 export const ROLE_ADMIN = "administrator";
 export const ROLE_COLLAB = "collaborator";
 export const ROLE_LISTENER = "listener";
-export type PermSection = "podcasts" | "news" | "merch" | "schedule" | "prayers" | "messages" | "radio" | "users";
+export type PermSection = "podcasts" | "meditations" | "news" | "merch" | "schedule" | "prayers" | "messages" | "radio" | "users";
 
 function extractSessionId(url?: string | null): string | null {
   if (!url) return null;

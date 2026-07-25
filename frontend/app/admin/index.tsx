@@ -18,6 +18,7 @@ const CARDS = [
   { key: "programs", label: "Programmi", icon: "calendar-month", color: "#14B8A6", route: "/admin/schedule" },
   { key: "news", label: "Articoli Notizie", icon: "newspaper-variant", color: "#38BDF8", route: "/admin/news" },
   { key: "podcasts", label: "Podcast", icon: "microphone", color: "#EF4444", route: "/admin/podcasts" },
+  { key: "meditations", label: "Meditazioni", icon: "book-open-variant", color: "#14B8A6", route: "/admin/meditations" },
   { key: "products", label: "Prodotti", icon: "storefront", color: "#22C55E", route: "/admin/products" },
   { key: "donations", label: "Donazioni", icon: "gift", color: colors.success, route: "/admin/donations" },
   { key: "notifications", label: "Notifiche", icon: "bell-ring", color: "#F59E0B", route: "/admin/notifications" },

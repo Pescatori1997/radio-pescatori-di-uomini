@@ -11,6 +11,7 @@ import { colors, spacing, radius } from "@/src/theme";
 
 const SECTIONS: { key: string; label: string }[] = [
   { key: "podcasts", label: "Podcast" },
+  { key: "meditations", label: "Meditazioni" },
   { key: "news", label: "Notizie" },
   { key: "merch", label: "Merchandising" },
   { key: "schedule", label: "Palinsesto" },
