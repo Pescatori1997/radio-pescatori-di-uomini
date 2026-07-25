@@ -1,11 +1,12 @@
 import React, { useCallback, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, Pressable } from "react-native";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { api } from "@/src/api";
 import AdminShell, { ADMIN } from "@/src/components/AdminShell";
 import { AInput, ASwitch, AImagePicker } from "@/src/components/adminForm";
 import PressableScale from "@/src/components/PressableScale";
+import { confirmAsync, alertMessage } from "@/src/utils/confirm";
 import { colors, spacing, radius } from "@/src/theme";
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -41,11 +42,11 @@ export default function MeditationEditor() {
   }, [id]));
 
   const save = async () => {
-    if (!f.title?.trim()) { Alert.alert("Campo obbligatorio", "Inserisci il titolo."); return; }
+    if (!f.title?.trim()) { alertMessage("Campo obbligatorio", "Inserisci il titolo."); return; }
     let publish_date: string | undefined;
     if (f.published && schedule) {
       const parsed = new Date(`${date}T${time}:00`);
-      if (isNaN(parsed.getTime())) { Alert.alert("Data non valida", "Usa il formato AAAA-MM-GG e ora HH:MM."); return; }
+      if (isNaN(parsed.getTime())) { alertMessage("Data non valida", "Usa il formato AAAA-MM-GG e ora HH:MM."); return; }
       publish_date = parsed.toISOString();
     } else if (f.published) {
       publish_date = new Date().toISOString();
@@ -61,15 +62,26 @@ export default function MeditationEditor() {
       else await api.adminEditMeditation(id!, payload);
       router.back();
     } catch (e: any) {
-      Alert.alert("Errore", e.message || "Salvataggio non riuscito");
+      alertMessage("Errore", e.message || "Salvataggio non riuscito");
     } finally { setSaving(false); }
   };
 
-  const remove = () => {
-    Alert.alert("Elimina meditazione", "Vuoi eliminare definitivamente questa meditazione?", [
-      { text: "Annulla", style: "cancel" },
-      { text: "Elimina", style: "destructive", onPress: async () => { await api.adminDeleteMeditation(id!); router.back(); } },
-    ]);
+  const remove = async () => {
+    const ok = await confirmAsync(
+      "Elimina meditazione",
+      "Vuoi eliminare definitivamente questa meditazione? L'operazione non è reversibile.",
+      "Elimina",
+      true
+    );
+    if (!ok) return;
+    setSaving(true);
+    try {
+      await api.adminDeleteMeditation(id!);
+      alertMessage("Meditazione eliminata", "La meditazione è stata rimossa correttamente.");
+      router.back();
+    } catch (e: any) {
+      alertMessage("Errore", e.message || "Eliminazione non riuscita");
+    } finally { setSaving(false); }
   };
 
   return (

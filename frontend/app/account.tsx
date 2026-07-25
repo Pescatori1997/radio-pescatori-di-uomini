@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import { useAuth } from "@/src/context/AuthContext";
 import { api } from "@/src/api";
+import { confirmAsync, alertMessage } from "@/src/utils/confirm";
 import PressableScale from "@/src/components/PressableScale";
 import { colors, spacing, radius } from "@/src/theme";
 
@@ -61,19 +62,21 @@ export default function Account() {
     } finally { setSavingPw(false); }
   };
 
-  const remove = () => {
-    Alert.alert("Elimina account", "Questa azione è definitiva: il tuo account e i tuoi dati personali verranno eliminati e non potranno essere recuperati. Vuoi continuare?", [
-      { text: "Annulla", style: "cancel" },
-      { text: "Elimina account", style: "destructive", onPress: async () => {
-        try {
-          await api.deleteAccount();
-          await logout();
-          router.replace("/welcome" as any);
-        } catch (e: any) {
-          Alert.alert("Errore", e.message || "Eliminazione non riuscita");
-        }
-      } },
-    ]);
+  const remove = async () => {
+    const ok = await confirmAsync(
+      "Elimina account",
+      "Questa azione è definitiva: il tuo account e i tuoi dati personali verranno eliminati e non potranno essere recuperati. Vuoi continuare?",
+      "Elimina account",
+      true
+    );
+    if (!ok) return;
+    try {
+      await api.deleteAccount();
+      await logout();
+      router.replace("/welcome" as any);
+    } catch (e: any) {
+      alertMessage("Errore", e.message || "Eliminazione non riuscita");
+    }
   };
 
   const initials = (user?.name || "?").slice(0, 1).toUpperCase();
