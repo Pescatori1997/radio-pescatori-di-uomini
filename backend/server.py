@@ -1465,11 +1465,24 @@ async def admin_radio_control(body: RadioControlIn, admin=Depends(require_perm("
         if a == "restart":
             await az_api("POST", f"/station/{station}/restart", key)
         elif a == "start":
-            await az_api("POST", f"/station/{station}/backend/start", key)
-            await az_api("POST", f"/station/{station}/frontend/start", key)
+            # Idempotent: only start services that are not already running.
+            try:
+                st = await az_api("GET", f"/station/{station}/status", key)
+            except Exception:
+                st = {}
+            if not st.get("backendRunning"):
+                await az_api("POST", f"/station/{station}/backend/start", key)
+            if not st.get("frontendRunning"):
+                await az_api("POST", f"/station/{station}/frontend/start", key)
         else:  # stop
-            await az_api("POST", f"/station/{station}/frontend/stop", key)
-            await az_api("POST", f"/station/{station}/backend/stop", key)
+            try:
+                st = await az_api("GET", f"/station/{station}/status", key)
+            except Exception:
+                st = {"backendRunning": True, "frontendRunning": True}
+            if st.get("frontendRunning"):
+                await az_api("POST", f"/station/{station}/frontend/stop", key)
+            if st.get("backendRunning"):
+                await az_api("POST", f"/station/{station}/backend/stop", key)
     except Exception as e:
         logger.error("radio control %s failed: %s", a, e)
         raise HTTPException(status_code=502, detail=f"Errore AzuraCast: {e}")

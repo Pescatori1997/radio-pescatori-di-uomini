@@ -91,3 +91,12 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - **Frontend**: `api.liveStatus()` riscrive l'artwork HTTP nel proxy `/api/live/art`; `liveStreamUrl()` usa il proxy HTTPS. `PolyerContext` fa polling metadati ogni `refresh_interval` (15s), aggiorna titolo/artista/copertina del brano live in tempo reale, e riconnette automaticamente lo stream con stati connessione **online/reconnecting/offline** senza crash. Player mostra titolo, artista, artwork, stato diretta e n° ascoltatori. Admin Radio Settings modificabile (stream/API/intervallo) senza toccare il codice.
 - Nota: la stazione è **offline** al momento (stream 502/503) → l'app gestisce tutto in modo graceful; funzionerà appena la radio va in onda.
 - Tested: backend 15/15 (test_radio_azuracast), frontend 100% (iteration_10). Nessuna regressione.
+
+## Implemented (2026-07-24, session 7 — Radio Control Center)
+- **Radio Control Center** nel pannello admin (`/admin/control`): gestione della stazione AzuraCast senza aprire la dashboard AzuraCast.
+- **Stato in tempo reale** (auto-refresh 8s): Radio Online/Offline, Icecast (frontend) e Liquidsoap (backend) running, ascoltatori, brano corrente (titolo/artista/copertina).
+- **Controlli**: Avvia / Ferma / Riavvia (Start/Stop idempotenti: controllano prima lo stato). Toast successo/errore senza refresh pagina.
+- **Live Mode**: Avvia Diretta (ferma AutoDJ via `backend/stop` + `live_mode=true`) / Termina (riavvia AutoDJ + `live_mode=false`). URL "Watch Live" configurabile dal pannello.
+- **App mobile**: con `live_mode=true` → banner rosso "LIVE NOW" + pulsante "Watch Live" (apre l'URL configurato) e la radio player viene nascosta/fermata; con `live_mode=false` → player ripristinato.
+- **Backend**: `GET /admin/radio/status`, `POST /admin/radio/control`, `POST /admin/radio/live` (require_perm radio); AzuraCast via `X-API-Key` (env `AZURACAST_API_KEY` + override da pannello); la key è mascherata nelle risposte (`has_api_key`). `/api/live/status` espone `live_mode` + `live_watch_url`. Azioni loggate nell'audit.
+- Tested: backend 18/18 (test_radio_control), frontend 100% (iteration_11). Stazione lasciata online, nessuna regressione.
