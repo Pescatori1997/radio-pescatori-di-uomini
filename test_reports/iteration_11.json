@@ -1,0 +1,45 @@
+{
+  "summary": "Full-stack testing of the new RADIO CONTROL CENTER feature (Admin Panel → /admin/control) that manages the real AzuraCast station 'pescatori' at 84.247.184.136. Backend: 18/18 pytest cases PASS in /app/backend/tests/test_radio_control.py — GET /api/admin/radio/status returns controls_available=true + boolean backend_running/frontend_running (from AzuraCast /station/{s}/status via X-API-Key), is_online, listeners, title/artist/artwork, live_mode, live_watch_url, station_shortcode='pescatori'; 401 unauth, 403 for non-admin listener. POST /api/admin/radio/control: action='restart' returns 200 {ok:true, status:{...}} and station comes back online (backend+frontend running verified by polling status for ~40s); action='start' returns 200 when idempotent OR 502 when AzuraCast rejects redundant start with 500 (documented upstream behavior — station still ends running); invalid action='explode' → 400. POST /api/admin/radio/live: action='start' with watch_url persists live_mode=true + live_watch_url in Mongo AND public GET /api/live/status reflects it immediately; action='end' resets live_mode=false and resumes AutoDJ (backend/start called async, verified station running again after ~6s); invalid action → 400; 401 unauth. GET /api/admin/radio MASKS the AzuraCast key — no 'azuracast_api_key' in response, has_api_key=true, station_shortcode='pescatori'. PUT /api/admin/radio with empty azuracast_api_key='' does NOT wipe the env key (has_api_key stays true); can update live_watch_url + refresh_interval and both persist + reflect in /api/live/status. Regression: /api/live/status still returns full shape incl live_mode + live_watch_url; /api/podcasts, /api/news, /api/products, /api/programs all 200. Frontend (mobile viewport 390x844): admin login (pescatoridiuomini@outlook.it / Admin1234!) auto-redirects to /admin. /admin/control renders correctly with ALL required testIDs found: ctrl-start, ctrl-stop, ctrl-restart, live-watch-url, live-start (live-end only rendered when live_mode=true — correct conditional render). UI shows: Radio Online chip (green dot), Icecast + Liquidsoap service chips (both green/running), '0 ascolt.' listeners, 'ORA IN ONDA' + 'musica 3' + 'Pescatori di Uomini' now-playing, three Avvia/Ferma/Riavvia buttons, Live Mode section with URL Watch Live input + 'Avvia Diretta LIVE' button. Clicking 'Riavvia' triggers POST /api/admin/radio/control {action:'restart'}, green toast 'Radio riavviata ✓' appears within ~2s (no page refresh), status reloads and Radio Online persists. Status auto-refreshes every 8s via setInterval in useFocusEffect. Home (guest, live_mode=false): shows normal hero — 'IN DIRETTA ORA' badge + 'ORA IN ONDA' + 'musica 3' + 'Ascolta la Diretta' button; NO 'LIVE NOW' banner, NO 'Watch Live' button — correct fallback behavior. CLEANUP CONFIRMED: after all tests, backend_running=true, frontend_running=true, is_online=true, live_mode=false, live_watch_url='' — station left fully RUNNING and AutoDJ resumed as instructed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "shadow* style props deprecation", "issue": "Console warning '\"shadow*\" style props are deprecated. Use \"boxShadow\"' persists (carry-over from prior iterations). Non-blocking."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_radio_control.py",
+    "/app/test_reports/pytest/iteration_11_results.xml"
+  ],
+  "action_items": [
+    "(carry-over) Migrate shadow* StyleSheet props to boxShadow to silence RN warnings.",
+    "(carry-over) server.py is now ~1855 lines — consider splitting into APIRouter modules (auth, admin, radio, cms, users).",
+    "OPTIONAL UX: AzuraCast returns 500 when 'start' is called on an already-running backend, which our endpoint maps to 502. Consider: (a) probe /station/{s}/status first and skip start if already running (return 200 no-op), OR (b) swallow the 500 on backend/start when it's an 'already running' condition. Not blocking — the 'Riavvia' button (idempotent) is the recommended UX and already works perfectly."
+  ],
+  "critical_code_review_comments": [
+    "az_api() uses X-API-Key header with AZURACAST_BASE + '/api' prefix and follow_redirects=True — correct per AzuraCast v0.20+ API. Timeout=25s appropriate for restart operations.",
+    "_mask_radio() correctly pops 'azuracast_api_key' AND '_id' before returning, exposes only 'has_api_key' boolean + station_shortcode. Good security posture.",
+    "PUT /api/admin/radio: 'if azuracast_api_key in updates and not updates[..].strip(): updates.pop(..)' — the empty-string-guard prevents accidental key wipe from an untouched form field. Verified.",
+    "_radio_status_payload() wraps both nowplaying HTTP call AND status HTTP call in try/except — endpoint never 500s even if AzuraCast is unreachable; status_error field surfaces upstream errors to UI. Good resilience.",
+    "POST /admin/radio/live start: az_api('POST', backend/stop) is wrapped in try/except with warning log — a stop failure won't prevent live_mode=true from being persisted. This is the right prioritization (Mongo state > best-effort AzuraCast state).",
+    "log_activity() is called with a distinct action label per action ('avviato'/'fermato'/'riavviato'/'LIVE avviata'/'LIVE terminata') → good audit trail.",
+    "Frontend /admin/control uses useFocusEffect + setInterval(fetchStatus, 8000) — correctly cleaned up on unmount. Polling is 8s which is reasonable given AzuraCast /status response time (~200-500ms).",
+    "watchTouched ref prevents server-side live_watch_url overwriting user's in-progress input during polling — clean UX.",
+    "PressableScale with testID prop is properly forwarded — all interactive elements are testable.",
+    "Home LIVE banner + Watch Live button gating on liveInfo.live_mode (not local state) means it reacts to server state within refresh_interval seconds. Good architecture."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_radio_control.py (new — 18 pytest cases for the new Radio Control Center)"
+  ],
+  "success_rate": {
+    "backend": "100% (18/18 test_radio_control.py)",
+    "frontend": "100% (admin login + redirect, /admin/control renders all testIDs + all required sections, Riavvia click shows success toast + no refresh needed + station stays Online, Home guest live_mode=false shows normal hero + Ascolta la Diretta and hides LIVE banner/Watch Live)"
+  },
+  "seed_data_creation": "Tests create TEST_-prefixed users via /api/auth/register for the 403 non-admin case and clean them up via DELETE /api/admin/users/{uid}. Admin radio settings temporarily changed (refresh_interval, live_watch_url, live_mode) then restored to originals. Final state verified: backend_running=true, frontend_running=true, live_mode=false, live_watch_url=''.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "AzuraCast station 'pescatori' at 84.247.184.136 is currently ONLINE (backend+frontend running). Admin creds unchanged: pescatoridiuomini@outlook.it / Admin1234!. Backend seeds ADMINTESTTOKEN123 admin session via conftest.py. Key testIDs on /admin/control: ctrl-start, ctrl-stop, ctrl-restart, live-watch-url, live-start (visible when live_mode=false), live-end (visible when live_mode=true). BE CAREFUL: /admin/radio/control action='start' returns 502 when backend is already running (AzuraCast 500 upstream) — use action='restart' (idempotent) as the safer test. ALWAYS restore state by calling {action:'restart'} for control and {action:'end'} for live at the end of tests.",
+  "rca_of_issue": "N/A — no bugs found. All acceptance criteria from the review request verified end-to-end."
+}

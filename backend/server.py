@@ -32,6 +32,28 @@ AZ_STREAM_URL = "http://84.247.184.136/listen/pescatori/radio.mp3"
 AZ_NOWPLAYING_URL = "http://84.247.184.136/api/nowplaying/pescatori"
 DEFAULT_ART = "https://images.unsplash.com/photo-1592818868295-f527dbac420d?w=600&q=85"
 
+# AzuraCast control API (station lifecycle). Env is the secure default; DB can override from the panel.
+AZURACAST_BASE = os.environ.get("AZURACAST_BASE_URL", "http://84.247.184.136").rstrip("/")
+AZURACAST_STATION_ENV = os.environ.get("AZURACAST_STATION", "pescatori")
+AZURACAST_API_KEY_ENV = os.environ.get("AZURACAST_API_KEY", "")
+
+
+async def _az_conf():
+    doc = await db.live_status.find_one({"_id": "current"}) or {}
+    key = doc.get("azuracast_api_key") or AZURACAST_API_KEY_ENV
+    station = doc.get("station_shortcode") or AZURACAST_STATION_ENV
+    return key, station, doc
+
+
+async def az_api(method: str, path: str, key: str):
+    async with httpx.AsyncClient(timeout=25, follow_redirects=True) as hc:
+        r = await hc.request(method, f"{AZURACAST_BASE}/api{path}", headers={"X-API-Key": key})
+        r.raise_for_status()
+        try:
+            return r.json()
+        except Exception:
+            return {}
+
 
 def now_utc():
     return datetime.now(timezone.utc)
@@ -246,6 +268,8 @@ async def live_status():
         "stream_url": stream,
         "refresh_interval": refresh if refresh > 0 else 15,
         "station_name": doc.get("station_name") or "Pescatori di Uomini",
+        "live_mode": bool(doc.get("live_mode")),
+        "live_watch_url": doc.get("live_watch_url") or "",
     }
     try:
         async with httpx.AsyncClient(timeout=8) as hc:
@@ -1343,23 +1367,146 @@ class RadioSettings(BaseModel):
     title: Optional[str] = None
     artist: Optional[str] = None
     artwork: Optional[str] = None
+    live_watch_url: Optional[str] = None
+    azuracast_api_key: Optional[str] = None
+    station_shortcode: Optional[str] = None
+
+
+def _mask_radio(doc: dict) -> dict:
+    doc.pop("_id", None)
+    key = doc.pop("azuracast_api_key", None) or AZURACAST_API_KEY_ENV
+    doc["has_api_key"] = bool(key)
+    doc["station_shortcode"] = doc.get("station_shortcode") or AZURACAST_STATION_ENV
+    return doc
 
 
 @api_router.get("/admin/radio")
 async def admin_get_radio(admin=Depends(require_perm("radio"))):
     doc = await db.live_status.find_one({"_id": "current"}) or {}
-    doc.pop("_id", None)
-    return doc
+    return _mask_radio(doc)
 
 
 @api_router.put("/admin/radio")
 async def admin_update_radio(body: RadioSettings, admin=Depends(require_perm("radio"))):
     updates = body.model_dump(exclude_unset=True)
+    # Blank api-key input must not wipe an existing/env key.
+    if "azuracast_api_key" in updates and not (updates["azuracast_api_key"] or "").strip():
+        updates.pop("azuracast_api_key")
     if updates:
         await db.live_status.update_one({"_id": "current"}, {"$set": updates}, upsert=True)
     doc = await db.live_status.find_one({"_id": "current"}) or {}
-    doc.pop("_id", None)
-    return doc
+    return _mask_radio(doc)
+
+
+# ---------------- Radio Control Center ----------------
+async def _radio_status_payload():
+    key, station, doc = await _az_conf()
+    out = {
+        "controls_available": bool(key),
+        "backend_running": None,
+        "frontend_running": None,
+        "is_online": False,
+        "listeners": None,
+        "title": doc.get("title") or "In Diretta",
+        "artist": doc.get("artist") or doc.get("station_name") or "Pescatori di Uomini",
+        "artwork": doc.get("artwork") or DEFAULT_ART,
+        "live_mode": bool(doc.get("live_mode")),
+        "live_watch_url": doc.get("live_watch_url") or "",
+        "station_shortcode": station,
+        "status_error": None,
+    }
+    # Public now-playing (no key required)
+    try:
+        async with httpx.AsyncClient(timeout=8) as hc:
+            r = await hc.get(doc.get("metadata_url") or AZ_NOWPLAYING_URL)
+            r.raise_for_status()
+            data = r.json()
+        song = (data.get("now_playing") or {}).get("song") or {}
+        out["is_online"] = bool(data.get("is_online", False))
+        out["listeners"] = (data.get("listeners") or {}).get("current")
+        if song.get("title"):
+            out["title"] = song.get("title")
+        if song.get("artist"):
+            out["artist"] = song.get("artist")
+        if song.get("art"):
+            out["artwork"] = song.get("art")
+    except Exception as e:
+        logger.info("radio status nowplaying failed: %s", e)
+    # Icecast (frontend) + Liquidsoap (backend) service state — needs the API key
+    if key:
+        try:
+            st = await az_api("GET", f"/station/{station}/status", key)
+            out["backend_running"] = st.get("backendRunning")
+            out["frontend_running"] = st.get("frontendRunning")
+        except Exception as e:
+            out["status_error"] = f"{e}"
+    return out
+
+
+@api_router.get("/admin/radio/status")
+async def admin_radio_status(admin=Depends(require_perm("radio"))):
+    return await _radio_status_payload()
+
+
+class RadioControlIn(BaseModel):
+    action: str  # start | stop | restart
+
+
+@api_router.post("/admin/radio/control")
+async def admin_radio_control(body: RadioControlIn, admin=Depends(require_perm("radio"))):
+    key, station, _ = await _az_conf()
+    if not key:
+        raise HTTPException(status_code=400, detail="API key AzuraCast non configurata")
+    a = body.action
+    label = {"start": "avviato", "stop": "fermato", "restart": "riavviato"}.get(a)
+    if not label:
+        raise HTTPException(status_code=400, detail="Azione non valida")
+    try:
+        if a == "restart":
+            await az_api("POST", f"/station/{station}/restart", key)
+        elif a == "start":
+            await az_api("POST", f"/station/{station}/backend/start", key)
+            await az_api("POST", f"/station/{station}/frontend/start", key)
+        else:  # stop
+            await az_api("POST", f"/station/{station}/frontend/stop", key)
+            await az_api("POST", f"/station/{station}/backend/stop", key)
+    except Exception as e:
+        logger.error("radio control %s failed: %s", a, e)
+        raise HTTPException(status_code=502, detail=f"Errore AzuraCast: {e}")
+    await log_activity(admin, f"ha {label} la radio", "radio", {"action": a})
+    return {"ok": True, "status": await _radio_status_payload()}
+
+
+class LiveModeIn(BaseModel):
+    action: str  # start | end
+    watch_url: Optional[str] = None
+
+
+@api_router.post("/admin/radio/live")
+async def admin_radio_live(body: LiveModeIn, admin=Depends(require_perm("radio"))):
+    key, station, _ = await _az_conf()
+    if body.action == "start":
+        if key:
+            try:
+                await az_api("POST", f"/station/{station}/backend/stop", key)  # pause AutoDJ
+            except Exception as e:
+                logger.warning("live start backend/stop failed: %s", e)
+        updates = {"live_mode": True}
+        if body.watch_url is not None:
+            updates["live_watch_url"] = body.watch_url.strip()
+        await db.live_status.update_one({"_id": "current"}, {"$set": updates}, upsert=True)
+        await log_activity(admin, "ha avviato la Diretta LIVE", "radio")
+    elif body.action == "end":
+        if key:
+            try:
+                await az_api("POST", f"/station/{station}/backend/start", key)  # resume AutoDJ
+            except Exception as e:
+                logger.warning("live end backend/start failed: %s", e)
+        await db.live_status.update_one({"_id": "current"}, {"$set": {"live_mode": False}}, upsert=True)
+        await log_activity(admin, "ha terminato la Diretta LIVE", "radio")
+    else:
+        raise HTTPException(status_code=400, detail="Azione non valida")
+    return {"ok": True, "status": await _radio_status_payload()}
 
 
 # ---------------- Admin: General Settings ----------------

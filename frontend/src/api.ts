@@ -162,6 +162,9 @@ export const api = {
   // admin radio & settings
   adminRadio: () => request("/admin/radio", {}, true),
   adminUpdateRadio: (body: any) => request("/admin/radio", { method: "PUT", body: JSON.stringify(body) }, true),
+  adminRadioStatus: () => request("/admin/radio/status", {}, true),
+  adminRadioControl: (action: string) => request("/admin/radio/control", { method: "POST", body: JSON.stringify({ action }) }, true),
+  adminRadioLive: (action: string, watch_url?: string) => request("/admin/radio/live", { method: "POST", body: JSON.stringify({ action, watch_url }) }, true),
   adminSettings: () => request("/admin/settings", {}, true),
   adminUpdateSettings: (body: any) => request("/admin/settings", { method: "PUT", body: JSON.stringify(body) }, true),
   // merchandising (public)

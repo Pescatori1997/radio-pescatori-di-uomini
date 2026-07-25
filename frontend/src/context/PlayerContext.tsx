@@ -215,6 +215,18 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setTrack(null);
   };
 
+  // When the admin turns on Live Mode, stop the radio player (the app shows "Watch Live" instead).
+  useEffect(() => {
+    if (liveInfo?.live_mode && trackRef.current?.isLive) {
+      shouldPlayLiveRef.current = false;
+      clearReconnect();
+      playerRef.current?.pause();
+      setIsPlaying(false);
+      setTrack(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveInfo?.live_mode]);
+
   return (
     <PlayerCtx.Provider
       value={{ track, isPlaying, isBuffering, volume, position, duration, liveInfo, connection, playTrack, playLive, togglePlay, setVolume, seekTo, stop }}

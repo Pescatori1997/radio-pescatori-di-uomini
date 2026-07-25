@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, RefreshControl } from "react-native";
+import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, RefreshControl, Linking } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -20,7 +20,7 @@ const STUDIO = require("@/assets/images/studio.png");
 export default function Home() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { playLive, track, isPlaying, liveInfo } = usePlayer();
+  const { playLive, playTrack, track, isPlaying, liveInfo } = usePlayer();
   const [podcasts, setPodcasts] = useState<any[]>([]);
   const [news, setNews] = useState<any[]>([]);
   const [programs, setPrograms] = useState<any[]>([]);
@@ -51,6 +51,11 @@ export default function Home() {
 
   const onListen = () => {
     playLive();
+  };
+
+  const openWatch = () => {
+    const url = liveInfo?.live_watch_url;
+    if (url) Linking.openURL(url).catch(() => {});
   };
 
   if (loading) {
@@ -91,20 +96,35 @@ export default function Home() {
         </Animated.View>
 
         <Animated.View entering={FadeInDown.duration(500).delay(120)} style={styles.liveBadge} testID="live-indicator">
-          <View style={[styles.dot, { backgroundColor: live?.is_live ? colors.success : colors.error }]} />
-          <Text style={styles.liveText}>{live?.is_live ? "IN DIRETTA ORA" : "OFFLINE"}</Text>
+          <View style={[styles.dot, { backgroundColor: (liveInfo?.live_mode || live?.is_live) ? colors.success : colors.error }]} />
+          <Text style={styles.liveText}>{liveInfo?.live_mode ? "LIVE NOW" : live?.is_live ? "IN DIRETTA ORA" : "OFFLINE"}</Text>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.duration(500).delay(180)}>
-          <Text style={styles.nowLabel}>ORA IN ONDA</Text>
-          <Text style={styles.nowTitle} numberOfLines={1}>{live?.title}</Text>
-          <Text style={styles.nowArtist} numberOfLines={1}>{live?.artist}</Text>
-        </Animated.View>
+        {liveInfo?.live_mode ? (
+          <>
+            <Animated.View entering={FadeInDown.duration(500).delay(180)} testID="live-now-banner">
+              <Text style={styles.liveNowTitle}>🔴 Siamo in diretta</Text>
+              <Text style={styles.liveNowSub}>Guarda la diretta streaming ora in corso</Text>
+            </Animated.View>
+            <PressableScale testID="watch-live-button" style={styles.cta} onPress={openWatch}>
+              <Ionicons name="videocam" size={22} color={colors.navy} />
+              <Text style={styles.ctaText}>Watch Live</Text>
+            </PressableScale>
+          </>
+        ) : (
+          <>
+            <Animated.View entering={FadeInDown.duration(500).delay(180)}>
+              <Text style={styles.nowLabel}>ORA IN ONDA</Text>
+              <Text style={styles.nowTitle} numberOfLines={1}>{live?.title}</Text>
+              <Text style={styles.nowArtist} numberOfLines={1}>{live?.artist}</Text>
+            </Animated.View>
 
-        <PressableScale testID="listen-live-button" style={styles.cta} onPress={onListen}>
-          <Ionicons name={isLivePlaying ? "pause" : "play"} size={22} color={colors.navy} />
-          <Text style={styles.ctaText}>{isLivePlaying ? "In riproduzione" : "Ascolta la Diretta"}</Text>
-        </PressableScale>
+            <PressableScale testID="listen-live-button" style={styles.cta} onPress={onListen}>
+              <Ionicons name={isLivePlaying ? "pause" : "play"} size={22} color={colors.navy} />
+              <Text style={styles.ctaText}>{isLivePlaying ? "In riproduzione" : "Ascolta la Diretta"}</Text>
+            </PressableScale>
+          </>
+        )}
       </View>
 
       {/* PODCASTS */}
@@ -187,6 +207,8 @@ const styles = StyleSheet.create({
   liveText: { color: colors.white, fontSize: 11, fontWeight: "700", letterSpacing: 0.5 },
   nowTitle: { color: colors.white, fontSize: 26, fontWeight: "800", marginTop: 4, letterSpacing: -0.5 },
   nowArtist: { color: colors.muted, fontSize: 14, marginTop: 2 },
+  liveNowTitle: { color: colors.white, fontSize: 26, fontWeight: "800", marginTop: spacing.md, letterSpacing: -0.5 },
+  liveNowSub: { color: colors.muted, fontSize: 14, marginTop: 4 },
   cta: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, backgroundColor: colors.white, paddingVertical: spacing.md, borderRadius: radius.pill, marginTop: spacing.lg, shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
   ctaText: { color: colors.navy, fontSize: 16, fontWeight: "800" },
   sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, marginTop: spacing.xl, marginBottom: spacing.md },
