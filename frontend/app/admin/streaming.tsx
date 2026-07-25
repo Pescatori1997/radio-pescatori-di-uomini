@@ -42,7 +42,7 @@ export default function LiveStreaming() {
         <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 60 }}>
           <View style={styles.info}>
             <Ionicons name="information-circle" size={18} color={colors.brandSecondary} />
-            <Text style={styles.infoText}>Configura i link delle dirette. Quando il Live Mode è attivo, l'app mostrerà solo le piattaforme con un URL impostato. Se ce n'è una sola, si apre direttamente.</Text>
+            <Text style={styles.infoText}>Configura i link delle dirette. Quando la Modalità Diretta è attiva, l'app mostrerà solo le piattaforme con un URL impostato. Se ce n'è una sola, si apre direttamente.</Text>
           </View>
 
           <Text style={styles.count}>{configured} piattaforme configurate</Text>

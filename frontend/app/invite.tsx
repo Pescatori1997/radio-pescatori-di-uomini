@@ -12,7 +12,7 @@ import { colors, spacing, radius } from "@/src/theme";
 const LOGO = require("@/assets/images/logo.png");
 
 const SECTION_LABELS: Record<string, string> = {
-  podcasts: "Podcast", news: "News", merch: "Merchandising", schedule: "Palinsesto",
+  podcasts: "Podcast", news: "Notizie", merch: "Merchandising", schedule: "Palinsesto",
   prayers: "Preghiere", messages: "Messaggi", team: "Team", radio: "Radio",
 };
 
