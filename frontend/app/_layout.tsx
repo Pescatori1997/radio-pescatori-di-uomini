@@ -30,8 +30,8 @@ function AuthGate() {
     if (loading) return;
     const root = segments[0] as string | undefined;
     const inWelcomeOrAuth = root === "welcome" || root === "auth";
-    // Public routes reachable before deciding (welcome cards + auth form + invite accept + in-app login modal).
-    const inPublic = inWelcomeOrAuth || root === "login" || root === "invite";
+    // Public routes reachable before deciding (welcome cards + auth form + invite accept + in-app login modal + Stripe return page).
+    const inPublic = inWelcomeOrAuth || root === "login" || root === "invite" || root === "donation-success";
     const decided = !!user || guestChosen;
     if (!decided && !inPublic) {
       router.replace("/welcome");

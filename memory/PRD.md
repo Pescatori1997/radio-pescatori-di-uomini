@@ -107,3 +107,12 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - **App mobile**: con Live Mode attivo, "Watch Live" apre un modal "Dove vuoi guardare la diretta?" con SOLO le piattaforme configurate; 1 sola → apertura diretta senza modal; 0 → fallback al vecchio `live_watch_url`. Componente riutilizzabile `WatchLiveModal` + config condivisa `src/livePlatforms.ts`.
 - `live_links` esposto in `/api/live/status` e `/admin/radio/status`.
 - Tested: backend 11/11 (test_live_streaming, run con `-n 0`), frontend 100%. Nessuna regressione.
+
+## Implemented (2026-06, session 9 — Weather Widget + Donazioni Stripe)
+- **Weather Widget**: validato e2e (iteration_13, 100%). Open-Meteo keyless, ricerca città manuale, posizione dispositivo, pagina `/weather` con dettagli + previsioni 5 giorni, caching offline. Nessun issue.
+- **Donazioni reali con Stripe (TEST MODE)** via `emergentintegrations` (Emergent-managed key `sk_test_emergent`, routing proxy). **Solo one-time** (la lib Emergent non supporta subscription): importi predefiniti €5/€10/€25/€50 + personalizzato (validati server-side, min €1 max €5000).
+  - Backend: `POST /api/donations/checkout` (anonimo o auth → success/cancel URL da origin), `GET /api/donations/status/{session_id}` (polling idempotente, aggiorna transazione), `POST /api/webhook/stripe` (handle_webhook idempotente), `GET /api/me/donations` (storico utente, auth), `GET /api/admin/donations` + `/admin/donations/stats` (admin-only: total/count/average/donors/last_30_days). Collezione `donation_transactions`. `/admin/stats` include conteggio `donations`.
+  - Frontend: `/donate` (preset + custom + nome/messaggio → checkout), `/donation-success?session_id=` (polling esito, bypassa welcome gate), `/donations-history` (storico utente + totale, linkato da Profilo per utenti loggati), `/admin/donations` (card statistiche + storico, voce sidebar + card dashboard).
+  - Su web redirect via `window.location`; su native `WebBrowser.openBrowserAsync` + navigazione a success.
+  - NOTA: le donazioni RICORRENTI (mensili) NON sono implementabili con la key Emergent (solo one-time). Richiedono chiavi Stripe reali dell'utente.
+  - Tested: backend 13/13 (test_donations), frontend 100%. Nessuna regressione.
