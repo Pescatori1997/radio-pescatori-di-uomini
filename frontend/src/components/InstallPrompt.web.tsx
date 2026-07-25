@@ -101,7 +101,7 @@ export default function InstallPrompt() {
   return (
     <View pointerEvents="box-none" style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
       <View style={styles.card}>
-        <Image source={require("@/assets/images/icon.png")} style={styles.icon} contentFit="cover" />
+        <Image source={{ uri: "/icons/icon-192.png" }} style={styles.icon} contentFit="contain" />
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Installa Pescatori di Uomini</Text>
           <Text style={styles.sub}>
