@@ -116,3 +116,7 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
   - Su web redirect via `window.location`; su native `WebBrowser.openBrowserAsync` + navigazione a success.
   - NOTA: le donazioni RICORRENTI (mensili) NON sono implementabili con la key Emergent (solo one-time). Richiedono chiavi Stripe reali dell'utente.
   - Tested: backend 13/13 (test_donations), frontend 100%. Nessuna regressione.
+
+## Implemented (2026-06, session 10 — Chi Siamo editabile)
+- **Pagina "Chi Siamo"** aggiornata con i nuovi contenuti (titolo, versetto Matteo 4:19, descrizione a 4 paragrafi, 3 feature card, citazione finale) mantenendo layout/hero/animazioni/icone/responsività.
+- Tutti i testi ora provengono da `GET /api/settings` (con fallback ai default) e sono **editabili da Admin > Impostazioni** → sezione "Pagina Chi Siamo" (campi: titolo, sottotitolo, descrizione, 3 card titolo+testo, citazione). Modello `GeneralSettings` esteso con campi `about_*`; default seedati allo startup (merge solo delle chiavi mancanti, non sovrascrive gli edit admin). Aggiunta card citazione finale in fondo alla pagina.

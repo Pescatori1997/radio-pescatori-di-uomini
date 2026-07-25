@@ -1536,6 +1536,37 @@ class GeneralSettings(BaseModel):
     youtube: Optional[str] = None
     whatsapp: Optional[str] = None
     about_short: Optional[str] = None
+    # "Chi Siamo" page content (editable from Admin)
+    about_title: Optional[str] = None
+    about_verse: Optional[str] = None
+    about_description: Optional[str] = None
+    about_card1_title: Optional[str] = None
+    about_card1_text: Optional[str] = None
+    about_card2_title: Optional[str] = None
+    about_card2_text: Optional[str] = None
+    about_card3_title: Optional[str] = None
+    about_card3_text: Optional[str] = None
+    about_quote: Optional[str] = None
+
+
+# Default "Chi Siamo" content (seeded once; fully editable from Admin > Impostazioni).
+ABOUT_DEFAULTS = {
+    "about_title": "Pescatori di Uomini",
+    "about_verse": "\"Venite dietro a me e vi farò pescatori di uomini.\" — Matteo 4:19",
+    "about_description": (
+        "Pescatori di Uomini è una web radio cristiana nata per annunciare il Vangelo attraverso la musica, la Parola di Dio, i podcast e le dirette.\n\n"
+        "Il nostro desiderio è utilizzare gli strumenti digitali per raggiungere chiunque abbia bisogno di speranza, incoraggiamento e di un incontro autentico con Gesù Cristo.\n\n"
+        "Ogni giorno vogliamo offrire contenuti che edificano la fede, accompagnano il cammino spirituale e fanno sentire ogni ascoltatore parte di una grande famiglia cristiana.\n\n"
+        "La radio è aperta a tutti: a chi già vive la fede, a chi è in ricerca e a chi desidera semplicemente fermarsi qualche minuto per ascoltare una parola di speranza."
+    ),
+    "about_card1_title": "La Parola al centro",
+    "about_card1_text": "Ogni trasmissione nasce dalla Sacra Scrittura e desidera mettere Gesù Cristo al centro di ogni messaggio, perché la Bibbia è la nostra guida e il fondamento di tutto ciò che condividiamo.",
+    "about_card2_title": "Una comunità per tutti",
+    "about_card2_text": "Pescatori di Uomini è un luogo di incontro, ascolto e condivisione. Giovani, famiglie, bambini e adulti possono trovare musica cristiana, insegnamenti biblici, testimonianze, momenti di preghiera e dirette pensate per crescere insieme nella fede.",
+    "about_card3_title": "La nostra missione",
+    "about_card3_text": "Annunciare il Vangelo attraverso la radio e i mezzi digitali, portando un messaggio di speranza, amore e salvezza ovunque ci sia una persona pronta ad ascoltare.",
+    "about_quote": "\"Una voce che porta il Vangelo, una radio che unisce nella fede.\"",
+}
 
 
 @api_router.get("/admin/settings")
@@ -1932,6 +1963,12 @@ async def startup():
             "whatsapp": "",
             "about_short": "Radio evangelica cristiana. Annunciamo Cristo attraverso la radio e i nuovi media.",
         })
+
+    # Seed/merge the "Chi Siamo" page defaults (fill only missing keys, never overwrite admin edits).
+    gen = await db.settings.find_one({"_id": "general"}) or {}
+    missing = {k: v for k, v in ABOUT_DEFAULTS.items() if not gen.get(k)}
+    if missing:
+        await db.settings.update_one({"_id": "general"}, {"$set": missing}, upsert=True)
 
     if await db.podcasts.count_documents({}) == 0:
         covers = [

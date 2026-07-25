@@ -20,6 +20,11 @@ export default function AdminSettings() {
       contact_email: d.contact_email || "", contact_phone: d.contact_phone || "", address: d.address || "",
       facebook: d.facebook || "", instagram: d.instagram || "", youtube: d.youtube || "", whatsapp: d.whatsapp || "",
       about_short: d.about_short || "",
+      about_title: d.about_title || "", about_verse: d.about_verse || "", about_description: d.about_description || "",
+      about_card1_title: d.about_card1_title || "", about_card1_text: d.about_card1_text || "",
+      about_card2_title: d.about_card2_title || "", about_card2_text: d.about_card2_text || "",
+      about_card3_title: d.about_card3_title || "", about_card3_text: d.about_card3_text || "",
+      about_quote: d.about_quote || "",
     })).catch(() => {}).finally(() => setLoading(false));
   }, []);
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -47,6 +52,18 @@ export default function AdminSettings() {
 
           <Text style={styles.section}>Info App</Text>
           <AInput testID="set-about" label="Descrizione breve" value={f.about_short} onChangeText={(v: string) => set("about_short", v)} multiline />
+
+          <Text style={styles.section}>Pagina "Chi Siamo"</Text>
+          <AInput testID="set-about-title" label="Titolo" value={f.about_title} onChangeText={(v: string) => set("about_title", v)} />
+          <AInput testID="set-about-verse" label="Sottotitolo / Versetto" value={f.about_verse} onChangeText={(v: string) => set("about_verse", v)} multiline />
+          <AInput testID="set-about-description" label="Descrizione principale" value={f.about_description} onChangeText={(v: string) => set("about_description", v)} multiline />
+          <AInput testID="set-about-c1-title" label="Card 1 · Titolo" value={f.about_card1_title} onChangeText={(v: string) => set("about_card1_title", v)} />
+          <AInput testID="set-about-c1-text" label="Card 1 · Testo" value={f.about_card1_text} onChangeText={(v: string) => set("about_card1_text", v)} multiline />
+          <AInput testID="set-about-c2-title" label="Card 2 · Titolo" value={f.about_card2_title} onChangeText={(v: string) => set("about_card2_title", v)} />
+          <AInput testID="set-about-c2-text" label="Card 2 · Testo" value={f.about_card2_text} onChangeText={(v: string) => set("about_card2_text", v)} multiline />
+          <AInput testID="set-about-c3-title" label="Card 3 · Titolo" value={f.about_card3_title} onChangeText={(v: string) => set("about_card3_title", v)} />
+          <AInput testID="set-about-c3-text" label="Card 3 · Testo" value={f.about_card3_text} onChangeText={(v: string) => set("about_card3_text", v)} multiline />
+          <AInput testID="set-about-quote" label="Citazione finale" value={f.about_quote} onChangeText={(v: string) => set("about_quote", v)} multiline />
 
           {msg ? <Text style={styles.msg}>{msg}</Text> : null}
           <PressableScale testID="set-save" style={[styles.btn, busy && { opacity: 0.6 }]} onPress={save} disabled={busy}>
