@@ -130,3 +130,18 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Revisione completa di tutte le stringhe utente (schermate pubbliche, admin, componenti, messaggi backend, template email).
 - Rimosso testo inglese residuo e uniformata la terminologia: "News"→"Notizie" (tab, header, nav admin, dashboard, permessi, invito), "LIVE NOW"→"IN DIRETTA", "OFFLINE"→"NON IN ONDA", "Watch Live"→"Guarda la diretta", "Radio Control Center"→"Centro di Controllo Radio", "Live Streaming"→"Dirette Streaming", "Admin Panel"→"Pannello Admin", "Live Mode"→"Modalità Diretta", "Radio Online/Offline"→"Radio in onda/non in onda", "DIRETTA LIVE ATTIVA"→"DIRETTA ATTIVA", "Avvia Diretta LIVE"→"Avvia Diretta", "Featured"→"In evidenza", "Card N"→"Scheda N", "Altro / Custom"→"Altro / Personalizzato", "Now Playing"→"brano in onda" (testo UI), versetto Salmo 34:18 reso più naturale ("cuore spezzato").
 - Verificato via testing_agent (iteration_16, frontend, mobile 390x844): nessun testo troncato/sovrapposto, stringhe italiane corrette in tutte le schermate. Le 4 stringhe residue segnalate sono state corrette.
+
+## Implemented (2026-06, session 13 — Sistema Account Utente completo + Notifiche Push)
+**Audit account:** già presenti registrazione, login, logout, Google OAuth, ruoli/permessi RBAC, gestione utenti admin.
+**Aggiunto (Fase A — testabile):**
+- Recupero password: `POST /auth/forgot-password` (fallback: mostra il codice a schermo finché Resend non è attivo) + `POST /auth/reset-password` (codice 6 cifre, scadenza 30 min, invalida sessioni). Schermata `/reset-password` (2 step) + link "Password dimenticata?" su /auth.
+- Cambio password: `POST /auth/change-password`. Modifica profilo (nome + avatar via image picker): `PUT /auth/profile`. Schermata `/account`. AuthContext esteso con `updateProfile`/`refreshUser`.
+- Preferenze notifiche: `GET/PUT /me/notifications` (7 categorie, default ON). Schermata `/notifications-settings` con toggle. Voci Profilo "Il mio account" e "Notifiche".
+**Aggiunto (Fase B — Push, verificabile solo dopo Deploy+build):**
+- Integrazione Emergent managed push (SuprSend) per playbook: `POST /register-push` (relay), helper `send_push` (chunk 100), `notify_category` (rispetta preferenze + status), log in `notifications_log`.
+- Auto-notifiche: nuovo podcast/meditazione (category con 'meditaz'), nuova notizia (published), avvio diretta. Hook non bloccanti (try/except).
+- Admin: `POST /admin/notifications/send` (invio manuale), `GET /admin/notifications` (storico), `GET /admin/notifications/audience` (conteggio per categoria). Schermata `/admin/notifications` (chip categoria, anteprima live, destinatari, storico) + voce sidebar + card dashboard.
+- Frontend: `_layout.tsx` con setNotificationHandler + channel (module scope), tap handler warm/cold + nudge settimanale; `src/utils/push.ts` registerForPush (native-only, non bloccante) chiamato al login; `app.json` con plugin expo-notifications + `android.googleServicesFile` (placeholder) + permesso POST_NOTIFICATIONS.
+- `EMERGENT_PUSH_KEY=placeholder` in backend/.env (sostituito automaticamente al Deploy). L'invio push reale funziona SOLO dopo Deploy + build iOS/Android; in preview lo stato dei log è 'failed' (atteso).
+- Tested: backend 28/28 (test_notifications_account, iteration_17), frontend tutti i flussi Fase A OK. Push native-only non testabile in Expo Go/web.
+**PENDING utente:** fornire `google-services.json` (Android) prima del build; Google service account JSON + APNs .p8 (iOS) durante la generazione build.
