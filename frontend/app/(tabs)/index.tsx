@@ -11,6 +11,7 @@ import { api } from "@/src/api";
 import { usePlayer } from "@/src/context/PlayerContext";
 import { configuredPlatforms } from "@/src/livePlatforms";
 import WatchLiveModal from "@/src/components/WatchLiveModal";
+import WeatherWidget from "@/src/components/WeatherWidget";
 import Collaborators from "@/src/components/Collaborators";
 import WhatsAppSection from "@/src/components/WhatsAppSection";
 import PressableScale from "@/src/components/PressableScale";
@@ -140,6 +141,11 @@ export default function Home() {
         )}
       </View>
 
+      {/* WEATHER WIDGET */}
+      <View style={styles.weatherWrap}>
+        <WeatherWidget />
+      </View>
+
       {/* PODCASTS */}
       <SectionHeader title="Ultimi Podcast" onPress={() => router.push("/podcast")} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hRow}>
@@ -222,6 +228,7 @@ const styles = StyleSheet.create({
   liveText: { color: colors.white, fontSize: 11, fontWeight: "700", letterSpacing: 0.5 },
   nowTitle: { color: colors.white, fontSize: 26, fontWeight: "800", marginTop: 4, letterSpacing: -0.5 },
   nowArtist: { color: colors.muted, fontSize: 14, marginTop: 2 },
+  weatherWrap: { paddingHorizontal: spacing.lg, marginTop: spacing.lg },
   liveNowTitle: { color: colors.white, fontSize: 26, fontWeight: "800", marginTop: spacing.md, letterSpacing: -0.5 },
   liveNowSub: { color: colors.muted, fontSize: 14, marginTop: 4 },
   cta: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, backgroundColor: colors.white, paddingVertical: spacing.md, borderRadius: radius.pill, marginTop: spacing.lg, shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 6 },

@@ -12,8 +12,11 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.emergent.evangelicstream.wwoeys",
       "infoPlist": {
-        "UIBackgroundModes": ["audio"],
-        "NSPhotoLibraryUsageDescription": "Carica la tua foto ritratto per candidarti all'Equipaggio"
+        "UIBackgroundModes": [
+          "audio"
+        ],
+        "NSPhotoLibraryUsageDescription": "Carica la tua foto ritratto per candidarti all'Equipaggio",
+        "NSLocationWhenInUseUsageDescription": "Mostra il meteo della tua zona"
       }
     },
     "android": {
@@ -23,7 +26,13 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.emergent.evangelicstream.wwoeys",
-      "permissions": ["FOREGROUND_SERVICE", "WAKE_LOCK", "READ_MEDIA_IMAGES"]
+      "permissions": [
+        "FOREGROUND_SERVICE",
+        "WAKE_LOCK",
+        "READ_MEDIA_IMAGES",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "bundler": "metro",

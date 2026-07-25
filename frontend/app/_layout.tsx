@@ -10,6 +10,7 @@ import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { ensureIconFontFaces } from "@/src/iconFonts";
 import { AuthProvider, useAuth } from "@/src/context/AuthContext";
 import { PlayerProvider } from "@/src/context/PlayerContext";
+import { WeatherProvider } from "@/src/weather/WeatherContext";
 
 LogBox.ignoreAllLogs(true);
 SplashScreen.preventAutoHideAsync();
@@ -59,6 +60,7 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <AuthProvider>
           <PlayerProvider>
+            <WeatherProvider>
             <StatusBar style="light" />
             <AuthGate />
             <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#FFFFFF" } }}>
@@ -69,6 +71,8 @@ export default function RootLayout() {
               <Stack.Screen name="player" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
               <Stack.Screen name="login" options={{ presentation: "modal" }} />
               <Stack.Screen name="prayer" options={{ presentation: "card" }} />
+              <Stack.Screen name="weather" options={{ presentation: "card", animation: "slide_from_right" }} />
+              <Stack.Screen name="settings" options={{ presentation: "card" }} />
               <Stack.Screen name="about" />
               <Stack.Screen name="contact" />
               <Stack.Screen name="donate" />
@@ -82,6 +86,7 @@ export default function RootLayout() {
               <Stack.Screen name="podcast/[id]" />
               <Stack.Screen name="admin" />
             </Stack>
+            </WeatherProvider>
           </PlayerProvider>
         </AuthProvider>
       </SafeAreaProvider>
