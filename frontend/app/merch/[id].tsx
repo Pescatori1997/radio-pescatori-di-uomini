@@ -73,7 +73,7 @@ export default function ProductDetail() {
               {images.map((_, i) => <View key={i} style={[styles.dot, active === i && styles.dotActive]} />)}
             </View>
           )}
-          {p.featured && <View style={styles.featBadge}><Ionicons name="star" size={12} color={colors.navy} /><Text style={styles.featText}>Featured</Text></View>}
+          {p.featured && <View style={styles.featBadge}><Ionicons name="star" size={12} color={colors.navy} /><Text style={styles.featText}>In evidenza</Text></View>}
         </View>
 
         <Animated.View entering={FadeInDown.duration(400)} style={styles.body}>

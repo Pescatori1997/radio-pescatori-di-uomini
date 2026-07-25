@@ -37,7 +37,7 @@ export default function LiveStreaming() {
   const configured = Object.values(links).filter((v) => v && v.trim()).length;
 
   return (
-    <AdminShell title="Live Streaming" activeKey="streaming">
+    <AdminShell title="Dirette Streaming" activeKey="streaming">
       {loading ? <View style={styles.center}><ActivityIndicator color={colors.brandPrimary} size="large" /></View> : (
         <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 60 }}>
           <View style={styles.info}>

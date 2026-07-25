@@ -81,7 +81,7 @@ export default function AdminProducts() {
                     <Text style={styles.meta} numberOfLines={1}>{p.category}{p.price ? ` · ${p.price}` : ""}</Text>
                     <View style={styles.badges}>
                       <View style={[styles.badge, { backgroundColor: av.color + "22" }]}><Text style={[styles.badgeText, { color: av.color }]}>{av.label}</Text></View>
-                      {p.featured && <View style={[styles.badge, { backgroundColor: colors.warning + "22" }]}><Text style={[styles.badgeText, { color: colors.warning }]}>Featured</Text></View>}
+                      {p.featured && <View style={[styles.badge, { backgroundColor: colors.warning + "22" }]}><Text style={[styles.badgeText, { color: colors.warning }]}>In evidenza</Text></View>}
                       {!p.published && <View style={[styles.badge, { backgroundColor: ADMIN.muted + "22" }]}><Text style={[styles.badgeText, { color: ADMIN.muted }]}>Nascosto</Text></View>}
                     </View>
                   </View>

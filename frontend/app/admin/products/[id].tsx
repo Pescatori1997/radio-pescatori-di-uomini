@@ -124,7 +124,7 @@ export default function ProductEditor() {
         </View>
 
         <View style={{ marginTop: spacing.lg }}>
-          <ASwitch testID="prod-featured" label="In evidenza (Featured)" value={f.featured} onValueChange={(v: boolean) => set("featured", v)} />
+          <ASwitch testID="prod-featured" label="In evidenza" value={f.featured} onValueChange={(v: boolean) => set("featured", v)} />
           <ASwitch testID="prod-published" label="Visibile nell'app" value={f.published} onValueChange={(v: boolean) => set("published", v)} />
         </View>
 

@@ -40,11 +40,11 @@ export default function AdminRadio() {
         <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 60 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={styles.info}>
             <Ionicons name="information-circle" size={18} color={colors.brandSecondary} />
-            <Text style={styles.infoText}>{"Configura streaming e metadati Now Playing. Le modifiche sono attive immediatamente, senza toccare il codice. Lo stream e la copertina vengono serviti in sicurezza (HTTPS) tramite il server."}</Text>
+            <Text style={styles.infoText}>{"Configura lo streaming e i metadati del brano in onda. Le modifiche sono attive immediatamente, senza toccare il codice. Lo stream e la copertina vengono serviti in sicurezza (HTTPS) tramite il server."}</Text>
           </View>
 
           <Text style={styles.section}>Stato Diretta</Text>
-          <ASwitch testID="radio-live" label="In diretta (LIVE attivo)" value={f.is_live} onValueChange={(v: boolean) => set("is_live", v)} />
+          <ASwitch testID="radio-live" label="In diretta (trasmissione attiva)" value={f.is_live} onValueChange={(v: boolean) => set("is_live", v)} />
 
           <Text style={styles.section}>Streaming</Text>
           <AInput testID="radio-station" label="Nome stazione" value={f.station_name} onChangeText={(v: string) => set("station_name", v)} />
@@ -53,7 +53,7 @@ export default function AdminRadio() {
           <AInput testID="radio-metadata" label="URL API Now Playing" value={f.metadata_url} onChangeText={(v: string) => set("metadata_url", v)} placeholder="http://.../api/nowplaying/pescatori" keyboardType="url" />
           <AInput testID="radio-refresh" label="Intervallo aggiornamento metadati (secondi)" value={f.refresh_interval} onChangeText={(v: string) => set("refresh_interval", v.replace(/[^0-9]/g, ""))} placeholder="15" keyboardType="number-pad" />
 
-          <Text style={styles.section}>Now Playing (fallback manuale)</Text>
+          <Text style={styles.section}>Brano in onda (fallback manuale)</Text>
           <Text style={styles.hint}>Usati solo se l'API Now Playing non è raggiungibile.</Text>
           <AImagePicker testID="radio-artwork" label="Copertina" value={f.artwork} onChange={(v: string) => set("artwork", v)} aspect={[1, 1]} />
           <AInput testID="radio-title" label="Titolo programma" value={f.title} onChangeText={(v: string) => set("title", v)} />

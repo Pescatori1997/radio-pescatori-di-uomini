@@ -1,0 +1,47 @@
+{
+  "summary": "Revisione UI/localizzazione italiana (frontend only, viewport 390x844). Verificati Home ospite, tab bar, tab Notizie, /merch, /donation-success e tutte le sezioni Admin richieste (login UI con pescatoridiuomini@outlook.it). Le stringhe italiane richieste sono correttamente applicate nella stragrande maggioranza dei punti (~95%) e NON risultano visivamente troncate. Rilevate 4 stringhe inglesi residue minori (non bloccanti) che dovrebbero essere tradotte per completare la revisione.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AdminDashboard (/admin)", "issue": "Tile del dashboard mostra ancora l'etichetta 'Articoli News' invece di 'Articoli Notizie'. Visibile nello screenshot della dashboard. Reference: /app/frontend/app/admin/index.tsx:19 → { key: 'news', label: 'Articoli News', ... }", "testID": "n/a", "priority": "MEDIUM"},
+      {"component": "Admin Dirette Streaming (/admin/streaming)", "issue": "Nel testo informativo compare ancora 'Live Mode' invece di 'Modalità Diretta': \"Quando il Live Mode è attivo, l'app mostrerà solo le piattaforme...\". Reference: /app/frontend/app/admin/streaming.tsx:45", "testID": "n/a", "priority": "MEDIUM"},
+      {"component": "Admin Utenti / modale permessi (/admin/users)", "issue": "Elenco sezioni permessi ha 'News' invece di 'Notizie'. Reference: /app/frontend/app/admin/users.tsx:14 → { key: 'news', label: 'News' }", "testID": "n/a", "priority": "LOW"},
+      {"component": "Invito collaboratore (/invite)", "issue": "SECTION_LABELS ha 'news: \"News\"' — appare nell'elenco dei permessi in pagina invito. Reference: /app/frontend/app/invite.tsx:15", "testID": "n/a", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "generale", "issues": ["Nessun troncamento o overflow rilevato sugli screenshot 390x844 (Home, Notizie, Merchandising, Donation-success, Admin Dashboard, Sidebar, Centro di Controllo Radio, Streaming, Radio, Impostazioni, Prodotti)."]}
+    ],
+    "react_native_issues": []
+  },
+  "verified_translations": {
+    "tab_bar": ["Home", "Podcast", "Notizie", "Palinsesto", "Profilo"],
+    "home_live_indicator": "IN DIRETTA ORA (guest, no live_mode)",
+    "home_cta": "Ascolta la Diretta",
+    "news_tab_title": "Notizie",
+    "admin_sidebar_header": "Pannello Admin",
+    "admin_sidebar_items_ok": ["Notizie", "Centro di Controllo Radio", "Dirette Streaming"],
+    "admin_control_page": {"title": "Centro di Controllo Radio", "status": "Radio in onda", "section": "Modalità Diretta", "cta": "Avvia Diretta (senza 'LIVE')", "streaming_link": "Piattaforme di Streaming"},
+    "admin_streaming_title": "Dirette Streaming",
+    "admin_radio": {"section": "Brano in onda (fallback manuale)", "switch": "In diretta (trasmissione attiva)"},
+    "admin_settings": ["Pagina \"Chi Siamo\"", "Scheda 1 · Titolo", "Scheda 1 · Testo", "Scheda 2 · Titolo", "Scheda 3 · Testo"],
+    "merch_admin_filter": "In evidenza (chip filtro presente)",
+    "donation_success_buttons_code": ["Le mie offerte (state=paid)", "Riprova (expired/error/pending)", "Torna alla Home"]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Sostituire 'Articoli News' → 'Articoli Notizie' in /app/frontend/app/admin/index.tsx:19.",
+    "Sostituire 'Live Mode' → 'Modalità Diretta' nel testo informativo di /app/frontend/app/admin/streaming.tsx:45.",
+    "Nella mappa SECTIONS/SECTION_LABELS delle sezioni permessi tradurre 'News' → 'Notizie' in /app/frontend/app/admin/users.tsx:14 e /app/frontend/app/invite.tsx:15 (chiave interna 'news' invariata per non rompere il backend)."
+  ],
+  "critical_code_review_comments": [
+    "Le 4 stringhe inglesi residue sono TUTTE etichette UI, nessun cambio di logica o chiavi/permessi necessari (le key 'news' devono restare invariate per compatibilità backend)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend only test)", "frontend": "~95% (11 aree su 11 verificate, 4 stringhe residue minori in 4 file)"},
+  "seed_data_creation": "Nessuno.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Login UI admin: pescatoridiuomini@outlook.it / AdminTestPwd1! su /login (testID: login-email, login-password, login-submit). Welcome gate ospite: testID welcome-card-guest. Le donation-success in errore mostrano solo 'Riprova' + 'Torna alla Home'; per vedere 'Le mie offerte' serve session_id valido (state=paid). Il pulsante admin-menu è dentro un container che a volte cattura eventi in mobile; se serve navigare fra pagine admin, usare direttamente le URL /admin/<sezione>.",
+  "rca_of_issue": "N/A — non è un bug ma revisione linguistica. Le 4 stringhe rilevate sono state semplicemente omesse dalla precedente passata di traduzione (comparivano in file 'periferici': dashboard tile, testo informativo, mappe di etichette permessi in modali/pagina invito)."
+}

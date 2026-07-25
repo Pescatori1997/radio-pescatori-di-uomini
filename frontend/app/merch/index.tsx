@@ -126,7 +126,7 @@ export default function Merch() {
                         ) : (
                           <View style={[styles.img, styles.imgEmpty]}><Ionicons name="image-outline" size={28} color={colors.muted} /></View>
                         )}
-                        {p.featured && <View style={styles.featBadge}><Ionicons name="star" size={11} color={colors.navy} /><Text style={styles.featText}>Featured</Text></View>}
+                        {p.featured && <View style={styles.featBadge}><Ionicons name="star" size={11} color={colors.navy} /><Text style={styles.featText}>In evidenza</Text></View>}
                         <View style={[styles.availBadge, { backgroundColor: av.color }]}><Text style={styles.availText}>{av.label}</Text></View>
                       </View>
                       <View style={styles.cardBody}>

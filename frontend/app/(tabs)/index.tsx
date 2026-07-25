@@ -111,7 +111,7 @@ export default function Home() {
 
         <Animated.View entering={FadeInDown.duration(500).delay(120)} style={styles.liveBadge} testID="live-indicator">
           <View style={[styles.dot, { backgroundColor: (liveInfo?.live_mode || live?.is_live) ? colors.success : colors.error }]} />
-          <Text style={styles.liveText}>{liveInfo?.live_mode ? "LIVE NOW" : live?.is_live ? "IN DIRETTA ORA" : "OFFLINE"}</Text>
+          <Text style={styles.liveText}>{liveInfo?.live_mode ? "IN DIRETTA" : live?.is_live ? "IN DIRETTA ORA" : "NON IN ONDA"}</Text>
         </Animated.View>
 
         {liveInfo?.live_mode ? (
@@ -122,7 +122,7 @@ export default function Home() {
             </Animated.View>
             <PressableScale testID="watch-live-button" style={styles.cta} onPress={openWatch}>
               <Ionicons name="videocam" size={22} color={colors.navy} />
-              <Text style={styles.ctaText}>Watch Live</Text>
+              <Text style={styles.ctaText}>Guarda la diretta</Text>
             </PressableScale>
           </>
         ) : (

@@ -80,7 +80,7 @@ export default function PlayerScreen() {
             <View style={[styles.liveTag, connection === "reconnecting" ? styles.tagWarn : connection === "offline" ? styles.tagErr : null]}>
               <View style={[styles.liveDotSm, connection === "reconnecting" ? { backgroundColor: colors.warning } : connection === "offline" ? { backgroundColor: colors.error } : null]} />
               <Text style={[styles.liveTagText, connection === "reconnecting" ? { color: colors.warning } : connection === "offline" ? { color: colors.error } : null]}>
-                {connection === "reconnecting" ? "RICONNESSIONE..." : connection === "offline" ? "OFFLINE" : "IN DIRETTA"}
+                {connection === "reconnecting" ? "RICONNESSIONE..." : connection === "offline" ? "NON IN ONDA" : "IN DIRETTA"}
               </Text>
             </View>
             {typeof liveInfo?.listeners === "number" && liveInfo.listeners > 0 && (

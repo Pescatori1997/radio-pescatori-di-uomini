@@ -37,7 +37,7 @@ export default function Prayer() {
       <View style={[styles.container, styles.center]}>
         <View style={styles.successIcon}><Ionicons name="heart" size={40} color={colors.brandPrimary} /></View>
         <Text style={styles.successTitle}>Grazie per la tua richiesta</Text>
-        <Text style={styles.successSub}>Pregheremo insieme a te. "L'Eterno è vicino a quelli che hanno il cuore rotto." (Salmo 34:18)</Text>
+        <Text style={styles.successSub}>Pregheremo insieme a te. "L'Eterno è vicino a chi ha il cuore spezzato." (Salmo 34:18)</Text>
         <Pressable testID="prayer-done" style={styles.primaryBtn} onPress={() => router.back()}>
           <Text style={styles.primaryBtnText}>Torna alla Home</Text>
         </Pressable>

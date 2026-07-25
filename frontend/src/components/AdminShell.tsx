@@ -11,12 +11,12 @@ const NAV = [
   { key: "dash", label: "Dashboard", icon: "view-dashboard", route: "/admin", perm: null },
   { key: "team", label: "Team", icon: "anchor", route: "/admin/team", perm: null },
   { key: "podcast", label: "Podcast", icon: "microphone", route: "/admin/podcasts", perm: "podcasts" },
-  { key: "news", label: "News", icon: "newspaper-variant", route: "/admin/news", perm: "news" },
+  { key: "news", label: "Notizie", icon: "newspaper-variant", route: "/admin/news", perm: "news" },
   { key: "merch", label: "Merchandising", icon: "storefront", route: "/admin/products", perm: "merch" },
   { key: "schedule", label: "Palinsesto", icon: "calendar-month", route: "/admin/schedule", perm: "schedule" },
   { key: "radio", label: "Radio", icon: "radio", route: "/admin/radio", perm: "radio" },
-  { key: "control", label: "Radio Control Center", icon: "access-point", route: "/admin/control", perm: "radio" },
-  { key: "streaming", label: "Live Streaming", icon: "video-wireless", route: "/admin/streaming", perm: "radio" },
+  { key: "control", label: "Centro di Controllo Radio", icon: "access-point", route: "/admin/control", perm: "radio" },
+  { key: "streaming", label: "Dirette Streaming", icon: "video-wireless", route: "/admin/streaming", perm: "radio" },
   { key: "prayer", label: "Richieste di Preghiera", icon: "hands-pray", route: "/admin/prayers", perm: "prayers" },
   { key: "messages", label: "Messaggi & Testimonianze", icon: "message-text", route: "/admin/messages", perm: "messages" },
   { key: "donations", label: "Donazioni", icon: "gift", route: "/admin/donations", perm: null },
@@ -64,7 +64,7 @@ export default function AdminShell({ title, activeKey, children }: { title: stri
       <View style={styles.brand}>
         <View style={styles.brandBadge}><MaterialCommunityIcons name="anchor" size={20} color={colors.white} /></View>
         <View>
-          <Text style={styles.brandName}>Admin Panel</Text>
+          <Text style={styles.brandName}>Pannello Admin</Text>
           <Text style={styles.brandSub}>{isCollab ? "Collaboratore" : "Pescatori di Uomini"}</Text>
         </View>
       </View>

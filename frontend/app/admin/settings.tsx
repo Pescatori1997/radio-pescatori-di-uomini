@@ -59,12 +59,12 @@ export default function AdminSettings() {
           <AInput testID="set-about-title" label="Titolo" value={f.about_title} onChangeText={(v: string) => set("about_title", v)} />
           <AInput testID="set-about-verse" label="Sottotitolo / Versetto" value={f.about_verse} onChangeText={(v: string) => set("about_verse", v)} multiline />
           <AInput testID="set-about-description" label="Descrizione principale" value={f.about_description} onChangeText={(v: string) => set("about_description", v)} multiline />
-          <AInput testID="set-about-c1-title" label="Card 1 · Titolo" value={f.about_card1_title} onChangeText={(v: string) => set("about_card1_title", v)} />
-          <AInput testID="set-about-c1-text" label="Card 1 · Testo" value={f.about_card1_text} onChangeText={(v: string) => set("about_card1_text", v)} multiline />
-          <AInput testID="set-about-c2-title" label="Card 2 · Titolo" value={f.about_card2_title} onChangeText={(v: string) => set("about_card2_title", v)} />
-          <AInput testID="set-about-c2-text" label="Card 2 · Testo" value={f.about_card2_text} onChangeText={(v: string) => set("about_card2_text", v)} multiline />
-          <AInput testID="set-about-c3-title" label="Card 3 · Titolo" value={f.about_card3_title} onChangeText={(v: string) => set("about_card3_title", v)} />
-          <AInput testID="set-about-c3-text" label="Card 3 · Testo" value={f.about_card3_text} onChangeText={(v: string) => set("about_card3_text", v)} multiline />
+          <AInput testID="set-about-c1-title" label="Scheda 1 · Titolo" value={f.about_card1_title} onChangeText={(v: string) => set("about_card1_title", v)} />
+          <AInput testID="set-about-c1-text" label="Scheda 1 · Testo" value={f.about_card1_text} onChangeText={(v: string) => set("about_card1_text", v)} multiline />
+          <AInput testID="set-about-c2-title" label="Scheda 2 · Titolo" value={f.about_card2_title} onChangeText={(v: string) => set("about_card2_title", v)} />
+          <AInput testID="set-about-c2-text" label="Scheda 2 · Testo" value={f.about_card2_text} onChangeText={(v: string) => set("about_card2_text", v)} multiline />
+          <AInput testID="set-about-c3-title" label="Scheda 3 · Titolo" value={f.about_card3_title} onChangeText={(v: string) => set("about_card3_title", v)} />
+          <AInput testID="set-about-c3-text" label="Scheda 3 · Testo" value={f.about_card3_text} onChangeText={(v: string) => set("about_card3_text", v)} multiline />
           <AInput testID="set-about-quote" label="Citazione finale" value={f.about_quote} onChangeText={(v: string) => set("about_quote", v)} multiline />
 
           {msg ? <Text style={styles.msg}>{msg}</Text> : null}

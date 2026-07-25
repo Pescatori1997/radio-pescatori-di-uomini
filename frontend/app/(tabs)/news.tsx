@@ -35,7 +35,7 @@ export default function NewsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
-        <Text style={styles.h1}>News</Text>
+        <Text style={styles.h1}>Notizie</Text>
         <View style={styles.searchBox}>
           <Ionicons name="search" size={18} color={colors.muted} />
           <TextInput testID="news-search-input" value={search} onChangeText={setSearch} placeholder="Cerca notizie..." placeholderTextColor={colors.muted} style={styles.searchInput} />

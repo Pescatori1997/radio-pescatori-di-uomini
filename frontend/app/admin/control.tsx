@@ -88,7 +88,7 @@ export default function RadioControl() {
   const liveMode = !!status?.live_mode;
 
   return (
-    <AdminShell title="Radio Control Center" activeKey="control">
+    <AdminShell title="Centro di Controllo Radio" activeKey="control">
       {loading ? <View style={styles.center}><ActivityIndicator color={colors.brandPrimary} size="large" /></View> : (
         <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 60 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchStatus(); }} tintColor={colors.brandPrimary} />}>
@@ -103,7 +103,7 @@ export default function RadioControl() {
           {liveMode && (
             <View style={styles.liveBanner}>
               <View style={styles.liveDot} />
-              <Text style={styles.liveBannerText}>DIRETTA LIVE ATTIVA</Text>
+              <Text style={styles.liveBannerText}>DIRETTA ATTIVA</Text>
             </View>
           )}
 
@@ -111,7 +111,7 @@ export default function RadioControl() {
           <View style={styles.card}>
             <View style={styles.statusHeader}>
               <View style={[styles.bigDot, { backgroundColor: online ? colors.success : colors.error }]} />
-              <Text style={styles.bigStatus}>{online ? "Radio Online" : "Radio Offline"}</Text>
+              <Text style={styles.bigStatus}>{online ? "Radio in onda" : "Radio non in onda"}</Text>
               <View style={styles.refreshHint}><ActivityIndicator size="small" color={ADMIN.muted} /></View>
             </View>
 
@@ -150,13 +150,13 @@ export default function RadioControl() {
           </View>
 
           {/* Live mode */}
-          <Text style={styles.section}>Live Mode</Text>
-          <Text style={styles.hint}>Avvia una diretta esterna. Metterà in pausa l'AutoDJ e nell'app comparirà il banner "LIVE NOW" con il pulsante "Watch Live".</Text>
+          <Text style={styles.section}>Modalità Diretta</Text>
+          <Text style={styles.hint}>Avvia una diretta esterna. Metterà in pausa l'AutoDJ e nell'app comparirà il banner "IN DIRETTA" con il pulsante "Guarda la diretta".</Text>
 
           <PressableScale testID="goto-streaming" onPress={() => router.push("/admin/streaming")} style={styles.linkRow}>
             <MaterialCommunityIcons name="video-wireless" size={20} color={colors.brandPrimary} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.linkTitle}>Piattaforme Live Streaming</Text>
+              <Text style={styles.linkTitle}>Piattaforme di Streaming</Text>
               <Text style={styles.linkSub}>{linkCount} configurate · tocca per gestire i link</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={ADMIN.muted} />
@@ -164,7 +164,7 @@ export default function RadioControl() {
 
           {!liveMode ? (
             <PressableScale testID="live-start" disabled={!!busy} onPress={() => doLive("start")} style={[styles.liveBtn, { backgroundColor: colors.error }, busy === "start" && { opacity: 0.6 }]}>
-              {busy === "start" ? <ActivityIndicator color={colors.white} /> : (<><MaterialCommunityIcons name="access-point" size={20} color={colors.white} /><Text style={styles.liveBtnText}>Avvia Diretta LIVE</Text></>)}
+              {busy === "start" ? <ActivityIndicator color={colors.white} /> : (<><MaterialCommunityIcons name="access-point" size={20} color={colors.white} /><Text style={styles.liveBtnText}>Avvia Diretta</Text></>)}
             </PressableScale>
           ) : (
             <PressableScale testID="live-end" disabled={!!busy} onPress={() => doLive("end")} style={[styles.liveBtn, { backgroundColor: colors.success }, busy === "end" && { opacity: 0.6 }]}>

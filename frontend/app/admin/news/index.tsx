@@ -24,7 +24,7 @@ export default function AdminNewsList() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   return (
-    <AdminShell title="News" activeKey="news">
+    <AdminShell title="Notizie" activeKey="news">
       <View style={styles.topBar}>
         <View style={styles.searchBox}>
           <Ionicons name="search" size={18} color={ADMIN.muted} />
