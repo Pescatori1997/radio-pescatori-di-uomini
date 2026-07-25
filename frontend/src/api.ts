@@ -196,6 +196,13 @@ export const api = {
   newsCategories: () => request("/news/categories"),
   testimonies: () => request("/testimonies"),
   settings: () => request("/settings"),
+  // donations (Stripe, test mode)
+  donationCheckout: (body: { amount: number; origin_url: string; donor_name?: string; donor_email?: string; message?: string; anonymous?: boolean }) =>
+    request("/donations/checkout", { method: "POST", body: JSON.stringify(body) }, true),
+  donationStatus: (sessionId: string) => request(`/donations/status/${sessionId}`),
+  myDonations: () => request("/me/donations", {}, true),
+  adminDonations: () => request("/admin/donations", {}, true),
+  adminDonationStats: () => request("/admin/donations/stats", {}, true),
 };
 
 // HTTPS pass-through URL for the live radio stream (works on web + native).

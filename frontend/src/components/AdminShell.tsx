@@ -19,6 +19,7 @@ const NAV = [
   { key: "streaming", label: "Live Streaming", icon: "video-wireless", route: "/admin/streaming", perm: "radio" },
   { key: "prayer", label: "Richieste di Preghiera", icon: "hands-pray", route: "/admin/prayers", perm: "prayers" },
   { key: "messages", label: "Messaggi & Testimonianze", icon: "message-text", route: "/admin/messages", perm: "messages" },
+  { key: "donations", label: "Donazioni", icon: "gift", route: "/admin/donations", perm: null },
   { key: "users", label: "Utenti", icon: "account-group", route: "/admin/users", perm: null },
   { key: "activity", label: "Registro Attività", icon: "history", route: "/admin/activity", perm: null },
   { key: "settings", label: "Impostazioni", icon: "cog", route: "/admin/settings", perm: null },

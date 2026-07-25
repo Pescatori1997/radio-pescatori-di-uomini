@@ -716,6 +716,7 @@ async def admin_stats(admin=Depends(require_admin)):
         "news": await db.news.count_documents({}),
         "podcasts": await db.podcasts.count_documents({}),
         "products": await db.products.count_documents({}),
+        "donations": await db.donation_transactions.count_documents({"payment_status": "paid"}),
     }
 
 
@@ -1682,6 +1683,196 @@ async def admin_reorder_products(body: dict, admin=Depends(require_perm("merch")
     for i, pid in enumerate(ids):
         await db.products.update_one({"id": pid}, {"$set": {"order": i}})
     return {"ok": True}
+
+# ---------------- Donations (Stripe, test mode) ----------------
+from emergentintegrations.payments.stripe.checkout import (
+    StripeCheckout,
+    CheckoutSessionRequest,
+)
+from fastapi import Request
+
+STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "")
+PRESET_AMOUNTS = [5.0, 10.0, 25.0, 50.0]
+MIN_DONATION = 1.0
+MAX_DONATION = 5000.0
+
+
+async def get_optional_user(authorization: Optional[str]):
+    """Return the authenticated user doc if a valid token is present, else None."""
+    if not authorization:
+        return None
+    try:
+        return await get_current_user(authorization)
+    except Exception:
+        return None
+
+
+def _stripe_client(request: Request) -> StripeCheckout:
+    # Build the absolute webhook URL from the incoming request (behind the /api ingress).
+    base = str(request.base_url).rstrip("/")
+    webhook_url = f"{base}/api/webhook/stripe"
+    return StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+
+
+class DonationCheckoutIn(BaseModel):
+    amount: float
+    origin_url: str
+    donor_name: Optional[str] = None
+    donor_email: Optional[str] = None
+    message: Optional[str] = None
+    anonymous: bool = False
+
+
+@api_router.post("/donations/checkout")
+async def create_donation_checkout(body: DonationCheckoutIn, request: Request,
+                                    authorization: Optional[str] = Header(None)):
+    if not STRIPE_API_KEY:
+        raise HTTPException(status_code=503, detail="Donazioni non configurate")
+    # SECURITY: the amount is validated server-side; never trust arbitrary client values.
+    amount = round(float(body.amount), 2)
+    if amount < MIN_DONATION or amount > MAX_DONATION:
+        raise HTTPException(status_code=400, detail=f"Importo non valido (min €{MIN_DONATION:.0f}, max €{MAX_DONATION:.0f})")
+
+    user = await get_optional_user(authorization)
+    origin = body.origin_url.rstrip("/")
+    success_url = f"{origin}/donation-success?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{origin}/donate"
+
+    metadata = {
+        "type": "donation",
+        "anonymous": "true" if body.anonymous else "false",
+    }
+    if user:
+        metadata["user_id"] = user["user_id"]
+    if body.donor_email:
+        metadata["donor_email"] = body.donor_email[:120]
+
+    stripe = _stripe_client(request)
+    session = await stripe.create_checkout_session(CheckoutSessionRequest(
+        amount=amount,
+        currency="eur",
+        success_url=success_url,
+        cancel_url=cancel_url,
+        metadata=metadata,
+    ))
+
+    await db.donation_transactions.insert_one({
+        "id": new_id("don"),
+        "session_id": session.session_id,
+        "user_id": user["user_id"] if user else None,
+        "donor_name": (body.donor_name or (user.get("name") if user else None)),
+        "donor_email": (body.donor_email or (user.get("email") if user else None)),
+        "message": body.message,
+        "anonymous": bool(body.anonymous),
+        "amount": amount,
+        "currency": "eur",
+        "frequency": "one_time",
+        "payment_status": "initiated",
+        "status": "open",
+        "processed": False,
+        "created_at": now_utc(),
+        "updated_at": now_utc(),
+    })
+
+    return {"url": session.url, "session_id": session.session_id}
+
+
+async def _finalize_donation(session_id: str, payment_status: str, status: str,
+                             amount_total: Optional[int] = None, currency: Optional[str] = None):
+    """Idempotently update a donation transaction from a Stripe status/webhook event."""
+    tx = await db.donation_transactions.find_one({"session_id": session_id})
+    if not tx:
+        return None
+    update = {"payment_status": payment_status, "status": status, "updated_at": now_utc()}
+    newly_paid = payment_status == "paid" and not tx.get("processed")
+    if newly_paid:
+        update["processed"] = True
+        update["paid_at"] = now_utc()
+        if amount_total is not None:
+            update["amount"] = round(amount_total / 100, 2)
+        if currency:
+            update["currency"] = currency
+    await db.donation_transactions.update_one({"session_id": session_id}, {"$set": update})
+    return {**tx, **update}
+
+
+@api_router.get("/donations/status/{session_id}")
+async def donation_status(session_id: str, request: Request):
+    if not STRIPE_API_KEY:
+        raise HTTPException(status_code=503, detail="Donazioni non configurate")
+    stripe = _stripe_client(request)
+    result = await stripe.get_checkout_status(session_id)
+    await _finalize_donation(session_id, result.payment_status, result.status,
+                             result.amount_total, result.currency)
+    return {
+        "session_id": session_id,
+        "status": result.status,
+        "payment_status": result.payment_status,
+        "amount": round((result.amount_total or 0) / 100, 2),
+        "currency": result.currency,
+    }
+
+
+@api_router.post("/webhook/stripe")
+async def stripe_webhook(request: Request):
+    if not STRIPE_API_KEY:
+        raise HTTPException(status_code=503, detail="Donazioni non configurate")
+    body = await request.body()
+    signature = request.headers.get("Stripe-Signature")
+    stripe = _stripe_client(request)
+    try:
+        event = await stripe.handle_webhook(body, signature)
+    except Exception as e:
+        logger.error("Stripe webhook error: %s", e)
+        raise HTTPException(status_code=400, detail="Webhook non valido")
+    if getattr(event, "session_id", None):
+        status = "complete" if event.payment_status == "paid" else (event.status or "open")
+        await _finalize_donation(event.session_id, event.payment_status, status,
+                                 getattr(event, "amount_total", None), getattr(event, "currency", None))
+    return {"received": True}
+
+
+@api_router.get("/me/donations")
+async def my_donations(authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    docs = await db.donation_transactions.find(
+        {"user_id": user["user_id"], "payment_status": "paid"}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return docs
+
+
+@api_router.get("/admin/donations")
+async def admin_donations(admin=Depends(require_admin)):
+    docs = await db.donation_transactions.find(
+        {"payment_status": "paid"}, {"_id": 0}
+    ).sort("created_at", -1).to_list(500)
+    return docs
+
+
+@api_router.get("/admin/donations/stats")
+async def admin_donation_stats(admin=Depends(require_admin)):
+    paid = await db.donation_transactions.find({"payment_status": "paid"}, {"_id": 0}).to_list(5000)
+    total = round(sum(d.get("amount", 0) for d in paid), 2)
+    count = len(paid)
+    avg = round(total / count, 2) if count else 0.0
+    donors = len({d.get("user_id") or d.get("donor_email") or d.get("id") for d in paid})
+    # Last 30 days
+    cutoff = now_utc() - timedelta(days=30)
+    recent = 0.0
+    for d in paid:
+        ts = d.get("paid_at") or d.get("created_at")
+        if ts and (ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts) >= cutoff:
+            recent += d.get("amount", 0)
+    return {
+        "total": total,
+        "count": count,
+        "average": avg,
+        "donors": donors,
+        "last_30_days": round(recent, 2),
+        "currency": "eur",
+    }
+
+
 
 
 app.include_router(api_router)
