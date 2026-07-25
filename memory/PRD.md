@@ -154,3 +154,9 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Backend: collezione `meditations`, endpoint public (`/meditations`, `/meditations/categories`, `/meditations/{id}`) e admin CRUD; `/admin/stats` include conteggio `meditations`.
 - Navigazione: tab pubblico, voce sidebar admin, card dashboard admin, label permesso in Utenti/Inviti, tipo `PermSection` esteso.
 - Tested: backend 14/14 (test_meditations, iteration_18), frontend tutti i flussi OK (incluso flusso E2E crea→pubblica→visibile). Player web via iframe verificato.
+
+## Fixed (2026-06, session 15 — Eliminazione Meditazioni + confirm cross-platform)
+- **BUG**: l'eliminazione delle meditazioni (e l'eliminazione account) non funzionava nel preview web perché `Alert.alert` è un no-op su react-native-web → la conferma e la callback non partivano mai.
+- **FIX**: nuovo helper `src/utils/confirm.ts` — `confirmAsync` (window.confirm su web / Alert.alert su native) + `alertMessage` (window.alert/Alert). Usato in `/admin/meditations/[id].tsx` (eliminazione con conferma + messaggio di successo, e feedback validazione/errore del salvataggio) e in `/account.tsx` (eliminazione account).
+- Miniature salvate come base64 nel documento Mongo (nessun file storage separato) → eliminando il record si rimuove anche l'immagine: nessun file orfano. Lista admin già in refresh su focus → aggiornamento automatico dopo delete.
+- Tested: backend 14/14 + UI E2E (crea/modifica/elimina, DB pulito, 404 dopo delete, nessun residuo, non-regressione pubblico) — iteration_22. Grafica/UX invariate.
