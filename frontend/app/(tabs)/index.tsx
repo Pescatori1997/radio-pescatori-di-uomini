@@ -9,6 +9,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { api } from "@/src/api";
 import { usePlayer } from "@/src/context/PlayerContext";
+import { configuredPlatforms } from "@/src/livePlatforms";
+import WatchLiveModal from "@/src/components/WatchLiveModal";
 import Collaborators from "@/src/components/Collaborators";
 import WhatsAppSection from "@/src/components/WhatsAppSection";
 import PressableScale from "@/src/components/PressableScale";
@@ -26,6 +28,7 @@ export default function Home() {
   const [programs, setPrograms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [watchOpen, setWatchOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -54,8 +57,18 @@ export default function Home() {
   };
 
   const openWatch = () => {
-    const url = liveInfo?.live_watch_url;
-    if (url) Linking.openURL(url).catch(() => {});
+    const platforms = configuredPlatforms(liveInfo?.live_links);
+    if (platforms.length === 0) {
+      // Backward-compat: fall back to the legacy single URL if still set.
+      const legacy = liveInfo?.live_watch_url;
+      if (legacy) Linking.openURL(legacy).catch(() => {});
+      return;
+    }
+    if (platforms.length === 1) {
+      Linking.openURL(platforms[0].url).catch(() => {});
+      return;
+    }
+    setWatchOpen(true);
   };
 
   if (loading) {
@@ -180,6 +193,8 @@ export default function Home() {
         <Text style={styles.prayerCtaText}>Invia una richiesta di preghiera</Text>
         <Ionicons name="chevron-forward" size={18} color={colors.muted} />
       </Pressable>
+
+      <WatchLiveModal visible={watchOpen} links={liveInfo?.live_links} onClose={() => setWatchOpen(false)} />
     </ScrollView>
   );
 }

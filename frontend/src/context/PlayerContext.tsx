@@ -21,6 +21,9 @@ export type LiveInfo = {
   listeners: number | null;
   refresh_interval: number;
   station_name?: string;
+  live_mode?: boolean;
+  live_watch_url?: string;
+  live_links?: Record<string, string>;
 };
 
 export type Connection = "online" | "offline" | "reconnecting";

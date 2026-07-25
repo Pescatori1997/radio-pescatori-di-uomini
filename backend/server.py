@@ -9,7 +9,7 @@ import uuid
 import httpx
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import datetime, timezone, timedelta
 
 ROOT_DIR = Path(__file__).parent
@@ -270,6 +270,7 @@ async def live_status():
         "station_name": doc.get("station_name") or "Pescatori di Uomini",
         "live_mode": bool(doc.get("live_mode")),
         "live_watch_url": doc.get("live_watch_url") or "",
+        "live_links": doc.get("live_links") or {},
     }
     try:
         async with httpx.AsyncClient(timeout=8) as hc:
@@ -1368,6 +1369,7 @@ class RadioSettings(BaseModel):
     artist: Optional[str] = None
     artwork: Optional[str] = None
     live_watch_url: Optional[str] = None
+    live_links: Optional[Dict[str, str]] = None
     azuracast_api_key: Optional[str] = None
     station_shortcode: Optional[str] = None
 
@@ -1412,6 +1414,7 @@ async def _radio_status_payload():
         "artwork": doc.get("artwork") or DEFAULT_ART,
         "live_mode": bool(doc.get("live_mode")),
         "live_watch_url": doc.get("live_watch_url") or "",
+        "live_links": doc.get("live_links") or {},
         "station_shortcode": station,
         "status_error": None,
     }

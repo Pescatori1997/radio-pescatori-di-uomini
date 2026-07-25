@@ -1,0 +1,45 @@
+{
+  "summary": "Full-stack testing of the multi-platform LIVE STREAMING extension (Live Mode destination system). Backend: 11/11 pytest cases PASS in /app/backend/tests/test_live_streaming.py — PUT /api/admin/radio accepts live_links (Dict[str,str]) and persists them + returns them in the response while still MASKING azuracast_api_key (has_api_key present, key not in body). GET /api/admin/radio returns the persisted live_links. Public GET /api/live/status now includes live_links (regression: still returns live_mode, live_watch_url, stream_url, etc.). GET /api/admin/radio/status includes live_links alongside backend_running/frontend_running/listeners/live_mode/live_watch_url. Setting live_links={} clears the map and public status reflects the change. POST /api/admin/radio/live {action:'start'} sets live_mode=true and payload keeps live_links intact; {action:'end'} sets live_mode=false; invalid action=400. 401 on unauth PUT + status. Frontend (mobile viewport 390x844): Home guest with live_mode=true + 2 platforms configured (YouTube+Facebook) → 'LIVE NOW' banner shown, testID='watch-live-button' visible, tapping opens WatchLiveModal titled 'Dove vuoi guardare la diretta?' with ONLY the 2 configured platform rows (testID='watch-platform-youtube' + 'watch-platform-facebook' present; testIDs for tiktok/instagram/website/custom NOT rendered — correct filtering). Cancel button ('watch-cancel') closes the sheet. Home guest with live_mode=true + exactly ONE platform (YouTube) → tapping 'watch-live-button' does NOT show the modal AND window.open captured 'https://youtube.com/@pescatori/live' — direct-open path verified. Home guest with live_mode=false → normal hero shown ('IN DIRETTA ORA', 'ORA IN ONDA', 'Ascolta la Diretta' button); NO LIVE NOW banner, NO Watch Live button. Admin panel: login via /auth (pescatoridiuomini@outlook.it / Admin1234!) → auto-redirect to /admin. /admin/streaming renders all 6 URL inputs (testIDs live-link-youtube/facebook/tiktok/instagram/website/custom + live-links-save button); saving with 2 filled + tiktok with leading/trailing whitespace + others empty → success toast 'Piattaforme salvate ✓' appears, count updates to '2 piattaforme configurate'; server-side verification: empty fields dropped AND tiktok URL was trimmed correctly. /admin/control now shows the new PressableScale row testID='goto-streaming' with title 'Piattaforme Live Streaming' + subtitle 'N configurate · tocca per gestire i link', legacy testID='live-watch-url' input is REMOVED, and ctrl-start/ctrl-stop/ctrl-restart + live-start all still present; tapping goto-streaming navigates to /admin/streaming. CLEANUP CONFIRMED: after all tests, live_links={}, live_mode=false, live_watch_url='', backend_running=true, frontend_running=true, is_online=true — station left fully RUNNING as instructed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "shadow* style props deprecation", "issue": "Console warning '\"shadow*\" style props are deprecated. Use \"boxShadow\".' still present (carry-over from prior iterations, not introduced by this extension). Non-blocking."},
+      {"component": "props.pointerEvents deprecation", "issue": "Console warning 'props.pointerEvents is deprecated. Use style.pointerEvents' present (carry-over). Non-blocking."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_live_streaming.py",
+    "/app/test_reports/pytest/iteration_12_results.xml"
+  ],
+  "action_items": [
+    "(carry-over) Migrate shadow* StyleSheet props to boxShadow and props.pointerEvents to style.pointerEvents to silence RN web warnings.",
+    "(carry-over) server.py is now ~1871 lines — consider splitting into APIRouter modules (auth, admin, radio, cms, users).",
+    "OPTIONAL: Backend test suite currently runs with pytest-xdist parallel workers (2). test_live_streaming.py must be executed with '-n 0' (or the equivalent no-xdist flag) to avoid parallel state races on the shared live_links Mongo document. Consider adding pytest.mark.serial or -p no:xdist for radio/live tests, or using a per-test lock. All 11 pass reliably in serial mode."
+  ],
+  "critical_code_review_comments": [
+    "livePlatforms.ts cleanly encapsulates the 6 platforms (key, label, icon, color, placeholder). configuredPlatforms() correctly trims + filters empty URLs and preserves display order — shared by both admin/streaming.tsx and WatchLiveModal.tsx. Good DRY.",
+    "WatchLiveModal.tsx uses PressableScale with testID=`watch-platform-${key}` per row + testID='watch-cancel' — fully testable. Uses useSafeAreaInsets for bottom padding — good mobile UX.",
+    "app/(tabs)/index.tsx openWatch() branching is exactly per spec: 0 configured → legacy live_watch_url fallback via Linking.openURL; 1 configured → direct Linking.openURL (verified: window.open captured); >1 configured → setWatchOpen(true) opens the modal.",
+    "app/admin/streaming.tsx save() trims + drops empty entries client-side before PUT — matches server contract that persists the dict as-is. Success/error toast auto-dismisses. Good UX.",
+    "app/admin/control.tsx polls status every 8s and derives linkCount from status.live_links — the link row subtitle stays in sync with the persisted platforms without an extra call. Good architecture.",
+    "server.py PUT /api/admin/radio: model_dump(exclude_unset=True) + $set semantics means passing live_links replaces the whole map (expected behavior — the admin UI always sends the full sanitized dict). Verified.",
+    "server.py _radio_status_payload + /api/live/status both include live_links from the same live_status/current doc — single source of truth.",
+    "_mask_radio() still pops _id + azuracast_api_key while surfacing has_api_key + station_shortcode — no regression with the new live_links field.",
+    "All new interactive elements have testID prefixes ready for future tests (live-link-*, live-links-save, goto-streaming, watch-platform-*, watch-cancel)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_live_streaming.py (new — 11 pytest cases for multi-platform live streaming)"
+  ],
+  "success_rate": {
+    "backend": "100% (11/11 test_live_streaming.py, plus 18/18 test_radio_control.py from iteration_11 still applicable)",
+    "frontend": "100% (2-platform modal filters correctly + only shows configured platforms + testIDs present, 1-platform direct-open path verified via window.open capture, live_mode=false hero unchanged, /admin/streaming CRUD works with success toast + trim/drop-empty verified server-side, /admin/control link row + legacy input removal verified, navigation goto-streaming works)"
+  },
+  "seed_data_creation": "Tests transiently set live_links (up to 6 platforms) and toggle live_mode start/end. Session-scoped fixture snapshots and restores original live_links. Final state manually verified via curl: live_links={}, live_mode=false, live_watch_url='', backend_running=true, frontend_running=true, is_online=true.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Live Streaming extension VERIFIED end-to-end. Admin: pescatoridiuomini@outlook.it / Admin1234!. Backend seeds ADMINTESTTOKEN123 via conftest.py. Key new testIDs: /admin/streaming → live-link-{youtube|facebook|tiktok|instagram|website|custom}, live-links-save. /admin/control → goto-streaming (link row to /admin/streaming), legacy live-watch-url REMOVED. Home → watch-live-button (only when live_mode=true AND ≥1 platform configured OR legacy live_watch_url set). WatchLiveModal → watch-platform-{key} for each configured platform + watch-cancel. State model: 0 configured → falls back to legacy live_watch_url; 1 → direct Linking.openURL; >1 → modal. Station currently ONLINE + live_mode=false + live_links={}. When testing live flows, ALWAYS finish with POST /api/admin/radio/live {action:'end'} + PUT /api/admin/radio {live_links:{}}. IMPORTANT: run test_live_streaming.py with '-n 0' to avoid xdist race conditions on the shared live_status Mongo doc.",
+  "rca_of_issue": "N/A — all acceptance criteria in the review request PASS. Only observation: pytest-xdist parallel execution can race on the shared live_status document; must be run serially (-n 0) or with per-test isolation."
+}

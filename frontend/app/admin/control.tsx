@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, TextInput, Platform } from "react-native";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { api } from "@/src/api";
 import AdminShell, { ADMIN } from "@/src/components/AdminShell";
@@ -20,6 +20,7 @@ type Status = {
   artwork: string;
   live_mode: boolean;
   live_watch_url: string;
+  live_links?: Record<string, string>;
   status_error?: string | null;
 };
 
@@ -35,15 +36,16 @@ export default function RadioControl() {
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ t: string; ok: boolean } | null>(null);
-  const [watchUrl, setWatchUrl] = useState("");
-  const watchTouched = useRef(false);
+  const [linkCount, setLinkCount] = useState(0);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const router = useRouter();
 
   const fetchStatus = useCallback(async () => {
     try {
       const s = await api.adminRadioStatus();
       setStatus(s);
-      if (!watchTouched.current) setWatchUrl(s.live_watch_url || "");
+      const links = s.live_links || {};
+      setLinkCount(Object.values(links).filter((v: any) => v && String(v).trim()).length);
     } catch (e: any) {
       // Never crash; keep last status
     } finally {
@@ -74,9 +76,8 @@ export default function RadioControl() {
   const doLive = async (action: string) => {
     setBusy(action); setMsg(null);
     try {
-      const r = await api.adminRadioLive(action, action === "start" ? watchUrl.trim() : undefined);
+      const r = await api.adminRadioLive(action);
       if (r.status) setStatus(r.status);
-      watchTouched.current = false;
       setMsg({ t: action === "start" ? "🔴 Diretta LIVE avviata" : "🟢 Diretta terminata, radio ripristinata", ok: true });
     } catch (e: any) {
       setMsg({ t: e.message || "Errore", ok: false });
@@ -150,18 +151,17 @@ export default function RadioControl() {
 
           {/* Live mode */}
           <Text style={styles.section}>Live Mode</Text>
-          <Text style={styles.hint}>Avvia una diretta esterna (YouTube/Facebook/TikTok). Metterà in pausa l'AutoDJ e nell'app comparirà il banner "LIVE NOW" con il pulsante "Watch Live".</Text>
-          <Text style={styles.inputLabel}>URL Watch Live</Text>
-          <TextInput
-            testID="live-watch-url"
-            value={watchUrl}
-            onChangeText={(v) => { watchTouched.current = true; setWatchUrl(v); }}
-            placeholder="https://youtube.com/@tuocanale/live"
-            placeholderTextColor={ADMIN.muted}
-            autoCapitalize="none"
-            keyboardType="url"
-            style={styles.input}
-          />
+          <Text style={styles.hint}>Avvia una diretta esterna. Metterà in pausa l'AutoDJ e nell'app comparirà il banner "LIVE NOW" con il pulsante "Watch Live".</Text>
+
+          <PressableScale testID="goto-streaming" onPress={() => router.push("/admin/streaming")} style={styles.linkRow}>
+            <MaterialCommunityIcons name="video-wireless" size={20} color={colors.brandPrimary} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.linkTitle}>Piattaforme Live Streaming</Text>
+              <Text style={styles.linkSub}>{linkCount} configurate · tocca per gestire i link</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={ADMIN.muted} />
+          </PressableScale>
+
           {!liveMode ? (
             <PressableScale testID="live-start" disabled={!!busy} onPress={() => doLive("start")} style={[styles.liveBtn, { backgroundColor: colors.error }, busy === "start" && { opacity: 0.6 }]}>
               {busy === "start" ? <ActivityIndicator color={colors.white} /> : (<><MaterialCommunityIcons name="access-point" size={20} color={colors.white} /><Text style={styles.liveBtnText}>Avvia Diretta LIVE</Text></>)}
@@ -227,6 +227,9 @@ const styles = StyleSheet.create({
   ctrlLabel: { fontSize: 13, fontWeight: "800" },
   inputLabel: { color: ADMIN.muted, fontSize: 13, fontWeight: "700", marginBottom: 6 },
   input: { backgroundColor: ADMIN.card, borderRadius: radius.md, padding: spacing.md, fontSize: 15, color: colors.white, borderWidth: 1, borderColor: ADMIN.border, marginBottom: spacing.md },
+  linkRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: ADMIN.card, borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: ADMIN.border, marginBottom: spacing.md },
+  linkTitle: { color: colors.white, fontSize: 15, fontWeight: "700" },
+  linkSub: { color: ADMIN.muted, fontSize: 12, marginTop: 2 },
   liveBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, paddingVertical: spacing.md, borderRadius: radius.pill },
   liveBtnText: { color: colors.white, fontSize: 16, fontWeight: "800" },
 });
