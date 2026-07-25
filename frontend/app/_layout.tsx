@@ -11,6 +11,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { ensureIconFontFaces } from "@/src/iconFonts";
+import { setupPWA } from "@/src/utils/pwa";
 import { AuthProvider, useAuth } from "@/src/context/AuthContext";
 import { PlayerProvider } from "@/src/context/PlayerContext";
 import { WeatherProvider } from "@/src/weather/WeatherContext";
@@ -42,6 +43,10 @@ if (Platform.OS === "android") {
 // fontfaceobserver 6000ms-timeout polyfill never runs (prevents a hard crash on some
 // Chromium browsers / slow networks). No-op on native. See src/iconFonts.ts.
 ensureIconFontFaces();
+
+// Web-only: inject PWA manifest/meta tags + register the service worker so the
+// app is installable in the browser. No-op on native (Expo mobile app untouched).
+setupPWA();
 
 // Root auth gate: force the welcome screen until the user logs in or chooses guest mode.
 function AuthGate() {
