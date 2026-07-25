@@ -145,3 +145,12 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - `EMERGENT_PUSH_KEY=placeholder` in backend/.env (sostituito automaticamente al Deploy). L'invio push reale funziona SOLO dopo Deploy + build iOS/Android; in preview lo stato dei log è 'failed' (atteso).
 - Tested: backend 28/28 (test_notifications_account, iteration_17), frontend tutti i flussi Fase A OK. Push native-only non testabile in Expo Go/web.
 **PENDING utente:** fornire `google-services.json` (Android) prima del build; Google service account JSON + APNs .p8 (iOS) durante la generazione build.
+
+## Implemented (2026-06, session 14 — Sezione Meditazioni)
+- Nuova sezione dedicata **Meditazioni** (video meditazioni cristiane), entità separata dai podcast.
+- **CMS Admin** (`/admin/meditations`): CRUD completo (crea/modifica/elimina), video YouTube o link diretto, miniatura (image picker), titolo, oratore, versetto (opzionale), descrizione, categoria, data pubblicazione, Bozza/Pubblica, **programmazione** (publish_date futura → visibile e notificata alla data), ricerca e filtro per stato. Permesso RBAC `meditations` (aggiunto a PERM_SECTIONS).
+- **App pubblica**: nuovo tab **Meditazioni** con card responsive (miniatura/titolo/oratore/versetto/data/descrizione), ricerca per titolo, filtro per categoria; dettaglio `/meditazioni/[id]` con player video (WebView su native, iframe su web via `VideoEmbed.web.tsx`), condivisione e "Apri su YouTube".
+- **Notifiche**: invio automatico categoria `meditations` alla pubblicazione (immediata o programmata via `_flush_scheduled_meditations`), rispettando le preferenze utente. Push reale attiva dopo Deploy (key placeholder → log 'failed' in preview, atteso).
+- Backend: collezione `meditations`, endpoint public (`/meditations`, `/meditations/categories`, `/meditations/{id}`) e admin CRUD; `/admin/stats` include conteggio `meditations`.
+- Navigazione: tab pubblico, voce sidebar admin, card dashboard admin, label permesso in Utenti/Inviti, tipo `PermSection` esteso.
+- Tested: backend 14/14 (test_meditations, iteration_18), frontend tutti i flussi OK (incluso flusso E2E crea→pubblica→visibile). Player web via iframe verificato.
