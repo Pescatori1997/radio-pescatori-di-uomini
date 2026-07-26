@@ -146,16 +146,6 @@ export default function Home() {
         <WeatherWidget />
       </View>
 
-      {/* BIBLIOTECA */}
-      <PressableScale testID="home-biblioteca" style={styles.libBanner} onPress={() => router.push("/biblioteca")}>
-        <View style={styles.libIcon}><Ionicons name="library" size={24} color={colors.white} /></View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.libTitle}>Biblioteca</Text>
-          <Text style={styles.libSub}>Podcast, meditazioni, studi biblici, predicazioni e video</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={20} color={colors.brandSecondary} />
-      </PressableScale>
-
       {/* PODCASTS */}
       <SectionHeader title="Ultimi Podcast" onPress={() => router.push("/podcast")} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hRow}>
@@ -239,10 +229,6 @@ const styles = StyleSheet.create({
   nowTitle: { color: colors.white, fontSize: 26, fontWeight: "800", marginTop: 4, letterSpacing: -0.5 },
   nowArtist: { color: colors.muted, fontSize: 14, marginTop: 2 },
   weatherWrap: { paddingHorizontal: spacing.lg, marginTop: spacing.lg },
-  libBanner: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginHorizontal: spacing.lg, marginTop: spacing.lg, backgroundColor: colors.navy, borderRadius: radius.lg, padding: spacing.lg },
-  libIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
-  libTitle: { color: colors.white, fontSize: 17, fontWeight: "800" },
-  libSub: { color: colors.muted, fontSize: 12, marginTop: 3, lineHeight: 16 },
   liveNowTitle: { color: colors.white, fontSize: 26, fontWeight: "800", marginTop: spacing.md, letterSpacing: -0.5 },
   liveNowSub: { color: colors.muted, fontSize: 14, marginTop: 4 },
   cta: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, backgroundColor: colors.white, paddingVertical: spacing.md, borderRadius: radius.pill, marginTop: spacing.lg, shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
