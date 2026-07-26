@@ -1,9 +1,14 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Header, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, Header, Depends, Request
 from fastapi.responses import StreamingResponse, Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
+from bson import ObjectId
 import os
+import re
+import base64
+import shutil
+import subprocess
 import logging
 import secrets
 import uuid
@@ -19,6 +24,11 @@ load_dotenv(ROOT_DIR / '.env')
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
+
+# GridFS bucket for large uploaded media (video/audio/pdf) + chunked-upload temp dir.
+fs_bucket = AsyncIOMotorGridFSBucket(db, bucket_name="media")
+UPLOAD_TMP = Path("/tmp/pdu_uploads")
+UPLOAD_TMP.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -2187,29 +2197,237 @@ async def admin_notification_audience(admin=Depends(require_admin)):
 
 
 
-# ==================== Meditazioni (video meditations) ====================
+# ==================== Meditazioni (multi-format media) ====================
+# Backward compatible with legacy docs that only had video_url + thumbnail.
 class MeditationIn(BaseModel):
     title: str
+    subtitle: Optional[str] = ""
     speaker: Optional[str] = ""
     verse: Optional[str] = ""
     description: Optional[str] = ""
     category: Optional[str] = "Generale"
+    duration: Optional[str] = ""
+    # Content: either an external link (video_url) OR an uploaded media_id.
     video_url: Optional[str] = ""
+    media_id: Optional[str] = None
+    media_type: Optional[str] = None   # video | audio | pdf | embed
+    media_mime: Optional[str] = None
+    media_filename: Optional[str] = None
     thumbnail: Optional[str] = None
+    downloadable: Optional[bool] = True
+    attachments: Optional[List[Dict]] = None  # [{id,name,mime,size}]
     published: Optional[bool] = False
-    publish_date: Optional[str] = None  # ISO; future date = scheduled
+    publish_date: Optional[str] = None
 
 
 class MeditationEdit(BaseModel):
     title: Optional[str] = None
+    subtitle: Optional[str] = None
     speaker: Optional[str] = None
     verse: Optional[str] = None
     description: Optional[str] = None
     category: Optional[str] = None
+    duration: Optional[str] = None
     video_url: Optional[str] = None
+    media_id: Optional[str] = None
+    media_type: Optional[str] = None
+    media_mime: Optional[str] = None
+    media_filename: Optional[str] = None
     thumbnail: Optional[str] = None
+    downloadable: Optional[bool] = None
+    attachments: Optional[List[Dict]] = None
     published: Optional[bool] = None
     publish_date: Optional[str] = None
+
+
+def detect_provider(url: str) -> Optional[str]:
+    """Recognise a public video/audio provider from a URL for in-app embedding."""
+    if not url:
+        return None
+    u = url.lower()
+    if "youtube.com" in u or "youtu.be" in u:
+        return "youtube"
+    if "vimeo.com" in u:
+        return "vimeo"
+    if "tiktok.com" in u:
+        return "tiktok"
+    if "instagram.com" in u:
+        return "instagram"
+    if "facebook.com" in u or "fb.watch" in u:
+        return "facebook"
+    if "spotify.com" in u:
+        return "spotify"
+    return None
+
+
+def _media_type_from_mime(mime: str) -> str:
+    mime = (mime or "").lower()
+    if mime.startswith("video"):
+        return "video"
+    if mime.startswith("audio"):
+        return "audio"
+    if "pdf" in mime:
+        return "pdf"
+    return "file"
+
+
+def _ffmpeg_probe_duration(path: Path) -> str:
+    """Return a human duration mm:ss / h:mm:ss using ffprobe (best-effort)."""
+    try:
+        out = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
+            capture_output=True, text=True, timeout=30,
+        )
+        secs = int(float(out.stdout.strip()))
+        h, rem = divmod(secs, 3600)
+        m, s = divmod(rem, 60)
+        return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+    except Exception:
+        return ""
+
+
+def _ffmpeg_grab_frame(path: Path) -> Optional[str]:
+    """Extract a poster frame ~1s in as a base64 JPEG (best-effort)."""
+    try:
+        out_path = path.with_suffix(".jpg")
+        subprocess.run(
+            ["ffmpeg", "-y", "-ss", "00:00:01", "-i", str(path),
+             "-frames:v", "1", "-vf", "scale=640:-1", "-q:v", "4", str(out_path)],
+            capture_output=True, timeout=45,
+        )
+        if out_path.exists() and out_path.stat().st_size > 0:
+            data = out_path.read_bytes()
+            out_path.unlink(missing_ok=True)
+            return "data:image/jpeg;base64," + base64.b64encode(data).decode()
+    except Exception:
+        pass
+    return None
+
+
+async def _gridfs_delete(media_id: Optional[str]):
+    if not media_id:
+        return
+    try:
+        await fs_bucket.delete(ObjectId(media_id))
+    except Exception:
+        pass
+
+
+# ---------------- Chunked upload (admin) ----------------
+@api_router.post("/admin/uploads/init")
+async def upload_init(body: Dict, admin=Depends(require_perm("meditations"))):
+    filename = (body.get("filename") or "file").strip()
+    mime = body.get("mime") or "application/octet-stream"
+    upload_id = uuid.uuid4().hex
+    (UPLOAD_TMP / upload_id).write_bytes(b"")
+    (UPLOAD_TMP / (upload_id + ".meta")).write_text(f"{filename}\n{mime}")
+    return {"upload_id": upload_id}
+
+
+@api_router.put("/admin/uploads/{upload_id}/chunk")
+async def upload_chunk(upload_id: str, request: Request, admin=Depends(require_perm("meditations"))):
+    part = UPLOAD_TMP / upload_id
+    if not part.exists():
+        raise HTTPException(status_code=404, detail="Upload non trovato")
+    data = await request.body()
+    with open(part, "ab") as fh:
+        fh.write(data)
+    return {"ok": True, "size": part.stat().st_size}
+
+
+@api_router.post("/admin/uploads/{upload_id}/complete")
+async def upload_complete(upload_id: str, admin=Depends(require_perm("meditations"))):
+    part = UPLOAD_TMP / upload_id
+    meta = UPLOAD_TMP / (upload_id + ".meta")
+    if not part.exists():
+        raise HTTPException(status_code=404, detail="Upload non trovato")
+    filename, mime = "file", "application/octet-stream"
+    if meta.exists():
+        lines = meta.read_text().splitlines()
+        filename = lines[0] if lines else "file"
+        mime = lines[1] if len(lines) > 1 else mime
+    media_type = _media_type_from_mime(mime)
+    # Best-effort probe (video/audio) BEFORE streaming into GridFS.
+    duration = ""
+    thumbnail = None
+    if media_type in ("video", "audio"):
+        duration = _ffmpeg_probe_duration(part)
+    if media_type == "video":
+        thumbnail = _ffmpeg_grab_frame(part)
+    # Stream the assembled temp file into GridFS.
+    grid_in = fs_bucket.open_upload_stream(filename, metadata={"contentType": mime})
+    with open(part, "rb") as fh:
+        while True:
+            block = fh.read(1024 * 1024)
+            if not block:
+                break
+            await grid_in.write(block)
+    await grid_in.close()
+    size = part.stat().st_size
+    part.unlink(missing_ok=True)
+    meta.unlink(missing_ok=True)
+    return {
+        "media_id": str(grid_in._id),
+        "media_type": media_type,
+        "media_mime": mime,
+        "media_filename": filename,
+        "size": size,
+        "duration": duration,
+        "thumbnail": thumbnail,
+    }
+
+
+# ---------------- Media streaming (public, Range support) ----------------
+@api_router.get("/media/{media_id}")
+async def stream_media(media_id: str, request: Request, download: Optional[int] = 0):
+    try:
+        oid = ObjectId(media_id)
+        grid_out = await fs_bucket.open_download_stream(oid)
+    except Exception:
+        raise HTTPException(status_code=404, detail="File non trovato")
+    total = grid_out.length
+    mime = (grid_out.metadata or {}).get("contentType") or "application/octet-stream"
+    filename = grid_out.filename or "file"
+    range_header = request.headers.get("range")
+    disp = "attachment" if download else "inline"
+    base_headers = {
+        "Accept-Ranges": "bytes",
+        "Content-Disposition": f'{disp}; filename="{filename}"',
+        "Cache-Control": "public, max-age=86400",
+    }
+
+    if range_header:
+        m = re.match(r"bytes=(\d+)-(\d*)", range_header)
+        start = int(m.group(1)) if m else 0
+        end = int(m.group(2)) if (m and m.group(2)) else total - 1
+        end = min(end, total - 1)
+        start = min(start, end)
+        length = end - start + 1
+        grid_out.seek(start)
+
+        async def ranged():
+            remaining = length
+            while remaining > 0:
+                block = await grid_out.read(min(1024 * 512, remaining))
+                if not block:
+                    break
+                remaining -= len(block)
+                yield block
+
+        headers = {**base_headers, "Content-Range": f"bytes {start}-{end}/{total}",
+                   "Content-Length": str(length)}
+        return StreamingResponse(ranged(), status_code=206, media_type=mime, headers=headers)
+
+    async def full():
+        while True:
+            block = await grid_out.read(1024 * 512)
+            if not block:
+                break
+            yield block
+
+    return StreamingResponse(full(), media_type=mime,
+                             headers={**base_headers, "Content-Length": str(total)})
 
 
 async def _flush_scheduled_meditations():
@@ -2225,6 +2443,20 @@ async def _flush_scheduled_meditations():
                               action_url=f"/meditazioni/{m['id']}")
 
 
+def _decorate_meditation(doc: dict) -> dict:
+    """Compute provider + content_type for the client (non-destructive)."""
+    if not doc:
+        return doc
+    if doc.get("media_id") and doc.get("media_type"):
+        doc["content_type"] = doc["media_type"]
+        doc["provider"] = "upload"
+    else:
+        prov = detect_provider(doc.get("video_url") or "")
+        doc["provider"] = prov
+        doc["content_type"] = "embed" if prov else ("video" if doc.get("video_url") else "")
+    return doc
+
+
 @api_router.get("/meditations")
 async def get_meditations(search: Optional[str] = None, category: Optional[str] = None):
     await _flush_scheduled_meditations()
@@ -2235,7 +2467,7 @@ async def get_meditations(search: Optional[str] = None, category: Optional[str] 
     if search:
         query["title"] = {"$regex": search, "$options": "i"}
     docs = await db.meditations.find(query, {"_id": 0}).sort("publish_date", -1).to_list(300)
-    return docs
+    return [_decorate_meditation(d) for d in docs]
 
 
 @api_router.get("/meditations/categories")
@@ -2249,7 +2481,7 @@ async def get_meditation(mid: str):
     doc = await db.meditations.find_one({"id": mid}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Meditazione non trovata")
-    return doc
+    return _decorate_meditation(doc)
 
 
 @api_router.get("/admin/meditations")
@@ -2264,7 +2496,7 @@ async def admin_meditations(status: Optional[str] = None, search: Optional[str] 
     if search:
         query["title"] = {"$regex": search, "$options": "i"}
     docs = await db.meditations.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
-    return docs
+    return [_decorate_meditation(d) for d in docs]
 
 
 @api_router.get("/admin/meditations/{mid}")
@@ -2272,7 +2504,7 @@ async def admin_get_meditation(mid: str, admin=Depends(require_perm("meditations
     doc = await db.meditations.find_one({"id": mid}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Meditazione non trovata")
-    return doc
+    return _decorate_meditation(doc)
 
 
 @api_router.post("/admin/meditations", status_code=201)
@@ -2285,7 +2517,6 @@ async def admin_create_meditation(body: MeditationIn, admin=Depends(require_perm
     doc["notified"] = False
     await db.meditations.insert_one(dict(doc))
     await log_activity(admin, f"ha creato la meditazione \"{doc.get('title', '')}\"", "meditations", {"id": doc["id"]})
-    # Notify immediately if published and the publish date is now/past; scheduled ones fire on flush.
     if doc.get("published") and doc["publish_date"] <= now_utc().isoformat():
         await db.meditations.update_one({"id": doc["id"]}, {"$set": {"notified": True}})
         await notify_category("meditations", "Nuova meditazione", doc.get("title", ""),
@@ -2296,10 +2527,14 @@ async def admin_create_meditation(body: MeditationIn, admin=Depends(require_perm
 @api_router.patch("/admin/meditations/{mid}")
 async def admin_edit_meditation(mid: str, body: MeditationEdit, admin=Depends(require_perm("meditations"))):
     updates = body.model_dump(exclude_unset=True)
-    prev = await db.meditations.find_one({"id": mid}, {"published": 1, "notified": 1, "title": 1})
+    prev = await db.meditations.find_one({"id": mid})
+    if not prev:
+        raise HTTPException(status_code=404, detail="Meditazione non trovata")
+    # If the uploaded media is being replaced, delete the previous GridFS file to avoid orphans.
+    if "media_id" in updates and prev.get("media_id") and updates.get("media_id") != prev.get("media_id"):
+        await _gridfs_delete(prev.get("media_id"))
     if updates:
         await db.meditations.update_one({"id": mid}, {"$set": updates})
-    # Notify when a draft becomes published (and not already notified).
     became_published = updates.get("published") is True and prev and not prev.get("published")
     if became_published and prev and not prev.get("notified"):
         m = await db.meditations.find_one({"id": mid}, {"title": 1, "publish_date": 1})
@@ -2312,6 +2547,11 @@ async def admin_edit_meditation(mid: str, body: MeditationEdit, admin=Depends(re
 
 @api_router.delete("/admin/meditations/{mid}")
 async def admin_delete_meditation(mid: str, admin=Depends(require_perm("meditations"))):
+    doc = await db.meditations.find_one({"id": mid}, {"media_id": 1, "attachments": 1})
+    if doc:
+        await _gridfs_delete(doc.get("media_id"))
+        for att in (doc.get("attachments") or []):
+            await _gridfs_delete(att.get("id"))
     await db.meditations.delete_one({"id": mid})
     return {"ok": True}
 

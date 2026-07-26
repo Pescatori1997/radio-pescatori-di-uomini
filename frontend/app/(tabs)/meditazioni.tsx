@@ -80,6 +80,10 @@ export default function MeditazioniTab() {
                   <View style={styles.thumbWrap}>
                     {m.thumbnail ? <Image source={{ uri: m.thumbnail }} style={styles.thumb} contentFit="cover" /> : <View style={[styles.thumb, styles.thumbEmpty]}><MaterialCommunityIcons name="play-circle" size={44} color={colors.white} /></View>}
                     <View style={styles.playOverlay}><Ionicons name="play" size={20} color={colors.navy} /></View>
+                    <View style={styles.typeBadge}>
+                      <MaterialCommunityIcons name={m.content_type === "audio" ? "headphones" : m.content_type === "pdf" ? "file-pdf-box" : "play"} size={13} color={colors.white} />
+                      {!!m.duration && <Text style={styles.typeBadgeText}>{m.duration}</Text>}
+                    </View>
                   </View>
                   <View style={styles.cardBody}>
                     <Text style={styles.cardTitle} numberOfLines={2}>{m.title}</Text>
@@ -119,6 +123,8 @@ const styles = StyleSheet.create({
   thumb: { width: "100%", aspectRatio: 16 / 9, backgroundColor: colors.navy },
   thumbEmpty: { alignItems: "center", justifyContent: "center" },
   playOverlay: { position: "absolute", bottom: spacing.md, right: spacing.md, width: 44, height: 44, borderRadius: 22, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" },
+  typeBadge: { position: "absolute", top: spacing.sm, left: spacing.sm, flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(10,17,40,0.82)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.pill },
+  typeBadgeText: { color: colors.white, fontSize: 11, fontWeight: "800" },
   cardBody: { padding: spacing.lg },
   cardTitle: { color: colors.onSurface, fontSize: 17, fontWeight: "800", lineHeight: 22 },
   speaker: { color: colors.onSurfaceSecondary, fontSize: 13, fontWeight: "600", marginTop: 6 },

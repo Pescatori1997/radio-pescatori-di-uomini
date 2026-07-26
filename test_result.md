@@ -264,6 +264,40 @@ test_plan:
   test_all: false
   test_priority: "high_first"
 
+## --- Meditazioni multi-format overhaul (session 18) ---
+backend:
+  - task: "Meditazioni: multi-format media (upload video/audio/pdf via GridFS + chunked upload + Range streaming + embeds)"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "GridFS bucket 'media'. Chunked upload (admin, require_perm meditations): POST /api/admin/uploads/init {filename,mime}->upload_id; PUT /api/admin/uploads/{id}/chunk (raw body, appended to /tmp file); POST /api/admin/uploads/{id}/complete -> streams temp file into GridFS, returns {media_id, media_type(video|audio|pdf), media_mime, media_filename, size, duration(ffprobe), thumbnail(ffmpeg frame for video)}. Public streaming GET /api/media/{id} with HTTP Range (206 + Content-Range/Accept-Ranges) and ?download=1 (Content-Disposition attachment). Meditation model extended: subtitle, duration, media_id, media_type, media_mime, media_filename, downloadable, attachments; kept video_url for legacy/embeds. _decorate_meditation adds content_type + provider (detect_provider: youtube/vimeo/tiktok/instagram/facebook/spotify). CREATE/EDIT accept new fields; EDIT deletes previous GridFS media when media_id replaced; DELETE removes GridFS media+attachments. Draft/publish/schedule + notify preserved. Verified via curl: init->chunk->complete->stream full 200 + Range 206; provider detection; create/get/delete. ffmpeg+ffprobe installed."
+
+frontend:
+  - task: "Meditazioni UI: admin editor (upload/link + progress + replace media + all fields), unified in-app player, user card badges + detail Play/Download/Share"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/admin/meditations/[id].tsx, frontend/app/meditazioni/[id].tsx, frontend/app/(tabs)/meditazioni.tsx, frontend/src/components/MeditationPlayer.(web|native).tsx, frontend/src/utils/embeds.ts, frontend/src/api.ts"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Admin editor: title/subtitle/speaker/verse/category/duration, content source segment [Carica file | Link esterno]. Upload via expo-document-picker (video/audio/pdf, 1GB guard) + uploadMediaChunked() with progress bar; shows detected type + replace file; auto cover from ffmpeg frame prefilled; downloadable switch; draft/publish/schedule. Link mode shows detected provider. Unified MeditationPlayer: web renders <video>/<audio>/<iframe pdf>/<iframe embed>; native uses WebView (HTML5 video/audio, Google gview for PDF, provider iframe). Detail screen: in-app player + subtitle/duration/provider pills + verse + Condividi + Scarica(if downloadable). Card shows type badge + duration. Verified public YouTube detail via screenshot (in-app iframe player + buttons). Admin UI is behind Google welcome gate (not automatable)."
+
+test_plan:
+  current_focus:
+    - "Meditazioni: multi-format media (upload video/audio/pdf via GridFS + chunked upload + Range streaming + embeds)"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
 agent_communication:
     -agent: "main"
-    -message: "Test the new Segnalazioni/Feedback feature (backend + frontend). Backend admin auth: Bearer ADMINTESTTOKEN123 (seeded by conftest) for /api/admin/reports/*. Verify: POST /api/reports as guest (no token) and as authed user; validation (empty title/description => 400, invalid category => 400); admin list filters/search/sort + heavy base64 excluded from list; unread-count; GET detail marks read; PATCH status transitions + invalid status => 400 + 404 for missing; delete. Frontend: for admin UI login via Google gate is required (welcome gate blocks direct nav) — if not testable, focus on public /report flow (continue as Ospite → Profilo → Segnala un problema → fill form → submit → success). Clean up any TEST_-prefixed reports created."
+    -message: "Test the Meditazioni multi-format overhaul. Admin backend auth: login POST /api/auth/login {email: pescatoridiuomini@outlook.it, password: AdminTestPwd1!} -> token; use Bearer for /api/admin/*. BACKEND focus: (1) chunked upload lifecycle init->chunk(raw --data-binary)->complete for a small PDF and a small MP3 (mime audio/mpeg) -> assert media_type pdf/audio; (2) GET /api/media/{id} full 200 + correct content-type/size, and Range 'bytes=0-99' -> 206 with Content-Range & Content-Length=100 & Accept-Ranges; ?download=1 -> Content-Disposition attachment; (3) create meditation with external links and assert _decorate provider/content_type: youtube, vimeo (https://vimeo.com/76979871), spotify (https://open.spotify.com/episode/xxxx), tiktok, instagram, facebook, and embed; (4) create meditation with uploaded media_id -> content_type == media_type, provider=='upload'; (5) EDIT replacing media_id deletes old GridFS file (old /api/media/{oldid} -> 404 after); (6) DELETE meditation removes media (media 404 after); (7) draft not returned by public GET /api/meditations; scheduled (future publish_date) not returned until due; (8) auth guard on admin upload/meditation endpoints (401 no token). Clean up all TEST_-prefixed meditations and any GridFS files you create. FRONTEND admin UI is behind the Google welcome gate -> not automatable; only public meditation viewing is testable (continue as Ospite -> Meditazioni tab -> open item -> in-app player renders)."

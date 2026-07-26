@@ -3,6 +3,46 @@ import { storage } from "@/src/utils/storage";
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
 export const TOKEN_KEY = "pdu_session_token";
 
+/** Public streaming/download URL for an uploaded GridFS media file. */
+export const mediaUrl = (id: string, download = false) =>
+  `${BASE}/api/media/${id}${download ? "?download=1" : ""}`;
+
+/** Chunked upload of a large file (video/audio/pdf) to the backend (GridFS). */
+export async function uploadMediaChunked(
+  file: { uri: string; name: string; mime: string },
+  onProgress?: (p: number) => void,
+) {
+  const token = await storage.secureGet<string>(TOKEN_KEY, "");
+  const authH: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+  const initRes = await fetch(`${BASE}/api/admin/uploads/init`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authH },
+    body: JSON.stringify({ filename: file.name, mime: file.mime }),
+  });
+  if (!initRes.ok) throw new Error("Impossibile avviare il caricamento");
+  const { upload_id } = await initRes.json();
+
+  const blob = await (await fetch(file.uri)).blob();
+  const total = blob.size;
+  const CHUNK = 4 * 1024 * 1024;
+  for (let start = 0; start < total; start += CHUNK) {
+    const part = blob.slice(start, Math.min(start + CHUNK, total));
+    const r = await fetch(`${BASE}/api/admin/uploads/${upload_id}/chunk`, {
+      method: "PUT",
+      headers: { ...authH },
+      body: part,
+    });
+    if (!r.ok) throw new Error("Caricamento interrotto");
+    onProgress?.(Math.min(start + CHUNK, total) / total);
+  }
+  const c = await fetch(`${BASE}/api/admin/uploads/${upload_id}/complete`, {
+    method: "POST",
+    headers: { ...authH },
+  });
+  if (!c.ok) throw new Error("Finalizzazione non riuscita");
+  return c.json();
+}
+
 async function authHeaders(): Promise<Record<string, string>> {
   const token = await storage.secureGet<string>(TOKEN_KEY, "");
   return token ? { Authorization: `Bearer ${token}` } : {};
