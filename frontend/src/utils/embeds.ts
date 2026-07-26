@@ -27,6 +27,18 @@ export function embedSrc(url: string, provider?: string | null): string | null {
   return null;
 }
 
+export function detectProvider(url: string): string | null {
+  const u = (url || "").toLowerCase();
+  if (!u) return null;
+  if (u.includes("youtube.com") || u.includes("youtu.be")) return "youtube";
+  if (u.includes("vimeo.com")) return "vimeo";
+  if (u.includes("tiktok.com")) return "tiktok";
+  if (u.includes("instagram.com")) return "instagram";
+  if (u.includes("facebook.com") || u.includes("fb.watch")) return "facebook";
+  if (u.includes("spotify.com")) return "spotify";
+  return null;
+}
+
 export const PROVIDER_LABEL: Record<string, string> = {
   youtube: "YouTube",
   vimeo: "Vimeo",

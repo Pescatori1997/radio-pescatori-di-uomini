@@ -2549,9 +2549,49 @@ def _media_type_from_mime(mime: str) -> str:
         return "video"
     if mime.startswith("audio"):
         return "audio"
+    if mime.startswith("image"):
+        return "image"
     if "pdf" in mime:
         return "pdf"
     return "file"
+
+
+# Security: only these media kinds may be uploaded by admins.
+ALLOWED_MEDIA_EXT = {
+    "mp3", "wav", "m4a", "aac", "ogg", "flac",           # audio
+    "mp4", "mov", "m4v", "webm",                          # video
+    "jpg", "jpeg", "png", "webp",                         # image
+    "pdf",                                                # documents
+}
+ALLOWED_MEDIA_MIME_PREFIX = ("audio/", "video/", "image/", "application/pdf")
+
+
+def _validate_media(filename: str, mime: str):
+    ext = (filename.rsplit(".", 1)[-1] if "." in filename else "").lower()
+    mime = (mime or "").lower()
+    if ext and ext not in ALLOWED_MEDIA_EXT:
+        raise HTTPException(status_code=400, detail=f"Estensione non consentita: .{ext}")
+    if not any(mime.startswith(p) or mime == p for p in ALLOWED_MEDIA_MIME_PREFIX):
+        raise HTTPException(status_code=400, detail="Tipo di file non consentito")
+
+
+def _optimize_image(path: Path) -> tuple:
+    """Resize (max 1600px) + convert images to WebP for performance. Returns (new_path, mime, filename)."""
+    try:
+        from PIL import Image as _PImage
+        img = _PImage.open(path)
+        img = img.convert("RGBA") if img.mode in ("P", "LA") else img.convert("RGB") if img.mode != "RGB" else img
+        w, h = img.size
+        if max(w, h) > 1600:
+            ratio = 1600 / max(w, h)
+            img = img.resize((int(w * ratio), int(h * ratio)), _PImage.LANCZOS)
+        out = path.with_suffix(".webp")
+        img.save(out, "WEBP", quality=82, method=4)
+        if out.exists() and out.stat().st_size > 0:
+            return out, "image/webp", out.name
+    except Exception:
+        pass
+    return path, None, None
 
 
 def _ffmpeg_probe_duration(path: Path) -> str:
@@ -2599,9 +2639,10 @@ async def _gridfs_delete(media_id: Optional[str]):
 
 # ---------------- Chunked upload (admin) ----------------
 @api_router.post("/admin/uploads/init")
-async def upload_init(body: Dict, admin=Depends(require_perm("meditations"))):
+async def upload_init(body: Dict, admin=Depends(require_admin)):
     filename = (body.get("filename") or "file").strip()
     mime = body.get("mime") or "application/octet-stream"
+    _validate_media(filename, mime)
     upload_id = uuid.uuid4().hex
     (UPLOAD_TMP / upload_id).write_bytes(b"")
     (UPLOAD_TMP / (upload_id + ".meta")).write_text(f"{filename}\n{mime}")
@@ -2609,7 +2650,7 @@ async def upload_init(body: Dict, admin=Depends(require_perm("meditations"))):
 
 
 @api_router.put("/admin/uploads/{upload_id}/chunk")
-async def upload_chunk(upload_id: str, request: Request, admin=Depends(require_perm("meditations"))):
+async def upload_chunk(upload_id: str, request: Request, admin=Depends(require_admin)):
     part = UPLOAD_TMP / upload_id
     if not part.exists():
         raise HTTPException(status_code=404, detail="Upload non trovato")
@@ -2620,7 +2661,7 @@ async def upload_chunk(upload_id: str, request: Request, admin=Depends(require_p
 
 
 @api_router.post("/admin/uploads/{upload_id}/complete")
-async def upload_complete(upload_id: str, admin=Depends(require_perm("meditations"))):
+async def upload_complete(upload_id: str, admin=Depends(require_admin)):
     part = UPLOAD_TMP / upload_id
     meta = UPLOAD_TMP / (upload_id + ".meta")
     if not part.exists():
@@ -2630,14 +2671,22 @@ async def upload_complete(upload_id: str, admin=Depends(require_perm("meditation
         lines = meta.read_text().splitlines()
         filename = lines[0] if lines else "file"
         mime = lines[1] if len(lines) > 1 else mime
+    _validate_media(filename, mime)
     media_type = _media_type_from_mime(mime)
-    # Best-effort probe (video/audio) BEFORE streaming into GridFS.
     duration = ""
     thumbnail = None
     if media_type in ("video", "audio"):
         duration = _ffmpeg_probe_duration(part)
     if media_type == "video":
         thumbnail = _ffmpeg_grab_frame(part)
+    # Images: resize + convert to WebP for performance.
+    if media_type == "image":
+        new_path, new_mime, new_name = _optimize_image(part)
+        if new_mime:
+            if new_path != part:
+                part.unlink(missing_ok=True)
+                part = new_path
+            mime, filename = new_mime, new_name
     # Stream the assembled temp file into GridFS.
     grid_in = fs_bucket.open_upload_stream(filename, metadata={"contentType": mime})
     with open(part, "rb") as fh:
@@ -2836,6 +2885,179 @@ async def admin_delete_meditation(mid: str, admin=Depends(require_perm("meditati
         for att in (doc.get("attachments") or []):
             await _gridfs_delete(att.get("id"))
     await db.meditations.delete_one({"id": mid})
+    return {"ok": True}
+
+
+# ==================== Generic CMS content (modular, reusable per section) ====================
+# One collection `contents` discriminated by `section`. New sections are enabled by simply
+# adding their key here — no code rewrite. Media uses the shared GridFS upload or external URL.
+CONTENT_SECTIONS = {
+    "studi-biblici": "Studi Biblici",
+    "predicazioni": "Predicazioni",
+    "video": "Video",
+    "eventi": "Eventi",
+    "galleria": "Galleria",
+    "download": "Download PDF",
+}
+
+
+class ContentIn(BaseModel):
+    section: str
+    title: str
+    subtitle: Optional[str] = ""
+    description: Optional[str] = ""
+    category: Optional[str] = "Generale"
+    author: Optional[str] = ""
+    tags: Optional[List[str]] = None
+    thumbnail: Optional[str] = None
+    media_id: Optional[str] = None
+    media_type: Optional[str] = None
+    media_mime: Optional[str] = None
+    media_filename: Optional[str] = None
+    video_url: Optional[str] = ""
+    duration: Optional[str] = ""
+    downloadable: Optional[bool] = True
+    visibility: Optional[str] = "public"   # public | private
+    order: Optional[int] = 0
+    status: Optional[str] = "draft"        # draft | published | archived
+    publish_date: Optional[str] = None
+
+
+class ContentEdit(BaseModel):
+    title: Optional[str] = None
+    subtitle: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    author: Optional[str] = None
+    tags: Optional[List[str]] = None
+    thumbnail: Optional[str] = None
+    media_id: Optional[str] = None
+    media_type: Optional[str] = None
+    media_mime: Optional[str] = None
+    media_filename: Optional[str] = None
+    video_url: Optional[str] = None
+    duration: Optional[str] = None
+    downloadable: Optional[bool] = None
+    visibility: Optional[str] = None
+    order: Optional[int] = None
+    status: Optional[str] = None
+    publish_date: Optional[str] = None
+
+
+def _check_section(section: str):
+    if section not in CONTENT_SECTIONS:
+        raise HTTPException(status_code=404, detail="Sezione non valida")
+
+
+@api_router.get("/content-sections")
+async def content_sections():
+    return [{"key": k, "label": v} for k, v in CONTENT_SECTIONS.items()]
+
+
+@api_router.get("/contents")
+async def get_contents(section: str, search: Optional[str] = None,
+                       category: Optional[str] = None, tag: Optional[str] = None):
+    _check_section(section)
+    now_iso = now_utc().isoformat()
+    query: dict = {"section": section, "status": "published", "visibility": {"$ne": "private"},
+                   "$or": [{"publish_date": {"$lte": now_iso}}, {"publish_date": None}]}
+    if category and category != "Tutti":
+        query["category"] = category
+    if tag:
+        query["tags"] = tag
+    if search:
+        query["title"] = {"$regex": search, "$options": "i"}
+    docs = await db.contents.find(query, {"_id": 0}).sort([("order", 1), ("publish_date", -1)]).to_list(300)
+    return [_decorate_meditation(d) for d in docs]
+
+
+@api_router.get("/contents/{cid}")
+async def get_content(cid: str):
+    doc = await db.contents.find_one({"id": cid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Contenuto non trovato")
+    return _decorate_meditation(doc)
+
+
+@api_router.get("/admin/contents")
+async def admin_contents(section: str, status: Optional[str] = None, search: Optional[str] = None,
+                         admin=Depends(require_admin)):
+    _check_section(section)
+    query: dict = {"section": section}
+    if status:
+        query["status"] = status
+    if search:
+        query["$or"] = [{"title": {"$regex": search, "$options": "i"}},
+                        {"author": {"$regex": search, "$options": "i"}},
+                        {"category": {"$regex": search, "$options": "i"}},
+                        {"tags": {"$regex": search, "$options": "i"}}]
+    docs = await db.contents.find(query, {"_id": 0}).sort([("order", 1), ("created_at", -1)]).to_list(500)
+    return [_decorate_meditation(d) for d in docs]
+
+
+@api_router.get("/admin/contents/item/{cid}")
+async def admin_get_content(cid: str, admin=Depends(require_admin)):
+    doc = await db.contents.find_one({"id": cid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Contenuto non trovato")
+    return _decorate_meditation(doc)
+
+
+@api_router.post("/admin/contents", status_code=201)
+async def admin_create_content(body: ContentIn, admin=Depends(require_admin)):
+    _check_section(body.section)
+    doc = body.model_dump()
+    doc["id"] = new_id("cnt")
+    doc["created_at"] = now_utc()
+    if not doc.get("publish_date"):
+        doc["publish_date"] = now_utc().isoformat()
+    doc["notified"] = False
+    await db.contents.insert_one(dict(doc))
+    await log_activity(admin, f"ha creato \"{doc.get('title','')}\" in {CONTENT_SECTIONS[body.section]}", body.section, {"id": doc["id"]})
+    if doc.get("status") == "published" and doc["publish_date"] <= now_utc().isoformat():
+        await db.contents.update_one({"id": doc["id"]}, {"$set": {"notified": True}})
+        await notify_category("meditations", CONTENT_SECTIONS[body.section], doc.get("title", ""),
+                              action_url=f"/c/{body.section}/{doc['id']}", admin_email=admin.get("email"))
+    return {"ok": True, "id": doc["id"]}
+
+
+@api_router.patch("/admin/contents/{cid}")
+async def admin_edit_content(cid: str, body: ContentEdit, admin=Depends(require_admin)):
+    prev = await db.contents.find_one({"id": cid})
+    if not prev:
+        raise HTTPException(status_code=404, detail="Contenuto non trovato")
+    updates = body.model_dump(exclude_unset=True)
+    if "media_id" in updates and prev.get("media_id") and updates.get("media_id") != prev.get("media_id"):
+        await _gridfs_delete(prev.get("media_id"))
+    if updates:
+        await db.contents.update_one({"id": cid}, {"$set": updates})
+    return {"ok": True}
+
+
+@api_router.post("/admin/contents/{cid}/duplicate", status_code=201)
+async def admin_duplicate_content(cid: str, admin=Depends(require_admin)):
+    doc = await db.contents.find_one({"id": cid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Contenuto non trovato")
+    doc["id"] = new_id("cnt")
+    doc["title"] = f"{doc.get('title','')} (copia)"
+    doc["status"] = "draft"
+    doc["notified"] = False
+    doc["created_at"] = now_utc()
+    # Note: shares the same media_id as the original (no file duplication needed).
+    await db.contents.insert_one(dict(doc))
+    return {"ok": True, "id": doc["id"]}
+
+
+@api_router.delete("/admin/contents/{cid}")
+async def admin_delete_content(cid: str, admin=Depends(require_admin)):
+    doc = await db.contents.find_one({"id": cid}, {"media_id": 1})
+    if doc:
+        # Only delete the GridFS file if no other content references it (duplicates share it).
+        others = await db.contents.count_documents({"media_id": doc.get("media_id"), "id": {"$ne": cid}}) if doc.get("media_id") else 0
+        if doc.get("media_id") and others == 0:
+            await _gridfs_delete(doc.get("media_id"))
+    await db.contents.delete_one({"id": cid})
     return {"ok": True}
 
 

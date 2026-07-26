@@ -7,10 +7,11 @@ export const TOKEN_KEY = "pdu_session_token";
 export const mediaUrl = (id: string, download = false) =>
   `${BASE}/api/media/${id}${download ? "?download=1" : ""}`;
 
-/** Chunked upload of a large file (video/audio/pdf) to the backend (GridFS). */
+/** Chunked upload of a large file (audio/video/image/pdf) to the backend (GridFS). */
 export async function uploadMediaChunked(
   file: { uri: string; name: string; mime: string },
   onProgress?: (p: number) => void,
+  control?: { cancelled?: boolean },
 ) {
   const token = await storage.secureGet<string>(TOKEN_KEY, "");
   const authH: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
@@ -19,13 +20,17 @@ export async function uploadMediaChunked(
     headers: { "Content-Type": "application/json", ...authH },
     body: JSON.stringify({ filename: file.name, mime: file.mime }),
   });
-  if (!initRes.ok) throw new Error("Impossibile avviare il caricamento");
+  if (!initRes.ok) {
+    const e = await initRes.json().catch(() => ({}));
+    throw new Error(e.detail || "Impossibile avviare il caricamento");
+  }
   const { upload_id } = await initRes.json();
 
   const blob = await (await fetch(file.uri)).blob();
   const total = blob.size;
   const CHUNK = 4 * 1024 * 1024;
   for (let start = 0; start < total; start += CHUNK) {
+    if (control?.cancelled) throw new Error("Caricamento annullato");
     const part = blob.slice(start, Math.min(start + CHUNK, total));
     const r = await fetch(`${BASE}/api/admin/uploads/${upload_id}/chunk`, {
       method: "PUT",
@@ -39,7 +44,10 @@ export async function uploadMediaChunked(
     method: "POST",
     headers: { ...authH },
   });
-  if (!c.ok) throw new Error("Finalizzazione non riuscita");
+  if (!c.ok) {
+    const e = await c.json().catch(() => ({}));
+    throw new Error(e.detail || "Finalizzazione non riuscita");
+  }
   return c.json();
 }
 
@@ -303,6 +311,23 @@ export const api = {
   adminReportsUnread: () => request("/admin/reports/unread-count", {}, true),
   adminUpdateReport: (id: string, status: string) => request(`/admin/reports/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }, true),
   adminDeleteReport: (id: string) => request(`/admin/reports/${id}`, { method: "DELETE" }, true),
+
+  // generic CMS content (reused by every section)
+  contentSections: () => request("/content-sections"),
+  contents: (section: string, params?: { search?: string; category?: string; tag?: string }) => {
+    const q = new URLSearchParams({ section, ...(params || {}) } as any).toString();
+    return request(`/contents?${q}`);
+  },
+  contentItem: (id: string) => request(`/contents/${id}`),
+  adminContents: (section: string, params?: { status?: string; search?: string }) => {
+    const q = new URLSearchParams({ section, ...(params || {}) } as any).toString();
+    return request(`/admin/contents?${q}`, {}, true);
+  },
+  adminContent: (id: string) => request(`/admin/contents/item/${id}`, {}, true),
+  adminCreateContent: (body: any) => request("/admin/contents", { method: "POST", body: JSON.stringify(body) }, true),
+  adminEditContent: (id: string, body: any) => request(`/admin/contents/${id}`, { method: "PATCH", body: JSON.stringify(body) }, true),
+  adminDuplicateContent: (id: string) => request(`/admin/contents/${id}/duplicate`, { method: "POST" }, true),
+  adminDeleteContent: (id: string) => request(`/admin/contents/${id}`, { method: "DELETE" }, true),
 };
 
 // HTTPS pass-through URL for the live radio stream (works on web + native).
