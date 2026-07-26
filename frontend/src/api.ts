@@ -315,12 +315,16 @@ export const api = {
   // generic CMS content (reused by every section)
   contentSections: () => request("/content-sections"),
   contents: (section: string, params?: { search?: string; category?: string; tag?: string }) => {
-    const q = new URLSearchParams({ section, ...(params || {}) } as any).toString();
+    const clean: any = { section };
+    Object.entries(params || {}).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== "") clean[k] = v; });
+    const q = new URLSearchParams(clean).toString();
     return request(`/contents?${q}`);
   },
   contentItem: (id: string) => request(`/contents/${id}`),
   adminContents: (section: string, params?: { status?: string; search?: string }) => {
-    const q = new URLSearchParams({ section, ...(params || {}) } as any).toString();
+    const clean: any = { section };
+    Object.entries(params || {}).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== "") clean[k] = v; });
+    const q = new URLSearchParams(clean).toString();
     return request(`/admin/contents?${q}`, {}, true);
   },
   adminContent: (id: string) => request(`/admin/contents/item/${id}`, {}, true),

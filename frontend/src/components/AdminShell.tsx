@@ -5,13 +5,21 @@ import { useRouter, usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { SlideInLeft } from "react-native-reanimated";
 import { api } from "@/src/api";
+import { CMS_SECTIONS } from "@/src/utils/sections";
 import { colors, spacing, radius } from "@/src/theme";
+
+// Generic CMS sections (managed by the universal engine). Adding a section in
+// src/utils/sections.ts automatically adds it here — no panel restructuring needed.
+const CMS_NAV = CMS_SECTIONS.map((s) => ({
+  key: s.key, label: s.label, icon: s.icon, route: `/admin/content/${s.key}`, perm: null,
+}));
 
 const NAV = [
   { key: "dash", label: "Dashboard", icon: "view-dashboard", route: "/admin", perm: null },
   { key: "team", label: "Team", icon: "anchor", route: "/admin/team", perm: null },
   { key: "podcast", label: "Podcast", icon: "microphone", route: "/admin/podcasts", perm: "podcasts" },
   { key: "meditations", label: "Meditazioni", icon: "book-open-variant", route: "/admin/meditations", perm: "meditations" },
+  ...CMS_NAV,
   { key: "news", label: "Notizie", icon: "newspaper-variant", route: "/admin/news", perm: "news" },
   { key: "merch", label: "Merchandising", icon: "storefront", route: "/admin/products", perm: "merch" },
   { key: "schedule", label: "Palinsesto", icon: "calendar-month", route: "/admin/schedule", perm: "schedule" },

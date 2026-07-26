@@ -327,3 +327,29 @@ frontend:
 agent_communication:
     -agent: "main"
     -message: "IMPORTANT: pod STRIPE_API_KEY is placeholder sk_test_emergent -> official SDK real session creation CANNOT succeed here (returns 400 by design, NOT 500). Focus BACKEND on VALIDATION/SECURITY/graceful-errors. Admin login: POST /api/auth/login {email: pescatoridiuomini@outlook.it, password: AdminTestPwd1!} -> token. Verify: donation amount<1/>5000 ->400, valid ->400(not500); subscribe invalid plan ->400, valid ->400; create TEST_ product price '15,00' available published; orders/checkout empty items->400, missing shipping fields->400, pickup missing phone->400, sold_out->400, unknown product->404, valid->400 AND assert NO orphan order left; admin/orders no token->401/403; price recomputed server-side. Clean up TEST_ products/orders. FRONTEND verified by screenshots already; Stripe redirect needs owner key -> not testable."
+
+## --- Universal CMS Phase 1 (session 20) ---
+backend:
+  - task: "Generic CMS content routes per section (studi-biblici, predicazioni, video)"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Generic /api/contents + /api/admin/contents CRUD, duplicate, delete already in backend. api.ts fixed to strip undefined query params (was serializing 'undefined' string -> empty results). Seeded 2 demo studi-biblici via Mongo."
+frontend:
+  - task: "Generic admin editor + public Biblioteca hub + section list/detail with unified player"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/admin/content/[section]/[id].tsx, app/biblioteca.tsx, app/c/[section]/index.tsx, app/c/[section]/[id].tsx"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Public flow verified via screenshot (guest): Biblioteca hub, section list with category chips + seeded items, detail with YouTube embed player + meta pills + tags + share/download + prev/next. Admin editor behind Google gate."
+
+agent_communication:
+    -agent: "main"
+    -message: "Test Universal CMS Phase 1. Admin login: POST /api/auth/login {email: pescatoridiuomini@outlook.it, password: AdminTestPwd1!} -> token; Bearer for /api/admin/*. BACKEND: (1) GET /api/content-sections returns 6 sections; (2) admin create content section=predicazioni status=draft -> 201, NOT in public GET /api/contents?section=predicazioni; (3) create status=published -> appears in public; (4) PATCH edit title/category; (5) POST /api/admin/contents/{id}/duplicate -> 201 new draft copy; (6) DELETE removes it; (7) invalid section -> 404; (8) filter public by category & search work (verify undefined params fix: GET /api/contents?section=studi-biblici returns the 2 seeded items 'Il Sermone sul Monte'/'La Fede di Abramo'); (9) auth guard 401 no token on admin content routes. Clean up all TEST_-prefixed content you create. FRONTEND (public only, admin behind Google gate): as Ospite from /welcome -> Home 'Biblioteca' banner -> hub shows Podcast/Meditazioni/Studi Biblici/Predicazioni/Video -> tap Studi Biblici -> list shows 2 items + category chips -> open item -> player + prev/next + related render."

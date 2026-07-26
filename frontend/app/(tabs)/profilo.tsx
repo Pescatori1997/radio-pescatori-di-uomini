@@ -33,6 +33,7 @@ export default function Profilo() {
   const menu = [
     ...(isAdmin ? [{ icon: "shield-checkmark-outline", label: "Pannello Amministratore", route: "/admin" }] : []),
     { icon: "boat-outline", label: "Il nostro Team", route: "/equipaggio" },
+    { icon: "library-outline", label: "Biblioteca", route: "/biblioteca" },
     { icon: "heart-outline", label: "Richieste di Preghiera", route: "/prayer" },
     { icon: "bag-handle-outline", label: "Merchandising", route: "/merch" },
     { icon: "information-circle-outline", label: "Chi Siamo", route: "/about" },

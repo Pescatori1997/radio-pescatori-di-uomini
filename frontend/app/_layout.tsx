@@ -141,6 +141,9 @@ export default function RootLayout() {
               <Stack.Screen name="prayer" options={{ presentation: "card" }} />
               <Stack.Screen name="weather" options={{ presentation: "card", animation: "slide_from_right" }} />
               <Stack.Screen name="meditazioni/[id]" options={{ presentation: "card" }} />
+              <Stack.Screen name="biblioteca" options={{ presentation: "card", animation: "slide_from_right" }} />
+              <Stack.Screen name="c/[section]/index" options={{ presentation: "card", animation: "slide_from_right" }} />
+              <Stack.Screen name="c/[section]/[id]" options={{ presentation: "card" }} />
               <Stack.Screen name="settings" options={{ presentation: "card" }} />
               <Stack.Screen name="account" options={{ presentation: "card" }} />
               <Stack.Screen name="notifications-settings" options={{ presentation: "card" }} />
