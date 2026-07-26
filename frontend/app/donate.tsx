@@ -9,7 +9,12 @@ import { api } from "@/src/api";
 import PressableScale from "@/src/components/PressableScale";
 import { colors, spacing, radius } from "@/src/theme";
 
-const PRESETS = [5, 10, 25, 50];
+const PRESETS = [5, 10, 25, 50, 100];
+const MONTHLY = [
+  { plan: "5", label: "5€", desc: "Un piccolo gesto costante" },
+  { plan: "10", label: "10€", desc: "Il sostegno più scelto" },
+  { plan: "20", label: "20€", desc: "Aiuti a crescere la missione" },
+];
 
 function appOrigin(): string {
   if (Platform.OS === "web" && typeof window !== "undefined") return window.location.origin;
@@ -24,11 +29,33 @@ export default function Donate() {
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [subLoading, setSubLoading] = useState<string | null>(null);
 
   const effectiveAmount = custom ? parseFloat(custom.replace(",", ".")) : amount;
   const valid = !!effectiveAmount && effectiveAmount >= 1 && effectiveAmount <= 5000;
 
   const selectPreset = (a: number) => { setAmount(a); setCustom(""); };
+
+  const openCheckout = async (url: string, sessionId?: string) => {
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      window.location.href = url;
+    } else {
+      await WebBrowser.openBrowserAsync(url);
+      if (sessionId) router.push(`/donation-success?session_id=${sessionId}` as any);
+    }
+  };
+
+  const subscribe = async (plan: string) => {
+    setSubLoading(plan);
+    try {
+      const res = await api.donationSubscribe({ plan, origin_url: appOrigin() });
+      await openCheckout(res.url, res.session_id);
+    } catch (e: any) {
+      Alert.alert("Errore", e?.message || "Impossibile avviare l'abbonamento.");
+    } finally {
+      setSubLoading(null);
+    }
+  };
 
   const donate = async () => {
     if (!valid) { Alert.alert("Importo non valido", "Inserisci un importo tra €1 e €5000."); return; }
@@ -122,7 +149,34 @@ export default function Donate() {
         </PressableScale>
         <View style={styles.secureRow}>
           <Ionicons name="lock-closed" size={13} color={colors.muted} />
-          <Text style={styles.note}>Pagamento sicuro con Stripe (modalità test). Nessun dato della carta viene salvato.</Text>
+          <Text style={styles.note}>Pagamento sicuro con Stripe. Nessun dato della carta viene salvato.</Text>
+        </View>
+
+        <View style={styles.monthlyCard}>
+          <View style={styles.monthlyHeader}>
+            <View style={styles.monthlyIcon}><Ionicons name="repeat" size={20} color={colors.white} /></View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.monthlyTitle}>Sostieni la radio ogni mese</Text>
+              <Text style={styles.monthlySub}>Con una piccola offerta mensile ci aiuti a pianificare e a portare avanti la missione con continuità. Puoi annullare quando vuoi.</Text>
+            </View>
+          </View>
+          {MONTHLY.map((m) => (
+            <PressableScale
+              key={m.plan}
+              testID={`donate-monthly-${m.plan}`}
+              style={styles.planRow}
+              onPress={() => subscribe(m.plan)}
+              disabled={subLoading !== null}
+            >
+              <View style={styles.planLeft}>
+                <Text style={styles.planAmount}>{m.label}<Text style={styles.planPer}>/mese</Text></Text>
+                <Text style={styles.planDesc}>{m.desc}</Text>
+              </View>
+              {subLoading === m.plan
+                ? <ActivityIndicator color={colors.brandPrimary} />
+                : <Ionicons name="arrow-forward-circle" size={26} color={colors.brandPrimary} />}
+            </PressableScale>
+          ))}
         </View>
       </ScrollView>
     </View>
@@ -152,4 +206,14 @@ const styles = StyleSheet.create({
   primaryText: { color: colors.white, fontSize: 16, fontWeight: "800" },
   secureRow: { flexDirection: "row", gap: 6, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.xl, marginTop: spacing.md },
   note: { fontSize: 12, color: colors.muted, textAlign: "center", lineHeight: 18, flexShrink: 1 },
+  monthlyCard: { marginHorizontal: spacing.xl, marginTop: spacing.xl, backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, borderWidth: 1.5, borderColor: colors.border, padding: spacing.lg },
+  monthlyHeader: { flexDirection: "row", gap: spacing.md, marginBottom: spacing.md },
+  monthlyIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
+  monthlyTitle: { color: colors.onSurface, fontSize: 17, fontWeight: "800" },
+  monthlySub: { color: colors.onSurfaceSecondary, fontSize: 13, lineHeight: 19, marginTop: 4 },
+  planRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, marginTop: spacing.sm },
+  planLeft: { flex: 1 },
+  planAmount: { color: colors.onSurface, fontSize: 18, fontWeight: "800" },
+  planPer: { color: colors.onSurfaceTertiary, fontSize: 13, fontWeight: "600" },
+  planDesc: { color: colors.onSurfaceSecondary, fontSize: 12, marginTop: 2 },
 });

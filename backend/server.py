@@ -1761,9 +1761,50 @@ from emergentintegrations.payments.stripe.checkout import (
 from fastapi import Request
 
 STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "")
-PRESET_AMOUNTS = [5.0, 10.0, 25.0, 50.0]
+PRESET_AMOUNTS = [5.0, 10.0, 25.0, 50.0, 100.0]
 MIN_DONATION = 1.0
 MAX_DONATION = 5000.0
+
+# Official Stripe SDK — used for subscriptions (monthly donations) and multi-line-item
+# merch orders, which the emergentintegrations helper does not cover. Same env key.
+import asyncio
+import stripe as stripe_sdk
+if STRIPE_API_KEY:
+    stripe_sdk.api_key = STRIPE_API_KEY
+
+# Monthly donation plans (EUR/month) -> Stripe recurring prices, provisioned lazily & idempotently.
+MONTHLY_PLANS = {"5": 500, "10": 1000, "20": 2000}
+_price_cache: Dict[str, str] = {}
+
+
+async def _get_or_create_monthly_price(plan: str) -> str:
+    """Return the Stripe Price ID for a monthly plan, creating Product+Price once (idempotent via lookup_key)."""
+    if plan in _price_cache:
+        return _price_cache[plan]
+    lookup = f"pdu_monthly_{plan}"
+
+    def _work():
+        found = stripe_sdk.Price.list(lookup_keys=[lookup], active=True, limit=1)
+        if found.data:
+            return found.data[0].id
+        product = stripe_sdk.Product.create(name=f"Sostegno mensile €{plan}/mese - Pescatori di Uomini")
+        price = stripe_sdk.Price.create(
+            product=product.id, unit_amount=MONTHLY_PLANS[plan], currency="eur",
+            recurring={"interval": "month"}, lookup_key=lookup,
+        )
+        return price.id
+
+    pid = await asyncio.to_thread(_work)
+    _price_cache[plan] = pid
+    return pid
+
+
+def _parse_price_eur(s: Optional[str]) -> Optional[float]:
+    """Extract a EUR amount from a free-form product price string (e.g. '€15', '15,00 €')."""
+    m = re.search(r"(\d+(?:[.,]\d{1,2})?)", s or "")
+    if not m:
+        return None
+    return round(float(m.group(1).replace(",", ".")), 2)
 
 
 async def get_optional_user(authorization: Optional[str]):
@@ -1898,7 +1939,220 @@ async def stripe_webhook(request: Request):
         status = "complete" if event.payment_status == "paid" else (event.status or "open")
         await _finalize_donation(event.session_id, event.payment_status, status,
                                  getattr(event, "amount_total", None), getattr(event, "currency", None))
+        # Also finalize merch orders (no-op if the session is not an order).
+        await _finalize_order(event.session_id)
     return {"received": True}
+
+
+# ---------------- Monthly donation subscriptions (Stripe subscription mode) ----------------
+class SubscribeIn(BaseModel):
+    plan: str  # "5" | "10" | "20"
+    origin_url: str
+    donor_email: Optional[str] = None
+
+
+@api_router.post("/donations/subscribe")
+async def create_subscription_checkout(body: SubscribeIn, request: Request,
+                                       authorization: Optional[str] = Header(None)):
+    if not STRIPE_API_KEY:
+        raise HTTPException(status_code=503, detail="Donazioni non configurate")
+    if body.plan not in MONTHLY_PLANS:
+        raise HTTPException(status_code=400, detail="Piano non valido")
+    user = await get_optional_user(authorization)
+    origin = body.origin_url.rstrip("/")
+    price_id = await _get_or_create_monthly_price(body.plan)
+    metadata = {"type": "subscription", "plan": body.plan}
+    if user:
+        metadata["user_id"] = user["user_id"]
+
+    def _create():
+        return stripe_sdk.checkout.Session.create(
+            mode="subscription",
+            line_items=[{"price": price_id, "quantity": 1}],
+            success_url=f"{origin}/donation-success?session_id={{CHECKOUT_SESSION_ID}}&type=sub",
+            cancel_url=f"{origin}/donate",
+            metadata=metadata,
+            **({"customer_email": body.donor_email} if body.donor_email else {}),
+        )
+
+    try:
+        session = await asyncio.to_thread(_create)
+    except Exception as e:
+        logger.error("Stripe subscribe error: %s", e)
+        raise HTTPException(status_code=400, detail="Impossibile avviare l'abbonamento")
+
+    await db.donation_transactions.insert_one({
+        "id": new_id("don"), "session_id": session.id,
+        "user_id": user["user_id"] if user else None,
+        "donor_email": body.donor_email or (user.get("email") if user else None),
+        "amount": MONTHLY_PLANS[body.plan] / 100, "currency": "eur",
+        "frequency": "monthly", "plan": body.plan,
+        "payment_status": "initiated", "status": "open", "processed": False,
+        "created_at": now_utc(), "updated_at": now_utc(),
+    })
+    return {"url": session.url, "session_id": session.id}
+
+
+# ---------------- Merchandising orders (Stripe payment mode, multi line-item) ----------------
+class OrderItemIn(BaseModel):
+    product_id: str
+    quantity: int = 1
+    size: Optional[str] = None
+    color: Optional[str] = None
+
+
+class DeliveryIn(BaseModel):
+    method: str  # "shipping" | "pickup"
+    name: str
+    surname: Optional[str] = ""
+    phone: str
+    address: Optional[str] = ""
+    cap: Optional[str] = ""
+    city: Optional[str] = ""
+    province: Optional[str] = ""
+
+
+class OrderCheckoutIn(BaseModel):
+    items: List[OrderItemIn]
+    delivery: DeliveryIn
+    origin_url: str
+    note: Optional[str] = ""
+
+
+def _order_number() -> str:
+    return f"PDU-{now_utc().strftime('%y%m%d')}-{secrets.token_hex(2).upper()}"
+
+
+@api_router.post("/orders/checkout")
+async def create_order_checkout(body: OrderCheckoutIn, request: Request,
+                                authorization: Optional[str] = Header(None)):
+    if not STRIPE_API_KEY:
+        raise HTTPException(status_code=503, detail="Pagamenti non configurati")
+    if not body.items:
+        raise HTTPException(status_code=400, detail="Carrello vuoto")
+    if body.delivery.method not in ("shipping", "pickup"):
+        raise HTTPException(status_code=400, detail="Metodo di consegna non valido")
+    if not body.delivery.name.strip() or not body.delivery.phone.strip():
+        raise HTTPException(status_code=400, detail="Nome e telefono sono obbligatori")
+    if body.delivery.method == "shipping":
+        d = body.delivery
+        if not all([(d.surname or "").strip(), (d.address or "").strip(), (d.cap or "").strip(),
+                    (d.city or "").strip(), (d.province or "").strip()]):
+            raise HTTPException(status_code=400, detail="Compila tutti i dati di spedizione")
+
+    user = await get_optional_user(authorization)
+    line_items = []
+    order_items = []
+    total = 0.0
+    for it in body.items:
+        prod = await db.products.find_one({"id": it.product_id}, {"_id": 0})
+        if not prod or prod.get("published") is False:
+            raise HTTPException(status_code=404, detail="Prodotto non disponibile")
+        if prod.get("availability") == "sold_out":
+            raise HTTPException(status_code=400, detail=f"'{prod.get('name')}' è esaurito")
+        # SECURITY: price is taken from the DB, never from the client.
+        eur = _parse_price_eur(prod.get("price"))
+        if not eur or eur <= 0:
+            raise HTTPException(status_code=400, detail=f"Prezzo non disponibile per '{prod.get('name')}'")
+        qty = max(1, min(int(it.quantity or 1), 99))
+        opts = " · ".join([x for x in [it.size, it.color] if x])
+        name = prod.get("name", "Prodotto") + (f" ({opts})" if opts else "")
+        line_items.append({
+            "quantity": qty,
+            "price_data": {
+                "currency": "eur", "unit_amount": int(round(eur * 100)),
+                "product_data": {"name": name, **({"images": prod["images"][:1]} if prod.get("images") and str(prod["images"][0]).startswith("http") else {})},
+            },
+        })
+        order_items.append({"product_id": it.product_id, "name": prod.get("name"), "options": opts,
+                            "size": it.size, "color": it.color, "quantity": qty,
+                            "unit_price": eur, "line_total": round(eur * qty, 2)})
+        total += eur * qty
+
+    order_number = _order_number()
+    origin = body.origin_url.rstrip("/")
+    metadata = {"type": "order", "order_number": order_number}
+    if user:
+        metadata["user_id"] = user["user_id"]
+
+    def _create():
+        return stripe_sdk.checkout.Session.create(
+            mode="payment", line_items=line_items,
+            success_url=f"{origin}/order-success?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{origin}/merch",
+            metadata=metadata,
+            phone_number_collection={"enabled": False},
+        )
+
+    try:
+        session = await asyncio.to_thread(_create)
+    except Exception as e:
+        logger.error("Stripe order error: %s", e)
+        raise HTTPException(status_code=400, detail="Impossibile avviare il pagamento")
+
+    order_doc = {
+        "id": new_id("ord"), "order_number": order_number, "session_id": session.id,
+        "user_id": user["user_id"] if user else None,
+        "items": order_items, "total": round(total, 2), "currency": "eur",
+        "delivery": body.delivery.model_dump(), "note": body.note or "",
+        "customer_name": body.delivery.name, "customer_phone": body.delivery.phone,
+        "payment_status": "initiated", "status": "pending", "processed": False,
+        "created_at": now_utc(), "updated_at": now_utc(),
+    }
+    await db.orders.insert_one(dict(order_doc))
+    return {"url": session.url, "session_id": session.id, "order_number": order_number}
+
+
+async def _finalize_order(session_id: str):
+    order = await db.orders.find_one({"session_id": session_id}, {"_id": 0})
+    if not order:
+        return None
+
+    def _retrieve():
+        return stripe_sdk.checkout.Session.retrieve(session_id)
+
+    try:
+        s = await asyncio.to_thread(_retrieve)
+    except Exception:
+        return order
+    payment_status = "paid" if s.get("payment_status") == "paid" else (s.get("payment_status") or "unpaid")
+    update = {"payment_status": payment_status, "updated_at": now_utc()}
+    if payment_status == "paid" and not order.get("processed"):
+        update.update({"processed": True, "status": "paid", "paid_at": now_utc()})
+    await db.orders.update_one({"session_id": session_id}, {"$set": update})
+    return {**order, **update}
+
+
+@api_router.get("/orders/status/{session_id}")
+async def order_status(session_id: str):
+    order = await _finalize_order(session_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Ordine non trovato")
+    return {
+        "order_number": order.get("order_number"), "payment_status": order.get("payment_status"),
+        "status": order.get("status"), "items": order.get("items", []),
+        "total": order.get("total"), "currency": order.get("currency", "eur"),
+        "delivery": order.get("delivery"), "note": order.get("note", ""),
+        "created_at": order.get("created_at"),
+    }
+
+
+@api_router.get("/admin/orders")
+async def admin_orders(status: Optional[str] = None, admin=Depends(require_perm("merch"))):
+    query: dict = {}
+    if status:
+        query["status"] = status
+    docs = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return docs
+
+
+@api_router.patch("/admin/orders/{order_id}")
+async def admin_update_order(order_id: str, body: dict, admin=Depends(require_perm("merch"))):
+    allowed = {k: v for k, v in body.items() if k in ("status", "tracking", "note")}
+    if allowed:
+        allowed["updated_at"] = now_utc()
+        await db.orders.update_one({"id": order_id}, {"$set": allowed})
+    return {"ok": True}
 
 
 @api_router.get("/me/donations")

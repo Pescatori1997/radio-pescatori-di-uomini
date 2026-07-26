@@ -257,6 +257,13 @@ export const api = {
   // donations (Stripe, test mode)
   donationCheckout: (body: { amount: number; origin_url: string; donor_name?: string; donor_email?: string; message?: string; anonymous?: boolean }) =>
     request("/donations/checkout", { method: "POST", body: JSON.stringify(body) }, true),
+  donationSubscribe: (body: { plan: string; origin_url: string; donor_email?: string }) =>
+    request("/donations/subscribe", { method: "POST", body: JSON.stringify(body) }, true),
+  orderCheckout: (body: { items: any[]; delivery: any; origin_url: string; note?: string }) =>
+    request("/orders/checkout", { method: "POST", body: JSON.stringify(body) }, true),
+  orderStatus: (sessionId: string) => request(`/orders/status/${sessionId}`),
+  adminOrders: (status?: string) => request(`/admin/orders${status ? `?status=${status}` : ""}`, {}, true),
+  adminUpdateOrder: (id: string, body: any) => request(`/admin/orders/${id}`, { method: "PATCH", body: JSON.stringify(body) }, true),
   donationStatus: (sessionId: string) => request(`/donations/status/${sessionId}`),
   myDonations: () => request("/me/donations", {}, true),
   adminDonations: () => request("/admin/donations", {}, true),

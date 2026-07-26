@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Linking, useWindowDimensions, Pressable } from "react-native";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, useWindowDimensions, Pressable } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -24,6 +24,9 @@ export default function ProductDetail() {
   const [p, setP] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState(0);
+  const [qty, setQty] = useState(1);
+  const [size, setSize] = useState<string | null>(null);
+  const [color, setColor] = useState<string | null>(null);
 
   const galleryW = Math.min(width, 720);
 
@@ -31,9 +34,11 @@ export default function ProductDetail() {
     api.product(id!).then(setP).catch(() => {}).finally(() => setLoading(false));
   }, [id]);
 
-  const whatsapp = () => {
-    const text = encodeURIComponent(`Ciao Radio Pescatori di Uomini! Sono interessato/a al prodotto: ${p?.name || ""}`);
-    Linking.openURL(`https://wa.me/393517556255?text=${text}`).catch(() => Linking.openURL("https://wa.me/393517556255").catch(() => {}));
+  const buy = () => {
+    const params = new URLSearchParams({ product_id: p.id, qty: String(qty) });
+    if (size) params.set("size", size);
+    if (color) params.set("color", color);
+    router.push(`/checkout?${params.toString()}` as any);
   };
 
   if (loading) return <View style={styles.center}><ActivityIndicator color={colors.brandPrimary} size="large" /></View>;
@@ -95,32 +100,56 @@ export default function ProductDetail() {
 
           {p.colors?.length > 0 && (
             <>
-              <Text style={styles.section}>Colori</Text>
+              <Text style={styles.section}>Colore</Text>
               <View style={styles.tagRow}>
-                {p.colors.map((c: string) => <View key={c} style={styles.tag}><Text style={styles.tagText}>{c}</Text></View>)}
+                {p.colors.map((c: string) => (
+                  <Pressable key={c} testID={`product-color-${c}`} onPress={() => setColor(color === c ? null : c)} style={[styles.tag, color === c && styles.tagActive]}>
+                    <Text style={[styles.tagText, color === c && styles.tagTextActive]}>{c}</Text>
+                  </Pressable>
+                ))}
               </View>
             </>
           )}
 
           {p.sizes?.length > 0 && (
             <>
-              <Text style={styles.section}>Taglie</Text>
+              <Text style={styles.section}>Taglia</Text>
               <View style={styles.tagRow}>
-                {p.sizes.map((s: string) => <View key={s} style={styles.tag}><Text style={styles.tagText}>{s}</Text></View>)}
+                {p.sizes.map((s: string) => (
+                  <Pressable key={s} testID={`product-size-${s}`} onPress={() => setSize(size === s ? null : s)} style={[styles.tag, size === s && styles.tagActive]}>
+                    <Text style={[styles.tagText, size === s && styles.tagTextActive]}>{s}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </>
+          )}
+
+          {av.label === AVAIL.available.label && (
+            <>
+              <Text style={styles.section}>Quantità</Text>
+              <View style={styles.qtyRow}>
+                <Pressable testID="product-qty-minus" onPress={() => setQty((q) => Math.max(1, q - 1))} style={styles.qtyBtn}><Ionicons name="remove" size={20} color={colors.onSurface} /></Pressable>
+                <Text style={styles.qtyValue}>{qty}</Text>
+                <Pressable testID="product-qty-plus" onPress={() => setQty((q) => Math.min(99, q + 1))} style={styles.qtyBtn}><Ionicons name="add" size={20} color={colors.onSurface} /></Pressable>
               </View>
             </>
           )}
         </Animated.View>
       </ScrollView>
 
-      {/* WHATSAPP CTA */}
+      {/* BUY CTA */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
-        <PressableScale testID="product-whatsapp" onPress={whatsapp} style={styles.waBtnShadow}>
-          <LinearGradient colors={["#25D366", "#1EBE5D"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.waBtn}>
-            <Ionicons name="logo-whatsapp" size={24} color={colors.white} />
-            <Text style={styles.waBtnText}>Contattaci su WhatsApp</Text>
-          </LinearGradient>
-        </PressableScale>
+        {p.availability === "available" ? (
+          <PressableScale testID="product-buy" onPress={buy} style={styles.buyBtn}>
+            <Ionicons name="bag-check" size={22} color={colors.white} />
+            <Text style={styles.buyBtnText}>Acquista ora{p.price ? ` · ${p.price}` : ""}</Text>
+          </PressableScale>
+        ) : (
+          <View style={[styles.buyBtn, styles.buyBtnDisabled]}>
+            <Ionicons name="lock-closed" size={18} color={colors.white} />
+            <Text style={styles.buyBtnText}>{av.label}</Text>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -155,9 +184,14 @@ const styles = StyleSheet.create({
   longDesc: { color: colors.onSurfaceSecondary, fontSize: 15, lineHeight: 23 },
   tagRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   tag: { backgroundColor: colors.surfaceTertiary, paddingHorizontal: spacing.md, paddingVertical: 8, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border },
+  tagActive: { backgroundColor: colors.brandTertiary, borderColor: colors.brandPrimary },
   tagText: { color: colors.onSurface, fontSize: 13, fontWeight: "700" },
+  tagTextActive: { color: colors.onBrandTertiary },
+  qtyRow: { flexDirection: "row", alignItems: "center", gap: spacing.lg },
+  qtyBtn: { width: 44, height: 44, borderRadius: radius.md, backgroundColor: colors.surfaceTertiary, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  qtyValue: { color: colors.onSurface, fontSize: 18, fontWeight: "800", minWidth: 28, textAlign: "center" },
   footer: { position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: spacing.lg, paddingTop: spacing.md, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
-  waBtnShadow: { borderRadius: radius.pill, shadowColor: "#25D366", shadowOpacity: 0.4, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 8, maxWidth: 720, alignSelf: "center", width: "100%" },
-  waBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, paddingVertical: spacing.md + 2, borderRadius: radius.pill },
-  waBtnText: { color: colors.white, fontSize: 16, fontWeight: "800" },
+  buyBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, paddingVertical: spacing.md + 2, borderRadius: radius.pill, backgroundColor: colors.navy, maxWidth: 720, alignSelf: "center", width: "100%" },
+  buyBtnDisabled: { backgroundColor: colors.muted },
+  buyBtnText: { color: colors.white, fontSize: 16, fontWeight: "800" },
 });
