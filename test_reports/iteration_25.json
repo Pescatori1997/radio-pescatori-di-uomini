@@ -1,0 +1,34 @@
+{
+  "summary": "Backend-only iteration for Payments Overhaul (donations one-time + monthly subscriptions + merch orders with delivery). 23/23 pytest tests pass. Verified: admin login returns a real Bearer token; donations/checkout validates amount bounds (0.5 -> 400, 6000 -> 400) and returns 400 (never 500) when Stripe placeholder key fails; donations/subscribe validates plan whitelist ('99' -> 400) and gracefully 400s on valid '10' plan; orders/checkout enforces empty-cart 400, shipping requires surname/address/cap/city/province (5 negative cases -> 400), pickup requires phone (400), unknown product -> 404, sold_out product -> 400, bogus client 'price' field is structurally ignored (OrderItemIn has no price field), and a valid shipping request reaches Stripe returning 400. ORPHAN-ORDER GUARANTEE CONFIRMED: after the valid shipping request that failed at Stripe, GET /api/admin/orders shows no order was persisted (orders collection is empty). Auth guards on GET /api/admin/orders and PATCH /api/admin/orders/{id} return 401 without token and with invalid token. Regression endpoints GET /api/products and GET /api/meditations still return 200. Cleanup verified: 0 TEST_ products and 0 orders remain in DB after test run.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_payments_overhaul.py",
+    "/app/test_reports/pytest/iteration_25_payments.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py: order insert (line 2131) correctly follows successful Stripe session creation (line 2117 in try/except). If Stripe raises, HTTP 400 is returned BEFORE any DB write — orphan-order guarantee is structurally enforced. Good.",
+    "OrderItemIn (line 2026) has no price field — client cannot inject a bogus price. Server always recomputes eur from db.products via _parse_price_eur. Good.",
+    "donations/checkout amount clamp is 1.0..5000.0 (MIN_DONATION..MAX_DONATION). Preset amounts 5/10/25/50/100 all pass validation. Good.",
+    "MONTHLY_PLANS = {'5','10','20'} matches spec (5/10/20 €/month). Plan validation before Stripe call. Good.",
+    "server.py file is 3140 lines — exceeds 700-line guideline. Consider splitting into modules (payments, admin, media, radio, rbac). Not blocking."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_payments_overhaul.py (new)"
+  ],
+  "success_rate": {"backend": "100% (23/23)", "frontend": "N/A (backend-only iteration)"},
+  "seed_data_creation": "Fixture created 1 TEST_ product via /api/admin/products and deleted it at teardown. Also toggled availability sold_out -> available inside the sold-out test. Final DB state: 0 TEST_ products, 0 orders.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Payments backend is production-ready as validated with the sk_test_emergent placeholder. Owner must set STRIPE_API_KEY=sk_live_... (and optionally STRIPE_WEBHOOK_SECRET) in production to enable real Stripe checkout URLs. Frontend flows (donate.tsx, checkout.tsx, order-success.tsx, merch/[id].tsx) were pre-verified by main agent and were out of scope for this run.",
+  "rca_of_issue": "N/A — no bugs found. Validation & orphan-guarantee behave as designed."
+}

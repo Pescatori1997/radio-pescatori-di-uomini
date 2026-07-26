@@ -1771,6 +1771,7 @@ import asyncio
 import stripe as stripe_sdk
 if STRIPE_API_KEY:
     stripe_sdk.api_key = STRIPE_API_KEY
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 
 # Monthly donation plans (EUR/month) -> Stripe recurring prices, provisioned lazily & idempotently.
 MONTHLY_PLANS = {"5": 500, "10": 1000, "20": 2000}
@@ -1857,18 +1858,32 @@ async def create_donation_checkout(body: DonationCheckoutIn, request: Request,
     if body.donor_email:
         metadata["donor_email"] = body.donor_email[:120]
 
-    stripe = _stripe_client(request)
-    session = await stripe.create_checkout_session(CheckoutSessionRequest(
-        amount=amount,
-        currency="eur",
-        success_url=success_url,
-        cancel_url=cancel_url,
-        metadata=metadata,
-    ))
+    def _create():
+        return stripe_sdk.checkout.Session.create(
+            mode="payment",
+            line_items=[{
+                "quantity": 1,
+                "price_data": {
+                    "currency": "eur",
+                    "unit_amount": int(round(amount * 100)),
+                    "product_data": {"name": "Donazione - Pescatori di Uomini"},
+                },
+            }],
+            success_url=success_url,
+            cancel_url=cancel_url,
+            metadata=metadata,
+            **({"customer_email": body.donor_email} if body.donor_email else {}),
+        )
+
+    try:
+        session = await asyncio.to_thread(_create)
+    except Exception as e:
+        logger.error("Stripe donation error: %s", e)
+        raise HTTPException(status_code=400, detail="Impossibile avviare la donazione")
 
     await db.donation_transactions.insert_one({
         "id": new_id("don"),
-        "session_id": session.session_id,
+        "session_id": session.id,
         "user_id": user["user_id"] if user else None,
         "donor_name": (body.donor_name or (user.get("name") if user else None)),
         "donor_email": (body.donor_email or (user.get("email") if user else None)),
@@ -1884,7 +1899,7 @@ async def create_donation_checkout(body: DonationCheckoutIn, request: Request,
         "updated_at": now_utc(),
     })
 
-    return {"url": session.url, "session_id": session.session_id}
+    return {"url": session.url, "session_id": session.id}
 
 
 async def _finalize_donation(session_id: str, payment_status: str, status: str,
@@ -1910,37 +1925,50 @@ async def _finalize_donation(session_id: str, payment_status: str, status: str,
 async def donation_status(session_id: str, request: Request):
     if not STRIPE_API_KEY:
         raise HTTPException(status_code=503, detail="Donazioni non configurate")
-    stripe = _stripe_client(request)
-    result = await stripe.get_checkout_status(session_id)
-    await _finalize_donation(session_id, result.payment_status, result.status,
-                             result.amount_total, result.currency)
+
+    def _retrieve():
+        return stripe_sdk.checkout.Session.retrieve(session_id)
+
+    try:
+        s = await asyncio.to_thread(_retrieve)
+    except Exception as e:
+        logger.error("Stripe status error: %s", e)
+        raise HTTPException(status_code=404, detail="Sessione non trovata")
+    payment_status = s.get("payment_status") or "unpaid"
+    status = s.get("status") or "open"
+    amount_total = s.get("amount_total")
+    currency = s.get("currency")
+    await _finalize_donation(session_id, payment_status, status, amount_total, currency)
     return {
         "session_id": session_id,
-        "status": result.status,
-        "payment_status": result.payment_status,
-        "amount": round((result.amount_total or 0) / 100, 2),
-        "currency": result.currency,
+        "status": status,
+        "payment_status": payment_status,
+        "amount": round((amount_total or 0) / 100, 2),
+        "currency": currency,
     }
 
 
 @api_router.post("/webhook/stripe")
 async def stripe_webhook(request: Request):
-    if not STRIPE_API_KEY:
-        raise HTTPException(status_code=503, detail="Donazioni non configurate")
     body = await request.body()
     signature = request.headers.get("Stripe-Signature")
-    stripe = _stripe_client(request)
+    # Confirmation also happens via status polling; the webhook is a secure backup.
+    if not STRIPE_WEBHOOK_SECRET:
+        return {"received": True, "verified": False}
     try:
-        event = await stripe.handle_webhook(body, signature)
+        event = stripe_sdk.Webhook.construct_event(body, signature, STRIPE_WEBHOOK_SECRET)
     except Exception as e:
         logger.error("Stripe webhook error: %s", e)
         raise HTTPException(status_code=400, detail="Webhook non valido")
-    if getattr(event, "session_id", None):
-        status = "complete" if event.payment_status == "paid" else (event.status or "open")
-        await _finalize_donation(event.session_id, event.payment_status, status,
-                                 getattr(event, "amount_total", None), getattr(event, "currency", None))
+    if event.get("type", "").startswith("checkout.session"):
+        obj = event["data"]["object"]
+        session_id = obj.get("id")
+        payment_status = obj.get("payment_status") or "unpaid"
+        status = "complete" if payment_status == "paid" else (obj.get("status") or "open")
+        await _finalize_donation(session_id, payment_status, status,
+                                 obj.get("amount_total"), obj.get("currency"))
         # Also finalize merch orders (no-op if the session is not an order).
-        await _finalize_order(event.session_id)
+        await _finalize_order(session_id)
     return {"received": True}
 
 
@@ -1960,22 +1988,23 @@ async def create_subscription_checkout(body: SubscribeIn, request: Request,
         raise HTTPException(status_code=400, detail="Piano non valido")
     user = await get_optional_user(authorization)
     origin = body.origin_url.rstrip("/")
-    price_id = await _get_or_create_monthly_price(body.plan)
     metadata = {"type": "subscription", "plan": body.plan}
     if user:
         metadata["user_id"] = user["user_id"]
 
-    def _create():
-        return stripe_sdk.checkout.Session.create(
-            mode="subscription",
-            line_items=[{"price": price_id, "quantity": 1}],
-            success_url=f"{origin}/donation-success?session_id={{CHECKOUT_SESSION_ID}}&type=sub",
-            cancel_url=f"{origin}/donate",
-            metadata=metadata,
-            **({"customer_email": body.donor_email} if body.donor_email else {}),
-        )
-
     try:
+        price_id = await _get_or_create_monthly_price(body.plan)
+
+        def _create():
+            return stripe_sdk.checkout.Session.create(
+                mode="subscription",
+                line_items=[{"price": price_id, "quantity": 1}],
+                success_url=f"{origin}/donation-success?session_id={{CHECKOUT_SESSION_ID}}&type=sub",
+                cancel_url=f"{origin}/donate",
+                metadata=metadata,
+                **({"customer_email": body.donor_email} if body.donor_email else {}),
+            )
+
         session = await asyncio.to_thread(_create)
     except Exception as e:
         logger.error("Stripe subscribe error: %s", e)

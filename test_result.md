@@ -301,3 +301,29 @@ test_plan:
 agent_communication:
     -agent: "main"
     -message: "Test the Meditazioni multi-format overhaul. Admin backend auth: login POST /api/auth/login {email: pescatoridiuomini@outlook.it, password: AdminTestPwd1!} -> token; use Bearer for /api/admin/*. BACKEND focus: (1) chunked upload lifecycle init->chunk(raw --data-binary)->complete for a small PDF and a small MP3 (mime audio/mpeg) -> assert media_type pdf/audio; (2) GET /api/media/{id} full 200 + correct content-type/size, and Range 'bytes=0-99' -> 206 with Content-Range & Content-Length=100 & Accept-Ranges; ?download=1 -> Content-Disposition attachment; (3) create meditation with external links and assert _decorate provider/content_type: youtube, vimeo (https://vimeo.com/76979871), spotify (https://open.spotify.com/episode/xxxx), tiktok, instagram, facebook, and embed; (4) create meditation with uploaded media_id -> content_type == media_type, provider=='upload'; (5) EDIT replacing media_id deletes old GridFS file (old /api/media/{oldid} -> 404 after); (6) DELETE meditation removes media (media 404 after); (7) draft not returned by public GET /api/meditations; scheduled (future publish_date) not returned until due; (8) auth guard on admin upload/meditation endpoints (401 no token). Clean up all TEST_-prefixed meditations and any GridFS files you create. FRONTEND admin UI is behind the Google welcome gate -> not automatable; only public meditation viewing is testable (continue as Ospite -> Meditazioni tab -> open item -> in-app player renders)."
+
+## --- Donazioni LIVE + Merch checkout (session 19) ---
+backend:
+  - task: "Stripe official SDK: one-time donation, monthly subscription, merch order checkout + order confirmation"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "All Stripe flows migrated to official `stripe` SDK using env STRIPE_API_KEY (no hardcoded keys). Pod placeholder key sk_test_emergent only works via Emergent proxy, NOT official SDK -> real session creation not testable here (returns 400 by design). Endpoints: /api/donations/checkout (one-time payment, amount 1..5000 validated), /api/donations/subscribe {plan 5|10|20} (subscription, auto-provisions Price via lookup_key), /api/orders/checkout (multi line_items, price RECOMPUTED from DB, delivery shipping|pickup validated), /api/orders/status/{session_id}, /api/admin/orders GET+PATCH (require_perm merch). Webhook uses official construct_event + STRIPE_WEBHOOK_SECRET (optional). All Stripe calls try/except -> clean 400/404."
+frontend:
+  - task: "Donations monthly UI + merch buy flow (qty/size/color, delivery, order confirmation + WhatsApp)"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/donate.tsx, checkout.tsx, order-success.tsx, merch/[id].tsx, src/api.ts"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Verified via screenshots (design preserved): donate presets 5/10/25/50/100 + 'Sostieni la radio ogni mese' subscription cards; merch 'Acquista ora' + qty/size/color; /checkout delivery form (Spedizione/Ritiro); /order-success confirmation + WhatsApp prefilled (393517556255). Stripe redirect needs owner real key."
+
+agent_communication:
+    -agent: "main"
+    -message: "IMPORTANT: pod STRIPE_API_KEY is placeholder sk_test_emergent -> official SDK real session creation CANNOT succeed here (returns 400 by design, NOT 500). Focus BACKEND on VALIDATION/SECURITY/graceful-errors. Admin login: POST /api/auth/login {email: pescatoridiuomini@outlook.it, password: AdminTestPwd1!} -> token. Verify: donation amount<1/>5000 ->400, valid ->400(not500); subscribe invalid plan ->400, valid ->400; create TEST_ product price '15,00' available published; orders/checkout empty items->400, missing shipping fields->400, pickup missing phone->400, sold_out->400, unknown product->404, valid->400 AND assert NO orphan order left; admin/orders no token->401/403; price recomputed server-side. Clean up TEST_ products/orders. FRONTEND verified by screenshots already; Stripe redirect needs owner key -> not testable."
