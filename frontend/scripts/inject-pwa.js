@@ -32,10 +32,14 @@ const HEAD_TAGS = `
     <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png" />
     <script>
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', function () {
-          navigator.serviceWorker.register('/sw.js').then(function (reg) {
+        var registerSW = function () {
+          navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then(function (reg) {
             // Poll for a newer service worker so open PWAs update without a manual relaunch.
             setInterval(function () { reg.update().catch(function () {}); }, 60000);
+            // Also check for updates when the app returns to the foreground.
+            document.addEventListener('visibilitychange', function () {
+              if (document.visibilityState === 'visible') reg.update().catch(function () {});
+            });
             reg.addEventListener('updatefound', function () {
               var nw = reg.installing;
               if (!nw) return;
@@ -53,7 +57,9 @@ const HEAD_TAGS = `
             refreshing = true;
             window.location.reload();
           });
-        });
+        };
+        if (document.readyState === 'complete') registerSW();
+        else window.addEventListener('load', registerSW);
       }
     </script>
 `;

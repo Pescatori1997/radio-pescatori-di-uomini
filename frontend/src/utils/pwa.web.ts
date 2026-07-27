@@ -44,11 +44,14 @@ export function setupPWA(): void {
   });
 
   if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
+    const registerSW = () => {
       navigator.serviceWorker
-        .register("/sw.js")
+        .register("/sw.js", { updateViaCache: "none" })
         .then((reg) => {
           setInterval(() => reg.update().catch(() => {}), 60000);
+          document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === "visible") reg.update().catch(() => {});
+          });
           reg.addEventListener("updatefound", () => {
             const nw = reg.installing;
             if (!nw) return;
@@ -66,6 +69,10 @@ export function setupPWA(): void {
         refreshing = true;
         window.location.reload();
       });
-    });
+    };
+    // Register immediately if the page already finished loading (React may mount
+    // after the 'load' event, in which case the listener would never fire).
+    if (document.readyState === "complete") registerSW();
+    else window.addEventListener("load", registerSW);
   }
 }
