@@ -30,13 +30,14 @@ next-env.d.ts
 dist/
 dist
 
-# Environment files (comprehensive coverage)
-.env
-.env.*
+# Environment files
+# NOTE: the app's backend/.env and frontend/.env MUST be included for the
+# Emergent deployment flow (they carry EXPO_PUBLIC_BACKEND_URL, MONGO_URL, etc.
+# and platform-managed secrets are injected at deploy). Only ignore truly local
+# override files here.
+.env.local
+.env.*.local
 !.env.example
-backend/.env
-frontend/.env
-**/.env
 
 *token.json*
 *credentials.json*
@@ -86,7 +87,6 @@ memory/test_credentials.md
 
 # Mobile development
 android-sdk/
-*.env
 credentials.json
 *.key
 .credentials
