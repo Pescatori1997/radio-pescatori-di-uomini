@@ -15,9 +15,9 @@ import WeatherWidget from "@/src/components/WeatherWidget";
 import Collaborators from "@/src/components/Collaborators";
 import WhatsAppSection from "@/src/components/WhatsAppSection";
 import PressableScale from "@/src/components/PressableScale";
+import Logo from "@/src/components/Logo";
 import { colors, spacing, radius } from "@/src/theme";
 
-const LOGO = require("@/assets/images/logo.png");
 const STUDIO = require("@/assets/images/studio.png");
 
 export default function Home() {
@@ -100,9 +100,7 @@ export default function Home() {
         <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(10,17,40,0.65)" }]} />
         <LinearGradient colors={["rgba(10,17,40,0.35)", "rgba(10,17,40,0.92)"]} style={StyleSheet.absoluteFill} />
         <Animated.View entering={FadeInDown.duration(500)} style={styles.brandRow}>
-          <View style={styles.logoBadge}>
-            <Image source={LOGO} style={styles.logoImg} contentFit="contain" />
-          </View>
+          <Logo size={52} shadow />
           <View>
             <Text style={styles.brandName}>Pescatori di Uomini</Text>
             <Text style={styles.slogan}>La radio che annuncia il Vangelo</Text>
@@ -218,8 +216,6 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
   hero: { padding: spacing.xl, paddingBottom: spacing.xl, overflow: "hidden" },
   brandRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  logoBadge: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.white, alignItems: "center", justifyContent: "center", overflow: "hidden", shadowColor: colors.brandPrimary, shadowOpacity: 0.4, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
-  logoImg: { width: 46, height: 46 },
   brandName: { color: colors.white, fontSize: 17, fontWeight: "800" },
   slogan: { color: colors.brandSecondary, fontSize: 13, marginTop: 2 },
   nowLabel: { color: colors.brandSecondary, fontSize: 11, fontWeight: "700", letterSpacing: 1.5, marginTop: spacing.md },

@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { SlideInLeft } from "react-native-reanimated";
 import { api } from "@/src/api";
+import Logo from "@/src/components/Logo";
 import { CMS_SECTIONS } from "@/src/utils/sections";
 import { colors, spacing, radius } from "@/src/theme";
 
@@ -73,7 +74,7 @@ export default function AdminShell({ title, activeKey, children }: { title: stri
   const Sidebar = ({ onNav }: { onNav?: () => void }) => (
     <View style={[styles.sidebar, { paddingTop: wide ? insets.top + spacing.lg : spacing.lg }]}>
       <View style={styles.brand}>
-        <View style={styles.brandBadge}><MaterialCommunityIcons name="anchor" size={20} color={colors.white} /></View>
+        <Logo size={44} />
         <View>
           <Text style={styles.brandName}>Pannello Admin</Text>
           <Text style={styles.brandSub}>{isCollab ? "Collaboratore" : "Pescatori di Uomini"}</Text>
@@ -136,7 +137,6 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: ADMIN.bg },
   sidebar: { width: 260, backgroundColor: ADMIN.surface, paddingHorizontal: spacing.md, paddingBottom: spacing.lg, borderRightWidth: 1, borderRightColor: ADMIN.border, flex: 1 },
   brand: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: spacing.sm, marginBottom: spacing.xl },
-  brandBadge: { width: 40, height: 40, borderRadius: 12, backgroundColor: ADMIN.accent, alignItems: "center", justifyContent: "center" },
   brandName: { color: colors.white, fontSize: 16, fontWeight: "800" },
   brandSub: { color: ADMIN.muted, fontSize: 12 },
   navItem: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.md, paddingHorizontal: spacing.md, borderRadius: radius.md, marginBottom: 4 },
