@@ -2393,10 +2393,21 @@ async def webpush_unsubscribe(body: WebPushSubscribeBody):
     return {"status": "unsubscribed"}
 
 
-def _send_one_webpush(sub: dict, payload: str, private_pem: str, claims: dict):
+@api_router.get("/admin/webpush/stats")
+async def webpush_stats(admin=Depends(require_admin)):
+    """Diagnostics: how many web-push devices are registered (total / logged-in / guest)."""
+    total = await db.web_push_subs.count_documents({})
+    anon = await db.web_push_subs.count_documents({"user_id": None})
+    return {"total_devices": total, "registered_users": total - anon, "guest_devices": anon}
+
+
+def _send_one_webpush(sub: dict, payload: str, vapid, claims: dict):
     from pywebpush import webpush, WebPushException
     try:
-        webpush(subscription_info=sub, data=payload, vapid_private_key=private_pem, vapid_claims=dict(claims))
+        # NOTE: vapid_private_key must be a Vapid object (or a base64 DER string).
+        # Passing a PEM string here makes py-vapid's from_string fail to parse, so
+        # we build the Vapid object from PEM in send_web_push and pass it through.
+        webpush(subscription_info=sub, data=payload, vapid_private_key=vapid, vapid_claims=dict(claims), ttl=86400)
         return True, None
     except WebPushException as e:
         code = getattr(getattr(e, "response", None), "status_code", None)
@@ -2406,15 +2417,19 @@ def _send_one_webpush(sub: dict, payload: str, private_pem: str, claims: dict):
 
 
 async def send_web_push(recipients: List[str], data: dict) -> int:
-    """Deliver a Web Push to the browser subscriptions of the given user_ids.
-    Returns the number of successful deliveries. Prunes expired subscriptions."""
-    if not recipients:
-        return 0
-    subs = await db.web_push_subs.find({"user_id": {"$in": recipients}}, {"_id": 0}).to_list(10000)
+    """Deliver a Web Push to browser subscriptions. Targets both registered users
+    who are recipients of this category AND anonymous (guest) devices that opted
+    in via the notifications screen. Returns successful deliveries; prunes expired."""
+    rec = recipients or []
+    subs = await db.web_push_subs.find(
+        {"$or": [{"user_id": {"$in": rec}}, {"user_id": None}]},
+        {"_id": 0},
+    ).to_list(10000)
     if not subs:
         return 0
+    from py_vapid import Vapid01
     v = await _get_vapid()
-    private_pem = v["private_pem"]
+    vapid = Vapid01.from_pem(v["private_pem"].encode())
     claims = {"sub": "mailto:pescatoridiuomini@outlook.it"}
     payload = json.dumps({
         "title": data.get("title", "Pescatori di Uomini"),
@@ -2424,7 +2439,7 @@ async def send_web_push(recipients: List[str], data: dict) -> int:
     delivered = 0
     stale: List[str] = []
     for s in subs:
-        ok, code = await asyncio.to_thread(_send_one_webpush, s["subscription"], payload, private_pem, claims)
+        ok, code = await asyncio.to_thread(_send_one_webpush, s["subscription"], payload, vapid, claims)
         if ok:
             delivered += 1
         elif code in (404, 410):
