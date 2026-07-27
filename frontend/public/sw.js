@@ -51,19 +51,28 @@ self.addEventListener("fetch", (event) => {
   // pick up new deploys). Let the browser handle these directly.
   if (url.pathname === "/sw.js" || url.pathname === "/manifest.json") return;
 
-  // App navigations -> network first, fall back to cached shell when offline.
+  // App navigations -> network-first WITH A TIMEOUT, fall back to the cached
+  // shell. Without the timeout an iOS standalone PWA cold-start (where the
+  // network request can hang indefinitely) would leave the user stuck on a
+  // blank screen forever, because the offline fallback only fires on a network
+  // *rejection*, not on a hang.
   if (req.mode === "navigate") {
     event.respondWith(
       (async () => {
+        const cache = await caches.open(APP_SHELL);
         try {
-          const fresh = await fetch(req);
-          const cache = await caches.open(APP_SHELL);
-          cache.put(OFFLINE_URL, fresh.clone());
+          const fresh = await Promise.race([
+            fetch(req),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 4000)),
+          ]);
+          // Only cache successful full responses as the offline shell.
+          if (fresh && fresh.ok) cache.put(OFFLINE_URL, fresh.clone());
           return fresh;
         } catch (e) {
-          const cache = await caches.open(APP_SHELL);
           const cached = await cache.match(OFFLINE_URL);
-          return cached || Response.error();
+          // If we have no shell yet, keep waiting on the network (last resort)
+          // rather than returning an error page.
+          return cached || fetch(req);
         }
       })()
     );
