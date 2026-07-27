@@ -1,0 +1,48 @@
+{
+  "summary": "PRE-LAUNCH full E2E verification. Backend: 31/31 pytest cases pass (test_pre_launch.py). Frontend: admin login + admin notifications send flow verified live on the preview URL. All the recent fixes explicitly requested by the user were validated working: (1) admin notifications 'Invia notifica' button — on web, confirmAsync opens a native confirm() dialog, sends POST /api/admin/notifications/send, then shows an alert 'Notifica inviata — Inviata a 40 destinatari.' and the Storico invii refreshes; (2) timezone offset — GET /api/admin/notifications returns created_at with '+00:00' suffix; UI shows '27 lug, 21:05' (correct Europe/Rome local time); (3) Web Push endpoints (public-key/subscribe idempotent/unsubscribe/invalid 400/422); (4) CMS 6 sezioni + 2 seed 'Il Sermone sul Monte' & 'La Fede di Abramo' visibili pubblicamente + admin CRUD (create draft → non pubblico → publish → visibile → delete). AUTH: registrazione/login/logout/duplicate 400/wrong-password 401/session persistente; admin email login (pescatoridiuomini@outlook.it/AdminTestPwd1!) restituisce role=administrator e app redirige automaticamente a /admin. RESET password: EMERGENT_EMAIL_KEY vuota → API risponde {ok:true, delivered:false, code:XXXXXX}; codice sbagliato→400; password<6 char→400; reset OK invalida le sessioni e la nuova password funziona. WEBHOOKS/PAYMENT: /donations/checkout con importo 0.5 o 6000 → 400; con 10€ e sk_test placeholder → 400 (mai 500). PUBLIC UI (guest): /welcome → Continua come Ospite → home carica con 'IN DIRETTA ORA', widget meteo, ultimi podcast (seed 'Il Sermone sul Monte'), ultime notizie, tab bar 5-way. Nessuna red-screen. /biblioteca hub con 5 categorie, /c/studi-biblici mostra i 2 seed, /donate /equipaggio /meditazioni caricano senza errori. NON automatizzabili (manuali/deploy-dependent, come da nota utente): consegna push nativa iOS/Android (EMERGENT_PUSH_KEY placeholder → status log 'pending build'), consegna web push reale (permesso browser richiesto), consegna email reale, Stripe LIVE, audio-in-background, PWA install su device. Deprecated packages check: NONE (nessun uso di expo-av/expo-barcode-scanner/expo-background-fetch riscontrato).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/radio/nowplaying", "issue": "Route non esistente (task-description mismatch). Il proxy AzuraCast è esposto come GET /api/live/status (funzionante). Aggiornare la documentazione o aggiungere alias se necessario."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "React Native Web shadow*", "issue": "Console warning ripetuto: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' Non bloccante ma emerge molte volte a ogni render. Ricerca fonte: probabilmente componenti che usano shadowColor/shadowOffset/shadowRadius. Reference: various screens (home, admin shell)."},
+      {"component": "React Native Web pointerEvents", "issue": "Console warning: 'props.pointerEvents is deprecated. Use style.pointerEvents' — inoffensivo ma da sistemare per RN 0.75+. Reference: unknown component wrapper."},
+      {"component": "expo-notifications (web)", "issue": "Warning atteso: 'Listening to push token changes is not yet fully supported on web' — non bloccante. Native build necessaria per push token."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_pre_launch.py",
+    "/app/test_reports/pytest/iteration_27_prelaunch.xml"
+  ],
+  "action_items": [
+    "Sostituire shadow* con boxShadow negli style objects (o wrap con Platform.select) per eliminare warning ripetuti in console web.",
+    "Aggiornare gli usi di props.pointerEvents ai corrispondenti style.pointerEvents.",
+    "(Opzionale) Aggiungere alias GET /api/radio/nowplaying che rimappa a /api/live/status per allineamento con la documentazione utente, oppure aggiornare docs.",
+    "Pre-deploy: valorizzare EMERGENT_PUSH_KEY, EMERGENT_EMAIL_KEY e STRIPE_API_KEY di produzione (i test confermano che i flussi sono strutturalmente pronti).",
+    "Test manuale in produzione: (a) consegna push nativa su device fisico iOS/Android; (b) consegna web push in browser reale con permesso concesso; (c) consegna email reset password; (d) PWA install + background audio; (e) donazione Stripe LIVE end-to-end."
+  ],
+  "critical_code_review_comments": [
+    "server.py 3484 righe — oltre linea guida 700; considerare split router (auth, admin, cms, payments, notifications, radio).",
+    "notify_category log serializzato con offset UTC in admin_notifications_log (buon fix). Ottima soluzione: gestisce sia datetime naive-UTC (from Mongo) sia tz-aware.",
+    "admin/notifications.tsx: fmt() aggiunge 'Z' se manca timezone, prevenendo interpretazione locale del backend UTC — corretto.",
+    "AzuraCast live_status endpoint racchiude httpx.get in try/except → non lancia mai (returna fallback). Bene per stabilità.",
+    "webpush_public_key genera VAPID keypair on-demand con cache in app_config — funzionante ma unica opportunità di regenerate su rotate.",
+    "Password reset: rec expires_at gestione tz-naive→UTC corretta. Sessioni invalidate dopo reset → sicuro.",
+    "Guest gate _layout.tsx redirige non-auth su /welcome; /notifications-settings sembra accessibile a guest — verificare se dovrebbe redirigere a login (minore)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_pre_launch.py (nuovo — 31 test)"
+  ],
+  "success_rate": {"backend": "100% (31/31)", "frontend": "100% dei flussi automatizzabili (auth, admin notifications send, guest browsing, CMS seed rendering)"},
+  "seed_data_creation": "Test creano utenti temporanei (testlaunch_*, prel_*, reset_*) e li cancellano via DELETE /api/auth/account. Notifiche di test 'TEST_ ' rimangono nel log (comportamento accettato — sono state realmente inviate al recipient set). Nessun content, order o product creato senza cleanup.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Preview URL: https://evangelic-stream.preview.emergentagent.com. Admin: pescatoridiuomini@outlook.it / AdminTestPwd1! (email login concede administrator). Welcome gate: /welcome → 'Continua come Ospite' per browsing anonimo; storage flag pdu_guest_mode. Le confermazioni admin (confirmAsync) su web sono window.confirm nativi — nei playwright test usare page.on('dialog', dialog=>dialog.accept()) altrimenti l'invio non parte. Il proxy AzuraCast è a /api/live/status (NON /api/radio/nowplaying). Payloads: PrayerRequest={text,name,anonymous}; MessageIn={text,name,type}; donations/checkout richiede origin_url; orders/checkout richiede origin_url + items. Tempo di build backend medio 0.5s per API. Push nativi/email/Stripe LIVE non testabili in preview.",
+  "rca_of_issue": "N/A — nessun bug riscontrato. Tutti i fix recenti richiesti dall'utente (confirmAsync per il bottone Invia notifica su web, offset UTC su created_at, web push endpoints, CMS seeds) sono strutturalmente corretti e verificati end-to-end. L'app è funzionalmente pronta per il lancio a settembre; restano solo le verifiche manuali su device fisici (push nativi, background audio, PWA install) e la valorizzazione dei secret di produzione."
+}
