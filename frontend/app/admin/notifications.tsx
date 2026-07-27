@@ -1,9 +1,10 @@
 import React, { useCallback, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, Alert, RefreshControl } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, RefreshControl } from "react-native";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import { api } from "@/src/api";
 import AdminShell, { ADMIN } from "@/src/components/AdminShell";
+import { confirmAsync, alertMessage } from "@/src/utils/confirm";
 import { colors, spacing, radius } from "@/src/theme";
 
 const CATEGORIES = [
@@ -38,23 +39,22 @@ export default function AdminNotifications() {
   }, []);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const send = () => {
-    if (!title.trim() || !message.trim()) { Alert.alert("Campi mancanti", "Inserisci titolo e messaggio."); return; }
-    Alert.alert("Invia notifica", `Invia a ${audience[category] ?? 0} utenti iscritti alla categoria "${CATEGORIES.find((c) => c.key === category)?.label}"?`, [
-      { text: "Annulla", style: "cancel" },
-      { text: "Invia", onPress: doSend },
-    ]);
+  const send = async () => {
+    if (!title.trim() || !message.trim()) { alertMessage("Campi mancanti", "Inserisci titolo e messaggio."); return; }
+    const label = CATEGORIES.find((c) => c.key === category)?.label;
+    const ok = await confirmAsync("Invia notifica", `Invia a ${audience[category] ?? 0} utenti iscritti alla categoria "${label}"?`, "Invia");
+    if (ok) doSend();
   };
 
   const doSend = async () => {
     setSending(true);
     try {
       const res = await api.adminSendNotification({ category, title: title.trim(), message: message.trim() });
-      Alert.alert("Notifica inviata", `Inviata a ${res.recipients} destinatari.`);
+      alertMessage("Notifica inviata", `Inviata a ${res.recipients} destinatari.`);
       setTitle(""); setMessage("");
       load();
     } catch (e: any) {
-      Alert.alert("Errore", e.message || "Invio non riuscito");
+      alertMessage("Errore", e.message || "Invio non riuscito");
     } finally { setSending(false); }
   };
 
