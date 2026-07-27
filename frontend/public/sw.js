@@ -5,15 +5,19 @@
  *    intercepted, so live streaming / auth / payments always hit the network.
  *  - Navigations: network-first with offline fallback to the cached app shell.
  *  - Static assets (JS/CSS/fonts/images/icons): stale-while-revalidate.
+ *  - VERSION is stamped uniquely at build time (scripts/inject-pwa.js replaces
+ *    __BUILD_ID__), so every deploy ships a byte-different sw.js -> the browser
+ *    detects the update, installs the new worker, purges the old caches on
+ *    activate and takes control immediately (skipWaiting + clients.claim).
  */
-const VERSION = "pdu-v1";
+const VERSION = "pdu-__BUILD_ID__";
 const APP_SHELL = `${VERSION}-shell`;
 const ASSETS = `${VERSION}-assets`;
 const OFFLINE_URL = "/";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(APP_SHELL).then((cache) => cache.addAll([OFFLINE_URL, "/manifest.json"]).catch(() => {}))
+    caches.open(APP_SHELL).then((cache) => cache.addAll([OFFLINE_URL]).catch(() => {}))
   );
   self.skipWaiting();
 });
@@ -42,6 +46,10 @@ self.addEventListener("fetch", (event) => {
 
   // Never touch cross-origin (API/backend, AzuraCast stream, YouTube, Stripe...).
   if (url.origin !== self.location.origin) return;
+
+  // Never cache the service worker or the manifest (must always revalidate to
+  // pick up new deploys). Let the browser handle these directly.
+  if (url.pathname === "/sw.js" || url.pathname === "/manifest.json") return;
 
   // App navigations -> network first, fall back to cached shell when offline.
   if (req.mode === "navigate") {

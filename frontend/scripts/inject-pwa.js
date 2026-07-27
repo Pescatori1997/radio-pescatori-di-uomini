@@ -33,7 +33,26 @@ const HEAD_TAGS = `
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', function () {
-          navigator.serviceWorker.register('/sw.js').catch(function () {});
+          navigator.serviceWorker.register('/sw.js').then(function (reg) {
+            // Poll for a newer service worker so open PWAs update without a manual relaunch.
+            setInterval(function () { reg.update().catch(function () {}); }, 60000);
+            reg.addEventListener('updatefound', function () {
+              var nw = reg.installing;
+              if (!nw) return;
+              nw.addEventListener('statechange', function () {
+                if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+                  nw.postMessage('SKIP_WAITING');
+                }
+              });
+            });
+          }).catch(function () {});
+          // When the new worker takes control, reload once to load the fresh assets.
+          var refreshing = false;
+          navigator.serviceWorker.addEventListener('controllerchange', function () {
+            if (refreshing) return;
+            refreshing = true;
+            window.location.reload();
+          });
         });
       }
     </script>
@@ -50,3 +69,17 @@ if (!html.includes('rel="manifest"')) {
 
 fs.writeFileSync(indexPath, html, "utf8");
 console.log("[inject-pwa] PWA tags + service worker injected into dist/index.html");
+
+// Stamp a unique build id into the exported service worker so every deploy ships
+// a byte-different sw.js. This makes the browser detect the update, install the
+// new worker, purge the previous version's caches and take control immediately.
+const swPath = path.join(dist, "sw.js");
+if (fs.existsSync(swPath)) {
+  const buildId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  let sw = fs.readFileSync(swPath, "utf8");
+  sw = sw.split("__BUILD_ID__").join(buildId);
+  fs.writeFileSync(swPath, sw, "utf8");
+  console.log(`[inject-pwa] Service worker version stamped: pdu-${buildId}`);
+} else {
+  console.warn("[inject-pwa] dist/sw.js not found — service worker versioning skipped.");
+}
