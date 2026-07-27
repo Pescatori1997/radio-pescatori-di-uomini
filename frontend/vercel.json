@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
   "installCommand": "yarn install --frozen-lockfile --ignore-scripts",
   "buildCommand": "npx expo export -p web && node scripts/inject-pwa.js",
   "outputDirectory": "dist",
