@@ -18,7 +18,12 @@ const CATEGORIES = [
 ];
 
 function fmt(iso: string) {
-  try { return new Date(iso).toLocaleString("it-IT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }); } catch { return ""; }
+  try {
+    // Backend timestamps are UTC. If the string has no timezone designator,
+    // treat it as UTC so toLocaleString converts to the device's local time.
+    const s = /[zZ]|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : `${iso}Z`;
+    return new Date(s).toLocaleString("it-IT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  } catch { return ""; }
 }
 
 export default function AdminNotifications() {

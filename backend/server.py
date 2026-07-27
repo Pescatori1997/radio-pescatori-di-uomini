@@ -2583,6 +2583,12 @@ async def admin_send_notification(body: AdminNotifyIn, admin=Depends(require_adm
 @api_router.get("/admin/notifications")
 async def admin_notifications_log(admin=Depends(require_admin)):
     docs = await db.notifications_log.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    # Mongo returns naive UTC datetimes; emit them with an explicit UTC offset so
+    # the client converts to the device's local timezone (Europe/Rome) correctly.
+    for d in docs:
+        ca = d.get("created_at")
+        if isinstance(ca, datetime):
+            d["created_at"] = (ca.replace(tzinfo=timezone.utc) if ca.tzinfo is None else ca).isoformat()
     return docs
 
 
