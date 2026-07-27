@@ -6,6 +6,7 @@ from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
 from bson import ObjectId
 import os
 import re
+import json
 import base64
 import shutil
 import subprocess
@@ -2302,8 +2303,14 @@ async def notify_category(category: str, title: str, message: str, action_url: O
     try:
         await send_push(recipients, data, idempotency_key=new_id("ntf"))
     except Exception as e:
-        logger.warning("Push non inviata (%s): %s", category, e)
+        logger.warning("Push nativa non inviata (%s): %s", category, e)
         status = "failed"
+    # Web Push (PWA) — independent channel, never blocks or raises.
+    web_sent = 0
+    try:
+        web_sent = await send_web_push(recipients, data)
+    except Exception as e:
+        logger.warning("Web push non inviata (%s): %s", category, e)
     await db.notifications_log.insert_one({
         "id": new_id("nlog"),
         "category": category,
@@ -2311,11 +2318,120 @@ async def notify_category(category: str, title: str, message: str, action_url: O
         "message": message,
         "action_url": action_url,
         "recipients": len(recipients),
+        "web_delivered": web_sent,
         "status": status,
         "sent_by": admin_email,
         "created_at": now_utc(),
     })
     return len(recipients)
+
+
+# ---- Web Push (PWA / VAPID) — standard self-hosted push for the installed web app ----
+# Keys are generated once and stored in `app_config` so they stay stable per
+# environment (regenerating would invalidate existing browser subscriptions).
+_vapid_cache: dict = {}
+
+
+async def _get_vapid() -> dict:
+    if _vapid_cache.get("private_pem"):
+        return _vapid_cache
+    doc = await db.app_config.find_one({"_id": "webpush_vapid"})
+    if not doc:
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from cryptography.hazmat.primitives import serialization
+        priv = ec.generate_private_key(ec.SECP256R1())
+        priv_pem = priv.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        ).decode()
+        nums = priv.public_key().public_numbers()
+        raw_pub = b"\x04" + nums.x.to_bytes(32, "big") + nums.y.to_bytes(32, "big")
+        public_key = base64.urlsafe_b64encode(raw_pub).rstrip(b"=").decode()
+        doc = {"_id": "webpush_vapid", "private_pem": priv_pem, "public_key": public_key}
+        await db.app_config.insert_one(doc)
+    _vapid_cache["private_pem"] = doc["private_pem"]
+    _vapid_cache["public_key"] = doc["public_key"]
+    return _vapid_cache
+
+
+class WebPushSubscribeBody(BaseModel):
+    user_id: Optional[str] = None
+    subscription: dict
+
+
+@api_router.get("/webpush/public-key")
+async def webpush_public_key():
+    v = await _get_vapid()
+    return {"public_key": v["public_key"]}
+
+
+@api_router.post("/webpush/subscribe", status_code=201)
+async def webpush_subscribe(body: WebPushSubscribeBody):
+    endpoint = (body.subscription or {}).get("endpoint")
+    if not endpoint:
+        raise HTTPException(400, "Subscription non valida")
+    await _get_vapid()  # ensure keys exist
+    await db.web_push_subs.update_one(
+        {"endpoint": endpoint},
+        {"$set": {
+            "endpoint": endpoint,
+            "user_id": body.user_id,
+            "subscription": body.subscription,
+            "updated_at": now_utc(),
+        }, "$setOnInsert": {"id": new_id("wps"), "created_at": now_utc()}},
+        upsert=True,
+    )
+    return {"status": "subscribed"}
+
+
+@api_router.post("/webpush/unsubscribe")
+async def webpush_unsubscribe(body: WebPushSubscribeBody):
+    endpoint = (body.subscription or {}).get("endpoint")
+    if endpoint:
+        await db.web_push_subs.delete_one({"endpoint": endpoint})
+    return {"status": "unsubscribed"}
+
+
+def _send_one_webpush(sub: dict, payload: str, private_pem: str, claims: dict):
+    from pywebpush import webpush, WebPushException
+    try:
+        webpush(subscription_info=sub, data=payload, vapid_private_key=private_pem, vapid_claims=dict(claims))
+        return True, None
+    except WebPushException as e:
+        code = getattr(getattr(e, "response", None), "status_code", None)
+        return False, code
+    except Exception:
+        return False, None
+
+
+async def send_web_push(recipients: List[str], data: dict) -> int:
+    """Deliver a Web Push to the browser subscriptions of the given user_ids.
+    Returns the number of successful deliveries. Prunes expired subscriptions."""
+    if not recipients:
+        return 0
+    subs = await db.web_push_subs.find({"user_id": {"$in": recipients}}, {"_id": 0}).to_list(10000)
+    if not subs:
+        return 0
+    v = await _get_vapid()
+    private_pem = v["private_pem"]
+    claims = {"sub": "mailto:pescatoridiuomini@outlook.it"}
+    payload = json.dumps({
+        "title": data.get("title", "Pescatori di Uomini"),
+        "message": data.get("message", ""),
+        "action_url": data.get("action_url", "/"),
+    })
+    delivered = 0
+    stale: List[str] = []
+    for s in subs:
+        ok, code = await asyncio.to_thread(_send_one_webpush, s["subscription"], payload, private_pem, claims)
+        if ok:
+            delivered += 1
+        elif code in (404, 410):
+            stale.append(s["endpoint"])
+    if stale:
+        await db.web_push_subs.delete_many({"endpoint": {"$in": stale}})
+    return delivered
 
 
 # ---- Password reset (email fallback shows code in response until Resend key is active) ----

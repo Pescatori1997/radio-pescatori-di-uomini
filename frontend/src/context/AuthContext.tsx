@@ -5,6 +5,7 @@ import * as Linking from "expo-linking";
 import { api, TOKEN_KEY } from "@/src/api";
 import { storage } from "@/src/utils/storage";
 import { registerForPush } from "@/src/utils/push";
+import { getWebPushState, subscribeWebPush } from "@/src/utils/webpush";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -188,9 +189,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await loadMe();
   };
 
-  // Register the device for push whenever a user becomes authenticated (native only, non-blocking).
+  // Register the device for push whenever a user becomes authenticated.
+  // Native: expo-notifications. Web: (re)subscribe silently only if the user
+  // already granted permission (never prompts here — prompting is done from the
+  // notifications settings screen on an explicit tap).
   useEffect(() => {
-    if (user?.user_id) registerForPush(user.user_id);
+    if (!user?.user_id) return;
+    registerForPush(user.user_id);
+    getWebPushState().then((st) => { if (st === "granted") subscribeWebPush(user.user_id); });
   }, [user?.user_id]);
 
   const role = user?.role;

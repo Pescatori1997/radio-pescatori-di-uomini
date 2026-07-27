@@ -1,9 +1,11 @@
-import React, { useCallback, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Switch, ActivityIndicator } from "react-native";
+import React, { useCallback, useEffect, useState } from "react";
+import { View, Text, StyleSheet, ScrollView, Pressable, Switch, ActivityIndicator, Platform, Linking } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/src/api";
+import { useAuth } from "@/src/context/AuthContext";
+import { getWebPushState, subscribeWebPush } from "@/src/utils/webpush";
 import { colors, spacing, radius } from "@/src/theme";
 
 const CATEGORIES: { key: string; label: string; desc: string; icon: string }[] = [
@@ -19,12 +21,25 @@ const CATEGORIES: { key: string; label: string; desc: string; icon: string }[] =
 export default function NotificationsSettings() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { user } = useAuth();
   const [prefs, setPrefs] = useState<Record<string, boolean> | null>(null);
+  const [webState, setWebState] = useState<"unsupported" | "granted" | "denied" | "default" | "loading">("loading");
 
   const load = useCallback(() => {
     api.getNotifPrefs().then(setPrefs).catch(() => setPrefs(Object.fromEntries(CATEGORIES.map((c) => [c.key, true]))));
   }, []);
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  useEffect(() => { getWebPushState().then(setWebState); }, []);
+
+  const enableWebPush = async () => {
+    setWebState("loading");
+    const res = await subscribeWebPush(user?.user_id || null);
+    setWebState(await getWebPushState());
+    if (!res.ok && res.reason === "denied") {
+      // permission blocked -> guide the user to browser settings
+    }
+  };
 
   const toggle = async (key: string, value: boolean) => {
     if (!prefs) return;
@@ -46,6 +61,32 @@ export default function NotificationsSettings() {
       ) : (
         <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: insets.bottom + 40 }}>
           <Text style={styles.intro}>Scegli quali notifiche ricevere. Puoi cambiare queste preferenze in qualsiasi momento.</Text>
+
+          {Platform.OS === "web" && webState !== "unsupported" && (
+            <View style={styles.webCard}>
+              <View style={styles.webIcon}><Ionicons name="notifications" size={22} color={colors.white} /></View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.webTitle}>Notifiche su questo dispositivo</Text>
+                <Text style={styles.webSub}>
+                  {webState === "granted"
+                    ? "Attive su questo browser/PWA. Riceverai gli avvisi anche ad app chiusa."
+                    : webState === "denied"
+                    ? "Bloccate. Abilitale dalle impostazioni del browser per questo sito."
+                    : "Attivale per ricevere gli avvisi anche quando l'app è chiusa."}
+                </Text>
+              </View>
+              {webState === "granted" ? (
+                <View style={styles.webBadge}><Ionicons name="checkmark" size={16} color={colors.white} /></View>
+              ) : webState === "loading" ? (
+                <ActivityIndicator color={colors.brandPrimary} />
+              ) : webState === "denied" ? (
+                <Pressable testID="webpush-settings" onPress={() => Linking.openSettings?.()} style={styles.webBtn}><Text style={styles.webBtnText}>Impostazioni</Text></Pressable>
+              ) : (
+                <Pressable testID="webpush-enable" onPress={enableWebPush} style={styles.webBtn}><Text style={styles.webBtnText}>Attiva</Text></Pressable>
+              )}
+            </View>
+          )}
+
           <View style={styles.card}>
             {CATEGORIES.map((c, i) => (
               <View key={c.key}>
@@ -69,7 +110,7 @@ export default function NotificationsSettings() {
           </View>
           <View style={styles.note}>
             <Ionicons name="information-circle-outline" size={18} color={colors.muted} />
-            <Text style={styles.noteText}>Le notifiche push arrivano sull'app installata (iOS/Android) dopo aver concesso il permesso. Ricordati di autorizzare le notifiche al primo avvio.</Text>
+            <Text style={styles.noteText}>Su iOS/Android le notifiche arrivano sull'app installata dopo aver concesso il permesso. Sul web (PWA) attiva le notifiche con il pulsante qui sopra.</Text>
           </View>
         </ScrollView>
       )}
@@ -83,6 +124,13 @@ const styles = StyleSheet.create({
   headerTitle: { color: colors.onSurface, fontSize: 18, fontWeight: "800" },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   intro: { color: colors.onSurfaceSecondary, fontSize: 14, lineHeight: 20, marginBottom: spacing.lg },
+  webCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.navy, borderRadius: radius.lg, padding: spacing.lg, marginBottom: spacing.lg },
+  webIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
+  webTitle: { color: colors.white, fontSize: 15, fontWeight: "800" },
+  webSub: { color: colors.muted, fontSize: 12, marginTop: 3, lineHeight: 16 },
+  webBtn: { backgroundColor: colors.brandPrimary, paddingHorizontal: spacing.lg, paddingVertical: 9, borderRadius: radius.pill },
+  webBtnText: { color: colors.white, fontSize: 13, fontWeight: "800" },
+  webBadge: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.success, alignItems: "center", justifyContent: "center" },
   card: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
   row: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.lg },
   iconWrap: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center" },

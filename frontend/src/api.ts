@@ -291,6 +291,11 @@ export const api = {
     request("/me/notifications", { method: "PUT", body: JSON.stringify(prefs) }, true),
   registerPush: (body: { user_id: string; platform: string; device_token: string }) =>
     request("/register-push", { method: "POST", body: JSON.stringify(body) }),
+  webpushPublicKey: () => request("/webpush/public-key"),
+  webpushSubscribe: (body: { user_id?: string | null; subscription: any }) =>
+    request("/webpush/subscribe", { method: "POST", body: JSON.stringify(body) }),
+  webpushUnsubscribe: (body: { subscription: any }) =>
+    request("/webpush/unsubscribe", { method: "POST", body: JSON.stringify(body) }),
   // admin notifications
   adminSendNotification: (body: { category: string; title: string; message: string; action_url?: string }) =>
     request("/admin/notifications/send", { method: "POST", body: JSON.stringify(body) }, true),
