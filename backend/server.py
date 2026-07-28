@@ -1550,7 +1550,7 @@ async def admin_radio_live(body: LiveModeIn, admin=Depends(require_perm("radio")
         await log_activity(admin, "ha avviato la Diretta LIVE", "radio")
         await notify_category("live", "Siamo in diretta! 🔴",
                               "La radio è in diretta ora. Tocca per ascoltare o guardare.",
-                              action_url="/(tabs)", admin_email=admin.get("email"))
+                              action_url="/", admin_email=admin.get("email"))
     elif body.action == "end":
         if key:
             try:
