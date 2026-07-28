@@ -1166,7 +1166,7 @@ async def admin_users(search: Optional[str] = None, role: Optional[str] = None,
 
 
 class UserRoleIn(BaseModel):
-    role: str  # collaborator | listener  (administrator is allowlist-only)
+    role: str  # administrator | collaborator | listener
     permissions: Optional[List[str]] = None
 
 
@@ -1176,16 +1176,17 @@ async def admin_set_user_role(uid: str, body: UserRoleIn, admin=Depends(require_
     if not u:
         raise HTTPException(status_code=404, detail="Utente non trovato")
     if (u.get("email") or "").lower() in ADMIN_EMAILS:
-        raise HTTPException(status_code=400, detail="Il ruolo degli amministratori è gestito dall'allowlist")
-    if body.role == ROLE_ADMIN:
-        raise HTTPException(status_code=400, detail="Il ruolo Amministratore si assegna solo dall'allowlist email")
-    if body.role not in (ROLE_COLLAB, ROLE_LISTENER):
+        raise HTTPException(status_code=400, detail="Il ruolo degli amministratori dell'allowlist non è modificabile")
+    if body.role not in (ROLE_ADMIN, ROLE_COLLAB, ROLE_LISTENER):
         raise HTTPException(status_code=400, detail="Ruolo non valido")
-    perms = []
+    # Administrators implicitly have every permission; collaborators get the selected subset.
+    perms: List[str] = []
     if body.role == ROLE_COLLAB:
         perms = [p for p in (body.permissions or []) if p in PERM_SECTIONS]
+    elif body.role == ROLE_ADMIN:
+        perms = list(PERM_SECTIONS)
     await db.users.update_one({"user_id": uid}, {"$set": {"role": body.role, "permissions": perms}})
-    label = "Collaboratore" if body.role == ROLE_COLLAB else "Ascoltatore"
+    label = {ROLE_ADMIN: "Amministratore", ROLE_COLLAB: "Collaboratore"}.get(body.role, "Ascoltatore")
     await log_activity(admin, f"ha impostato {u.get('name') or u.get('email')} come {label}", "utenti",
                        {"user_id": uid, "role": body.role, "permissions": perms})
     return {"ok": True, "role": body.role, "permissions": perms}
