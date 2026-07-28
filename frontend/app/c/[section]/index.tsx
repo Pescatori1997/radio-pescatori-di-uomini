@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { api } from "@/src/api";
 import PressableScale from "@/src/components/PressableScale";
+import { useThumbAspect } from "@/src/hooks/useThumbAspect";
 import { sectionLabel, sectionIcon } from "@/src/utils/sections";
 import { colors, spacing, radius } from "@/src/theme";
 
@@ -26,6 +27,7 @@ export default function ContentList() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const thumbAspect = useThumbAspect();
 
   const load = useCallback(() => {
     api.contents(section!, { search: search || undefined, category: cat !== "Tutti" ? cat : undefined })
@@ -93,7 +95,7 @@ export default function ContentList() {
               <Animated.View key={m.id} entering={FadeInDown.delay(Math.min(i * 50, 300))}>
                 <PressableScale testID={`cl-card-${m.id}`} style={styles.card} onPress={() => router.push(`/c/${section}/${m.id}` as any)}>
                   <View style={styles.thumbWrap}>
-                    {m.thumbnail ? <Image source={{ uri: m.thumbnail }} style={styles.thumb} contentFit="cover" /> : <View style={[styles.thumb, styles.thumbEmpty]}><MaterialCommunityIcons name={sectionIcon(section) as any} size={44} color={colors.white} /></View>}
+                    {m.thumbnail ? <Image source={{ uri: m.thumbnail }} style={[styles.thumb, { aspectRatio: thumbAspect }]} contentFit="cover" /> : <View style={[styles.thumb, styles.thumbEmpty, { aspectRatio: thumbAspect }]}><MaterialCommunityIcons name={sectionIcon(section) as any} size={44} color={colors.white} /></View>}
                     <View style={styles.typeBadge}>
                       <MaterialCommunityIcons name={TYPE_ICON[m.content_type] || "play"} size={13} color={colors.white} />
                       {!!m.duration && <Text style={styles.typeBadgeText}>{m.duration}</Text>}
@@ -134,7 +136,7 @@ const styles = StyleSheet.create({
   list: { padding: spacing.lg, gap: spacing.lg },
   card: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
   thumbWrap: { position: "relative" },
-  thumb: { width: "100%", aspectRatio: 16 / 9, backgroundColor: colors.navy },
+  thumb: { width: "100%", backgroundColor: colors.navy },
   thumbEmpty: { alignItems: "center", justifyContent: "center" },
   typeBadge: { position: "absolute", top: spacing.sm, left: spacing.sm, flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(10,17,40,0.82)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.pill },
   typeBadgeText: { color: colors.white, fontSize: 11, fontWeight: "800" },

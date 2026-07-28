@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { api } from "@/src/api";
 import PressableScale from "@/src/components/PressableScale";
+import { useThumbAspect } from "@/src/hooks/useThumbAspect";
 import { colors, spacing, radius } from "@/src/theme";
 
 function fmtDate(iso?: string) {
@@ -23,6 +24,7 @@ export default function MeditazioniTab() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const thumbAspect = useThumbAspect();
 
   const load = useCallback(() => {
     api.meditations(search || undefined, cat !== "Tutti" ? cat : undefined)
@@ -78,7 +80,7 @@ export default function MeditazioniTab() {
               <Animated.View key={m.id} entering={FadeInDown.delay(Math.min(i * 50, 300))}>
                 <PressableScale testID={`med-card-${m.id}`} style={styles.card} onPress={() => router.push(`/meditazioni/${m.id}`)}>
                   <View style={styles.thumbWrap}>
-                    {m.thumbnail ? <Image source={{ uri: m.thumbnail }} style={styles.thumb} contentFit="cover" /> : <View style={[styles.thumb, styles.thumbEmpty]}><MaterialCommunityIcons name="play-circle" size={44} color={colors.white} /></View>}
+                    {m.thumbnail ? <Image source={{ uri: m.thumbnail }} style={[styles.thumb, { aspectRatio: thumbAspect }]} contentFit="cover" /> : <View style={[styles.thumb, styles.thumbEmpty, { aspectRatio: thumbAspect }]}><MaterialCommunityIcons name="play-circle" size={44} color={colors.white} /></View>}
                     <View style={styles.playOverlay}><Ionicons name="play" size={20} color={colors.navy} /></View>
                     <View style={styles.typeBadge}>
                       <MaterialCommunityIcons name={m.content_type === "audio" ? "headphones" : m.content_type === "pdf" ? "file-pdf-box" : "play"} size={13} color={colors.white} />
@@ -120,7 +122,7 @@ const styles = StyleSheet.create({
   list: { padding: spacing.lg, gap: spacing.lg },
   card: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
   thumbWrap: { position: "relative" },
-  thumb: { width: "100%", aspectRatio: 16 / 9, backgroundColor: colors.navy },
+  thumb: { width: "100%", backgroundColor: colors.navy },
   thumbEmpty: { alignItems: "center", justifyContent: "center" },
   playOverlay: { position: "absolute", bottom: spacing.md, right: spacing.md, width: 44, height: 44, borderRadius: 22, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" },
   typeBadge: { position: "absolute", top: spacing.sm, left: spacing.sm, flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(10,17,40,0.82)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.pill },

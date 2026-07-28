@@ -50,7 +50,7 @@ export default function NewsEditor() {
         <View style={{ width: 40 }} />
       </View>
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: insets.bottom + 40 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <AImagePicker testID="news-image" label="Immagine di copertina" value={f.image} onChange={(v: string) => set("image", v)} aspect={[16, 9]} />
+        <AImagePicker testID="news-image" label="Immagine di copertina" value={f.image} onChange={(v: string) => set("image", v)} aspect={[1, 1]} />
         <AInput label="Titolo *" value={f.title} onChangeText={(v: string) => set("title", v)} />
         <AInput label="Riassunto breve" value={f.excerpt} onChangeText={(v: string) => set("excerpt", v)} multiline />
         <AInput label="Articolo completo" value={f.body} onChangeText={(v: string) => set("body", v)} multiline />

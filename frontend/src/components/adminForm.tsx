@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { ADMIN } from "@/src/components/AdminShell";
 import PressableScale from "@/src/components/PressableScale";
+import { useThumbAspect } from "@/src/hooks/useThumbAspect";
 import { colors, spacing, radius } from "@/src/theme";
 
 export function AInput({ label, value, onChangeText, multiline, keyboardType, placeholder, testID }: any) {
@@ -27,7 +28,8 @@ export function ASwitch({ label, value, onValueChange, testID }: any) {
   );
 }
 
-export function AImagePicker({ label, value, onChange, testID, aspect = [16, 9] as [number, number] }: any) {
+export function AImagePicker({ label, value, onChange, testID, aspect = [1, 1] as [number, number] }: any) {
+  const thumbAspect = useThumbAspect();
   const pick = async () => {
     const cur = await ImagePicker.getMediaLibraryPermissionsAsync();
     let st = cur.status;
@@ -39,7 +41,7 @@ export function AImagePicker({ label, value, onChange, testID, aspect = [16, 9] 
   return (
     <View style={{ marginBottom: spacing.md }}>
       <Text style={styles.label}>{label}</Text>
-      <PressableScale testID={testID} onPress={pick} style={styles.imgBox}>
+      <PressableScale testID={testID} onPress={pick} style={[styles.imgBox, { aspectRatio: thumbAspect }]}>
         {value ? <Image source={{ uri: value }} style={styles.img} contentFit="cover" /> : (
           <View style={styles.imgEmpty}><Ionicons name="image" size={26} color={colors.brandPrimary} /><Text style={styles.imgText}>Carica immagine</Text></View>
         )}
@@ -52,7 +54,7 @@ const styles = StyleSheet.create({
   label: { color: ADMIN.muted, fontSize: 13, fontWeight: "700", marginBottom: 6 },
   input: { backgroundColor: ADMIN.card, borderRadius: radius.md, padding: spacing.md, fontSize: 15, color: colors.white, borderWidth: 1, borderColor: ADMIN.border },
   switchRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.md, paddingVertical: 4 },
-  imgBox: { height: 160, borderRadius: radius.md, overflow: "hidden", backgroundColor: ADMIN.card, borderWidth: 1, borderColor: ADMIN.border, borderStyle: "dashed" },
+  imgBox: { width: "100%", borderRadius: radius.md, overflow: "hidden", backgroundColor: ADMIN.card, borderWidth: 1, borderColor: ADMIN.border, borderStyle: "dashed" },
   img: { width: "100%", height: "100%" },
   imgEmpty: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.sm },
   imgText: { color: colors.brandSecondary, fontSize: 13, fontWeight: "700" },

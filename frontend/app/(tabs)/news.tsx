@@ -7,6 +7,7 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/src/api";
 import PressableScale from "@/src/components/PressableScale";
+import { useThumbAspect } from "@/src/hooks/useThumbAspect";
 import { colors, spacing, radius } from "@/src/theme";
 
 export default function NewsScreen() {
@@ -18,6 +19,7 @@ export default function NewsScreen() {
   const [cat, setCat] = useState("Tutte");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const cardAspect = useThumbAspect();
 
   useFocusEffect(
     useCallback(() => {
@@ -71,7 +73,7 @@ export default function NewsScreen() {
           }
           ListEmptyComponent={<Text style={styles.empty}>Nessuna notizia trovata</Text>}
           renderItem={({ item }) => (
-            <Pressable testID={`news-card-${item.id}`} style={styles.card} onPress={() => router.push(`/news/${item.id}`)}>
+            <Pressable testID={`news-card-${item.id}`} style={[styles.card, { aspectRatio: cardAspect }]} onPress={() => router.push(`/news/${item.id}`)}>
               <Image source={{ uri: item.image }} style={styles.img} contentFit="cover" />
               <LinearGradient colors={["transparent", "rgba(10,17,40,0.92)"]} style={styles.scrim} />
               <View style={styles.badge}><Text style={styles.badgeText}>{item.category}</Text></View>
@@ -107,7 +109,7 @@ const styles = StyleSheet.create({
   bannerBody: { position: "absolute", left: spacing.lg, right: spacing.lg, bottom: spacing.lg },
   bannerTitle: { color: colors.white, fontSize: 22, fontWeight: "800" },
   bannerMeta: { color: colors.brandSecondary, fontSize: 13, marginTop: spacing.xs },
-  card: { height: 220, borderRadius: radius.lg, overflow: "hidden", backgroundColor: colors.navy },
+  card: { width: "100%", borderRadius: radius.lg, overflow: "hidden", backgroundColor: colors.navy },
   img: { ...StyleSheet.absoluteFillObject },
   scrim: { ...StyleSheet.absoluteFillObject },
   badge: { position: "absolute", top: spacing.md, left: spacing.md, backgroundColor: colors.brandPrimary, paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.sm },

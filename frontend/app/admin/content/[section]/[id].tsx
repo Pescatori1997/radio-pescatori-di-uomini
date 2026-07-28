@@ -131,7 +131,7 @@ export default function ContentEditor() {
     <AdminShell title={isNew ? `Nuovo · ${label}` : `Modifica · ${label}`} activeKey={section}>
       {loading ? <View style={styles.center}><ActivityIndicator color={colors.brandPrimary} size="large" /></View> : (
         <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 80 }} keyboardShouldPersistTaps="handled">
-          <AImagePicker testID="cnt-thumb" label="Copertina (16:9)" value={f.thumbnail} onChange={(v: string) => set("thumbnail", v)} aspect={[16, 9]} />
+          <AImagePicker testID="cnt-thumb" label="Copertina" value={f.thumbnail} onChange={(v: string) => set("thumbnail", v)} aspect={[1, 1]} />
           {f.media_type === "video" && !!f.thumbnail && <Text style={styles.hint}>La copertina è stata generata automaticamente dal video. Puoi sostituirla.</Text>}
 
           <AInput testID="cnt-title" label="Titolo *" value={f.title} onChangeText={(v: string) => set("title", v)} placeholder={`Titolo · ${label}`} />

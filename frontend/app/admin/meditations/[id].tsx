@@ -155,7 +155,7 @@ export default function MeditationEditor() {
     <AdminShell title={isNew ? "Nuova meditazione" : "Modifica meditazione"} activeKey="meditations">
       {loading ? <View style={styles.center}><ActivityIndicator color={colors.brandPrimary} size="large" /></View> : (
         <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
-          <AImagePicker testID="med-thumb" label="Copertina (16:9)" value={f.thumbnail} onChange={(v: string) => set("thumbnail", v)} aspect={[16, 9]} />
+          <AImagePicker testID="med-thumb" label="Copertina" value={f.thumbnail} onChange={(v: string) => set("thumbnail", v)} aspect={[1, 1]} />
           {f.media_type === "video" && !!f.thumbnail && <Text style={styles.hint}>Suggerimento: la copertina è stata generata automaticamente dal video. Puoi sostituirla.</Text>}
 
           <AInput testID="med-title" label="Titolo *" value={f.title} onChangeText={(v: string) => set("title", v)} placeholder="Titolo della meditazione" />
