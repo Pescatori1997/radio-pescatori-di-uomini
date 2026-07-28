@@ -642,6 +642,19 @@ def require_perm(section: str):
     return dep
 
 
+async def require_uploader(authorization: Optional[str] = Header(None)):
+    """Generic media upload access: admins, or any collaborator that manages at
+    least one section. The section endpoints (podcasts/meditations/...) still
+    enforce their own per-section permission when the uploaded media is saved."""
+    user = await get_current_user(authorization)
+    email = (user.get("email") or "").lower()
+    if user.get("role") == ROLE_ADMIN or email in ADMIN_EMAILS:
+        return user
+    if user.get("role") == ROLE_COLLAB and (user.get("permissions") or []):
+        return user
+    raise HTTPException(status_code=403, detail="Non hai i permessi per caricare file")
+
+
 class ApplicationEdit(BaseModel):
     name: Optional[str] = None
     surname: Optional[str] = None
@@ -2777,7 +2790,7 @@ async def _gridfs_delete(media_id: Optional[str]):
 
 # ---------------- Chunked upload (admin) ----------------
 @api_router.post("/admin/uploads/init")
-async def upload_init(body: Dict, admin=Depends(require_admin)):
+async def upload_init(body: Dict, admin=Depends(require_uploader)):
     filename = (body.get("filename") or "file").strip()
     mime = body.get("mime") or "application/octet-stream"
     _validate_media(filename, mime)
@@ -2788,7 +2801,7 @@ async def upload_init(body: Dict, admin=Depends(require_admin)):
 
 
 @api_router.put("/admin/uploads/{upload_id}/chunk")
-async def upload_chunk(upload_id: str, request: Request, admin=Depends(require_admin)):
+async def upload_chunk(upload_id: str, request: Request, admin=Depends(require_uploader)):
     part = UPLOAD_TMP / upload_id
     if not part.exists():
         raise HTTPException(status_code=404, detail="Upload non trovato")
@@ -2799,7 +2812,7 @@ async def upload_chunk(upload_id: str, request: Request, admin=Depends(require_a
 
 
 @api_router.post("/admin/uploads/{upload_id}/complete")
-async def upload_complete(upload_id: str, admin=Depends(require_admin)):
+async def upload_complete(upload_id: str, admin=Depends(require_uploader)):
     part = UPLOAD_TMP / upload_id
     meta = UPLOAD_TMP / (upload_id + ".meta")
     if not part.exists():
