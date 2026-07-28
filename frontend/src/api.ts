@@ -1,4 +1,5 @@
 import { storage } from "@/src/utils/storage";
+import { Platform } from "react-native";
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
 export const TOKEN_KEY = "pdu_session_token";
@@ -7,9 +8,32 @@ export const TOKEN_KEY = "pdu_session_token";
 export const mediaUrl = (id: string, download = false) =>
   `${BASE}/api/media/${id}${download ? "?download=1" : ""}`;
 
+/**
+ * Upload one chunk via XMLHttpRequest. iOS Safari/WebKit frequently aborts
+ * `fetch()` uploads with a generic "Load failed" error, whereas XHR is the
+ * reliable, well-supported path for request bodies on iOS (and works on
+ * Android/native too). Rejects on any non-2xx / network error so the caller
+ * can retry the same chunk.
+ */
+function xhrPutChunk(url: string, body: Blob, headers: Record<string, string>): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+    xhr.timeout = 120000;
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new Error(`HTTP ${xhr.status}`));
+    };
+    xhr.onerror = () => reject(new Error("network"));
+    xhr.ontimeout = () => reject(new Error("timeout"));
+    xhr.send(body);
+  });
+}
+
 /** Chunked upload of a large file (audio/video/image/pdf) to the backend (GridFS). */
 export async function uploadMediaChunked(
-  file: { uri: string; name: string; mime: string },
+  file: { uri: string; name: string; mime: string; blob?: Blob },
   onProgress?: (p: number) => void,
   control?: { cancelled?: boolean },
 ) {
@@ -26,17 +50,20 @@ export async function uploadMediaChunked(
   }
   const { upload_id } = await initRes.json();
 
-  const blob = await (await fetch(file.uri)).blob();
+  const blob = file.blob || (await (await fetch(file.uri)).blob());
   const total = blob.size;
   const CHUNK = 2 * 1024 * 1024;
   const putChunk = async (start: number, part: Blob, attempt = 0): Promise<void> => {
+    const url = `${BASE}/api/admin/uploads/${upload_id}/chunk`;
+    const headers = { ...authH, "X-Chunk-Offset": String(start) };
     try {
-      const r = await fetch(`${BASE}/api/admin/uploads/${upload_id}/chunk`, {
-        method: "PUT",
-        headers: { ...authH, "X-Chunk-Offset": String(start) },
-        body: part,
-      });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      if (Platform.OS === "web") {
+        // XHR is far more reliable than fetch for uploads on iOS Safari.
+        await xhrPutChunk(url, part, headers);
+      } else {
+        const r = await fetch(url, { method: "PUT", headers, body: part });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      }
     } catch {
       if (control?.cancelled) throw new Error("Caricamento annullato");
       // Transient network/proxy hiccup: retry the same chunk (idempotent server-side).

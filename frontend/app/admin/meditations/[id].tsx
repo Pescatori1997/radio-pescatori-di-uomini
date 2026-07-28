@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Pressable } from "react-native";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Pressable, Platform } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
@@ -76,8 +76,9 @@ export default function MeditationEditor() {
         return;
       }
       setUploadPct(0);
+      const webBlob = Platform.OS === "web" ? ((asset as any).file as Blob | undefined) : undefined;
       const info = await uploadMediaChunked(
-        { uri: asset.uri, name: asset.name || "file", mime: asset.mimeType || "application/octet-stream" },
+        { uri: asset.uri, name: asset.name || "file", mime: asset.mimeType || "application/octet-stream", blob: webBlob },
         (p) => setUploadPct(p),
       );
       setF((prev: any) => ({

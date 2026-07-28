@@ -1,5 +1,5 @@
 import React, { useRef, useState } from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import { uploadMediaChunked } from "@/src/api";
@@ -47,9 +47,9 @@ export default function MediaUpload({
   const [totalSize, setTotalSize] = useState(0);
   const [startedAt, setStartedAt] = useState(0);
   const controlRef = useRef<{ cancelled?: boolean }>({});
-  const lastFileRef = useRef<{ uri: string; name: string; mime: string } | null>(null);
+  const lastFileRef = useRef<{ uri: string; name: string; mime: string; blob?: Blob } | null>(null);
 
-  const doUpload = async (file: { uri: string; name: string; mime: string }, size?: number) => {
+  const doUpload = async (file: { uri: string; name: string; mime: string; blob?: Blob }, size?: number) => {
     controlRef.current = { cancelled: false };
     lastFileRef.current = file;
     setTotalSize(size || 0);
@@ -77,7 +77,10 @@ export default function MediaUpload({
       if (res.canceled || !res.assets?.[0]) return;
       const a = res.assets[0];
       if (a.size && a.size > MAX_BYTES) { alertMessage("File troppo grande", "La dimensione massima è 1 GB."); return; }
-      await doUpload({ uri: a.uri, name: a.name || "file", mime: a.mimeType || "application/octet-stream" }, a.size || 0);
+      // On web, pass the real File object so we never re-fetch a blob: URL
+      // (which iOS Safari fails on for large files → "Load failed").
+      const webBlob = Platform.OS === "web" ? ((a as any).file as Blob | undefined) : undefined;
+      await doUpload({ uri: a.uri, name: a.name || "file", mime: a.mimeType || "application/octet-stream", blob: webBlob }, a.size || 0);
     } catch (e: any) {
       alertMessage("Errore", e?.message || "Selezione non riuscita.");
     }
