@@ -3371,7 +3371,18 @@ async def startup():
     if missing:
         await db.settings.update_one({"_id": "general"}, {"$set": missing}, upsert=True)
 
-    if await db.podcasts.count_documents({}) == 0:
+    # One-time demo seeding: only on a genuinely fresh/empty install. Once the
+    # admin has curated content (or on any existing install), demo podcasts/news/
+    # programs/team are NEVER re-created — even if the collections are emptied.
+    seed_flags = await db.settings.find_one({"_id": "seed_flags"}) or {}
+    already_have_data = (
+        (await db.users.count_documents({}) > 0)
+        or (await db.podcasts.count_documents({}) > 0)
+        or (await db.crew.count_documents({}) > 0)
+    )
+    demo_seeded = bool(seed_flags.get("demo_seeded")) or already_have_data
+
+    if not demo_seeded and await db.podcasts.count_documents({}) == 0:
         covers = [
             "https://images.unsplash.com/photo-1507692049790-de58290a4334?w=600&q=80",
             "https://images.unsplash.com/photo-1476611338391-6f395a0ebc7b?w=600&q=80",
@@ -3400,7 +3411,7 @@ async def startup():
             })
         await db.podcasts.insert_many(podcasts)
 
-    if await db.news.count_documents({}) == 0:
+    if not demo_seeded and await db.news.count_documents({}) == 0:
         imgs = [
             "https://images.pexels.com/photos/13963623/pexels-photo-13963623.jpeg?auto=compress&cs=tinysrgb&w=940",
             "https://images.unsplash.com/photo-1544427920-c49ccfb85579?w=940&q=80",
@@ -3424,7 +3435,7 @@ async def startup():
             })
         await db.news.insert_many(news)
 
-    if await db.programs.count_documents({}) == 0:
+    if not demo_seeded and await db.programs.count_documents({}) == 0:
         progs = [
             ("Buongiorno con la Parola", "07:00", "Lunedì", "Marco Rossi", "Riflessione mattutina per iniziare la giornata con Dio."),
             ("Lode e Adorazione", "10:00", "Lunedì", "Sara Bianchi", "Un'ora di musica cristiana e worship."),
@@ -3441,7 +3452,7 @@ async def startup():
                          "host": host, "description": desc})
         await db.programs.insert_many(docs)
 
-    if await db.collaborators.count_documents({}) == 0:
+    if not demo_seeded and await db.collaborators.count_documents({}) == 0:
         team = [
             ("Marco Rossi", "Direttore & Speaker", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&q=80"),
             ("Sara Bianchi", "Conduttrice Lode e Adorazione", "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&q=80"),
@@ -3472,6 +3483,10 @@ async def startup():
             "order": 0,
             "published": True,
         })
+
+    # Mark demo seeding as done so it never runs again on this database.
+    if not demo_seeded:
+        await db.settings.update_one({"_id": "seed_flags"}, {"$set": {"demo_seeded": True}}, upsert=True)
 
     # --- CMS migration (idempotent): ensure existing content has publish/feature flags ---
     await db.podcasts.update_many({"published": {"$exists": False}}, {"$set": {"published": True}})
