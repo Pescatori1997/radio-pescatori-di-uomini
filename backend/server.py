@@ -2751,7 +2751,7 @@ def _ffmpeg_probe_duration(path: Path) -> str:
         out = subprocess.run(
             ["ffprobe", "-v", "error", "-show_entries", "format=duration",
              "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, text=True, timeout=20,
         )
         secs = int(float(out.stdout.strip()))
         h, rem = divmod(secs, 3600)
@@ -2768,7 +2768,7 @@ def _ffmpeg_grab_frame(path: Path) -> Optional[str]:
         subprocess.run(
             ["ffmpeg", "-y", "-ss", "00:00:01", "-i", str(path),
              "-frames:v", "1", "-vf", "scale=640:-1", "-q:v", "4", str(out_path)],
-            capture_output=True, timeout=45,
+            capture_output=True, timeout=25,
         )
         if out_path.exists() and out_path.stat().st_size > 0:
             data = out_path.read_bytes()
@@ -2806,7 +2806,15 @@ async def upload_chunk(upload_id: str, request: Request, admin=Depends(require_u
     if not part.exists():
         raise HTTPException(status_code=404, detail="Upload non trovato")
     data = await request.body()
-    with open(part, "ab") as fh:
+    # Idempotent writes: the client sends the absolute byte offset so a retried
+    # chunk overwrites the same region instead of appending a duplicate (which
+    # would corrupt the file). Falls back to append when no offset is provided.
+    offset_h = request.headers.get("x-chunk-offset")
+    with open(part, "r+b") as fh:
+        if offset_h is not None:
+            fh.seek(int(offset_h))
+        else:
+            fh.seek(0, 2)
         fh.write(data)
     return {"ok": True, "size": part.stat().st_size}
 
@@ -2826,23 +2834,25 @@ async def upload_complete(upload_id: str, admin=Depends(require_uploader)):
     media_type = _media_type_from_mime(mime)
     duration = ""
     thumbnail = None
+    # Run ffmpeg/ffprobe off the event loop so the single worker keeps serving
+    # requests (and the client connection is not held open longer than needed).
     if media_type in ("video", "audio"):
-        duration = _ffmpeg_probe_duration(part)
+        duration = await asyncio.to_thread(_ffmpeg_probe_duration, part)
     if media_type == "video":
-        thumbnail = _ffmpeg_grab_frame(part)
+        thumbnail = await asyncio.to_thread(_ffmpeg_grab_frame, part)
     # Images: resize + convert to WebP for performance.
     if media_type == "image":
-        new_path, new_mime, new_name = _optimize_image(part)
+        new_path, new_mime, new_name = await asyncio.to_thread(_optimize_image, part)
         if new_mime:
             if new_path != part:
                 part.unlink(missing_ok=True)
                 part = new_path
             mime, filename = new_mime, new_name
-    # Stream the assembled temp file into GridFS.
+    # Stream the assembled temp file into GridFS (large blocks = fewer round-trips).
     grid_in = fs_bucket.open_upload_stream(filename, metadata={"contentType": mime})
     with open(part, "rb") as fh:
         while True:
-            block = fh.read(1024 * 1024)
+            block = fh.read(8 * 1024 * 1024)
             if not block:
                 break
             await grid_in.write(block)

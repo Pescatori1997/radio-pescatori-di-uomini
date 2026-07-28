@@ -28,16 +28,29 @@ export async function uploadMediaChunked(
 
   const blob = await (await fetch(file.uri)).blob();
   const total = blob.size;
-  const CHUNK = 4 * 1024 * 1024;
+  const CHUNK = 2 * 1024 * 1024;
+  const putChunk = async (start: number, part: Blob, attempt = 0): Promise<void> => {
+    try {
+      const r = await fetch(`${BASE}/api/admin/uploads/${upload_id}/chunk`, {
+        method: "PUT",
+        headers: { ...authH, "X-Chunk-Offset": String(start) },
+        body: part,
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    } catch {
+      if (control?.cancelled) throw new Error("Caricamento annullato");
+      // Transient network/proxy hiccup: retry the same chunk (idempotent server-side).
+      if (attempt < 3) {
+        await new Promise((res) => setTimeout(res, 700 * (attempt + 1)));
+        return putChunk(start, part, attempt + 1);
+      }
+      throw new Error("Caricamento interrotto");
+    }
+  };
   for (let start = 0; start < total; start += CHUNK) {
     if (control?.cancelled) throw new Error("Caricamento annullato");
     const part = blob.slice(start, Math.min(start + CHUNK, total));
-    const r = await fetch(`${BASE}/api/admin/uploads/${upload_id}/chunk`, {
-      method: "PUT",
-      headers: { ...authH },
-      body: part,
-    });
-    if (!r.ok) throw new Error("Caricamento interrotto");
+    await putChunk(start, part);
     onProgress?.(Math.min(start + CHUNK, total) / total);
   }
   const c = await fetch(`${BASE}/api/admin/uploads/${upload_id}/complete`, {
