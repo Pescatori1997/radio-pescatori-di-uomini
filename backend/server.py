@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
 from bson import ObjectId
+from bson.binary import Binary
+from pymongo import ReturnDocument
 import os
 import re
 import json
@@ -2789,53 +2791,70 @@ async def _gridfs_delete(media_id: Optional[str]):
 
 
 # ---------------- Chunked upload (admin) ----------------
+# Chunks are stored in MongoDB (shared by every worker/replica) keyed by
+# (upload_id, offset). This makes uploads reliable regardless of how many
+# backend processes/pods are running and behind any load balancer — the local
+# /tmp filesystem is NOT shared, which caused "Upload non trovato" errors.
 @api_router.post("/admin/uploads/init")
 async def upload_init(body: Dict, admin=Depends(require_uploader)):
     filename = (body.get("filename") or "file").strip()
     mime = body.get("mime") or "application/octet-stream"
     _validate_media(filename, mime)
     upload_id = uuid.uuid4().hex
-    (UPLOAD_TMP / upload_id).write_bytes(b"")
-    (UPLOAD_TMP / (upload_id + ".meta")).write_text(f"{filename}\n{mime}")
+    await db.upload_sessions.insert_one({
+        "_id": upload_id, "filename": filename, "mime": mime, "created_at": now_utc(),
+    })
     return {"upload_id": upload_id}
 
 
 @api_router.put("/admin/uploads/{upload_id}/chunk")
 async def upload_chunk(upload_id: str, request: Request, admin=Depends(require_uploader)):
-    part = UPLOAD_TMP / upload_id
-    if not part.exists():
+    sess = await db.upload_sessions.find_one({"_id": upload_id})
+    if not sess:
         raise HTTPException(status_code=404, detail="Upload non trovato")
     data = await request.body()
-    # Idempotent writes: the client sends the absolute byte offset so a retried
-    # chunk overwrites the same region instead of appending a duplicate (which
-    # would corrupt the file). Falls back to append when no offset is provided.
     offset_h = request.headers.get("x-chunk-offset")
-    with open(part, "r+b") as fh:
-        if offset_h is not None:
-            fh.seek(int(offset_h))
-        else:
-            fh.seek(0, 2)
-        fh.write(data)
-    return {"ok": True, "size": part.stat().st_size}
+    if offset_h is not None:
+        offset = int(offset_h)
+    else:
+        # Legacy client (no offset header): append sequentially via a running
+        # counter kept on the session, so old frontends still upload correctly.
+        prev = await db.upload_sessions.find_one_and_update(
+            {"_id": upload_id},
+            {"$inc": {"next_offset": len(data)}},
+            return_document=ReturnDocument.BEFORE,
+        )
+        offset = (prev or {}).get("next_offset", 0)
+    # Upsert by (upload_id, offset): a retried chunk overwrites the same region
+    # instead of duplicating it, so retries are always safe.
+    await db.upload_chunks.update_one(
+        {"upload_id": upload_id, "offset": offset},
+        {"$set": {"data": Binary(data), "size": len(data), "created_at": now_utc()}},
+        upsert=True,
+    )
+    return {"ok": True}
 
 
 @api_router.post("/admin/uploads/{upload_id}/complete")
 async def upload_complete(upload_id: str, admin=Depends(require_uploader)):
-    part = UPLOAD_TMP / upload_id
-    meta = UPLOAD_TMP / (upload_id + ".meta")
-    if not part.exists():
+    sess = await db.upload_sessions.find_one({"_id": upload_id})
+    if not sess:
         raise HTTPException(status_code=404, detail="Upload non trovato")
-    filename, mime = "file", "application/octet-stream"
-    if meta.exists():
-        lines = meta.read_text().splitlines()
-        filename = lines[0] if lines else "file"
-        mime = lines[1] if len(lines) > 1 else mime
+    filename = sess.get("filename") or "file"
+    mime = sess.get("mime") or "application/octet-stream"
     _validate_media(filename, mime)
     media_type = _media_type_from_mime(mime)
+    # Assemble the MongoDB chunks (in order) into a local temp file on this worker.
+    part = UPLOAD_TMP / (upload_id + ".assemble")
+    with open(part, "wb") as fh:
+        async for ch in db.upload_chunks.find({"upload_id": upload_id}).sort("offset", 1):
+            fh.write(bytes(ch["data"]))
+    if part.stat().st_size == 0:
+        part.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail="Nessun dato ricevuto")
     duration = ""
     thumbnail = None
-    # Run ffmpeg/ffprobe off the event loop so the single worker keeps serving
-    # requests (and the client connection is not held open longer than needed).
+    # Run ffmpeg/ffprobe off the event loop so the worker keeps serving requests.
     if media_type in ("video", "audio"):
         duration = await asyncio.to_thread(_ffmpeg_probe_duration, part)
     if media_type == "video":
@@ -2859,7 +2878,9 @@ async def upload_complete(upload_id: str, admin=Depends(require_uploader)):
     await grid_in.close()
     size = part.stat().st_size
     part.unlink(missing_ok=True)
-    meta.unlink(missing_ok=True)
+    # Clean up the MongoDB staging data.
+    await db.upload_chunks.delete_many({"upload_id": upload_id})
+    await db.upload_sessions.delete_one({"_id": upload_id})
     return {
         "media_id": str(grid_in._id),
         "media_type": media_type,
@@ -3349,6 +3370,11 @@ async def startup():
     await db.invitations.create_index("token", unique=True)
     await db.invitations.create_index("email")
     await db.activity_log.create_index("created_at")
+    # Chunked uploads are assembled in MongoDB so they survive across multiple
+    # backend workers/replicas (the local /tmp filesystem is not shared).
+    await db.upload_sessions.create_index("created_at", expireAfterSeconds=6 * 3600)
+    await db.upload_chunks.create_index([("upload_id", 1), ("offset", 1)], unique=True)
+    await db.upload_chunks.create_index("created_at", expireAfterSeconds=6 * 3600)
 
     if not await db.live_status.find_one({"_id": "current"}):
         await db.live_status.insert_one({
