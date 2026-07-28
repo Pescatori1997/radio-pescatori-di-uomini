@@ -18,6 +18,9 @@ export default function PodcastScreen() {
   const [cat, setCat] = useState("Tutti");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const showFeatured = featured.length > 0 && !search && cat === "Tutti";
+  const featuredIds = React.useMemo(() => new Set(featured.map((f: any) => f.id)), [featured]);
+  const listData = showFeatured ? items.filter((i) => !featuredIds.has(i.id)) : items;
 
   const load = useCallback(async (c: string, s: string) => {
     setLoading(true);
@@ -70,7 +73,7 @@ export default function PodcastScreen() {
         <View style={styles.center}><Text style={styles.empty}>Nessun podcast trovato</Text></View>
       ) : (
         <FlatList
-          data={items}
+          data={listData}
           keyExtractor={(i) => i.id}
           numColumns={2}
           columnWrapperStyle={{ gap: spacing.md, paddingHorizontal: spacing.lg }}

@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/src/api";
+import { goBackOrHome } from "@/src/utils/nav";
 import { usePlayer } from "@/src/context/PlayerContext";
 import { useAuth } from "@/src/context/AuthContext";
 import PressableScale from "@/src/components/PressableScale";
@@ -46,7 +47,7 @@ export default function PodcastDetail() {
         <View style={styles.hero}>
           <Image source={{ uri: p.artwork }} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={30} />
           <LinearGradient colors={["rgba(10,17,40,0.5)", "rgba(10,17,40,0.98)"]} style={StyleSheet.absoluteFill} />
-          <PressableScale testID="pod-detail-back" onPress={() => router.back()} style={[styles.backBtn, { top: insets.top + spacing.sm }]}><Ionicons name="arrow-back" size={22} color={colors.white} /></PressableScale>
+          <PressableScale testID="pod-detail-back" onPress={() => goBackOrHome()} style={[styles.backBtn, { top: insets.top + spacing.sm }]}><Ionicons name="arrow-back" size={22} color={colors.white} /></PressableScale>
           <View style={[styles.heroContent, { paddingTop: insets.top + spacing["2xl"] }]}>
             <Image source={{ uri: p.artwork }} style={styles.cover} contentFit="cover" />
             {p.category ? <View style={styles.catBadge}><Text style={styles.catText}>{p.category}</Text></View> : null}

@@ -29,10 +29,13 @@ export default function NewsScreen() {
   );
   useEffect(() => { api.newsCategories().then(setCats).catch(() => {}); }, []);
 
+  const showFeatured = featured.length > 0 && !search && cat === "Tutte";
+  const featuredBannerId = showFeatured ? featured[0]?.id : undefined;
   const filtered = useMemo(() => items.filter((n) =>
     (cat === "Tutte" || n.category === cat) &&
-    (!search || n.title.toLowerCase().includes(search.toLowerCase()))
-  ), [items, cat, search]);
+    (!search || n.title.toLowerCase().includes(search.toLowerCase())) &&
+    n.id !== featuredBannerId
+  ), [items, cat, search, featuredBannerId]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>

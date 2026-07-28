@@ -5,6 +5,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, mediaUrl } from "@/src/api";
+import { goBackOrHome } from "@/src/utils/nav";
 import MeditationPlayer from "@/src/components/MeditationPlayer";
 import PressableScale from "@/src/components/PressableScale";
 import { PROVIDER_LABEL } from "@/src/utils/embeds";
@@ -48,7 +49,7 @@ export default function ContentDetail() {
   if (!m) return (
     <View style={styles.centerScreen}>
       <Text style={{ color: colors.onSurfaceSecondary }}>Contenuto non trovato.</Text>
-      <Pressable onPress={() => router.back()} style={{ marginTop: 12 }}><Text style={{ color: colors.brandPrimary, fontWeight: "700" }}>Torna indietro</Text></Pressable>
+      <Pressable onPress={() => goBackOrHome()} style={{ marginTop: 12 }}><Text style={{ color: colors.brandPrimary, fontWeight: "700" }}>Torna indietro</Text></Pressable>
     </View>
   );
 
@@ -66,7 +67,7 @@ export default function ContentDetail() {
   return (
     <View style={styles.container}>
       <View style={[styles.topBar, { paddingTop: insets.top + spacing.sm }]}>
-        <Pressable testID="cd-back" onPress={() => router.back()} hitSlop={12}><Ionicons name="arrow-back" size={24} color={colors.onSurface} /></Pressable>
+        <Pressable testID="cd-back" onPress={() => goBackOrHome()} hitSlop={12}><Ionicons name="arrow-back" size={24} color={colors.onSurface} /></Pressable>
         <Text style={styles.topTitle} numberOfLines={1}>{label}</Text>
         <Pressable testID="cd-share" onPress={share} hitSlop={12}><Ionicons name="share-social" size={22} color={colors.onSurface} /></Pressable>
       </View>

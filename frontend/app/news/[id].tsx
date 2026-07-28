@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/src/api";
+import { goBackOrHome } from "@/src/utils/nav";
 import { colors, spacing, radius } from "@/src/theme";
 
 export default function NewsDetail() {
@@ -30,7 +31,7 @@ export default function NewsDetail() {
         <View style={styles.hero}>
           <Image source={{ uri: item.image }} style={StyleSheet.absoluteFill} contentFit="cover" />
           <LinearGradient colors={["rgba(10,17,40,0.4)", "rgba(10,17,40,0.9)"]} style={StyleSheet.absoluteFill} />
-          <Pressable testID="news-back" onPress={() => router.back()} style={[styles.backBtn, { top: insets.top + spacing.sm }]} hitSlop={12}>
+          <Pressable testID="news-back" onPress={() => goBackOrHome()} style={[styles.backBtn, { top: insets.top + spacing.sm }]} hitSlop={12}>
             <Ionicons name="arrow-back" size={22} color={colors.white} />
           </Pressable>
           <View style={styles.heroText}>
