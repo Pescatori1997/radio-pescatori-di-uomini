@@ -103,6 +103,11 @@ export default function AdminUsers() {
     try { await api.adminSetUserRole(u.user_id, { role, permissions: [] }); setActionUser(null); load(); }
     catch (e: any) { notify(e.message); }
   };
+  const promoteAdmin = (u: any) => {
+    const msg = `Rendere ${u.name || u.email} Amministratore? Avrà accesso completo al pannello.`;
+    if (Platform.OS === "web") { if (window.confirm(msg)) quickRole(u, "administrator"); }
+    else Alert.alert("Promuovi ad Amministratore", msg, [{ text: "Annulla", style: "cancel" }, { text: "Conferma", onPress: () => quickRole(u, "administrator") }]);
+  };
 
   const openManage = (u: any) => {
     setActionUser(null);
@@ -269,12 +274,21 @@ export default function AdminUsers() {
           <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
             <View style={styles.sheetHandle} />
             <Text style={styles.sheetTitle} numberOfLines={1}>{actionUser?.name || actionUser?.email}</Text>
-            {actionUser?.role !== "collaborator" ? (
-              <SheetItem testID="act-promote" icon="arrow-up-circle-outline" label="Promuovi a Collaboratore" onPress={() => openManage(actionUser)} />
-            ) : (
+            {actionUser?.role === "administrator" ? (
+              <>
+                <SheetItem testID="act-perms" icon="options-outline" label="Riporta a Collaboratore" onPress={() => openManage(actionUser)} />
+                <SheetItem testID="act-demote" icon="arrow-down-circle-outline" label="Riporta ad Ascoltatore" onPress={() => quickRole(actionUser, "listener")} />
+              </>
+            ) : actionUser?.role === "collaborator" ? (
               <>
                 <SheetItem testID="act-perms" icon="options-outline" label="Gestisci permessi" onPress={() => openManage(actionUser)} />
+                <SheetItem testID="act-make-admin" icon="shield-checkmark-outline" label="Promuovi ad Amministratore" color={colors.warning} onPress={() => promoteAdmin(actionUser)} />
                 <SheetItem testID="act-demote" icon="arrow-down-circle-outline" label="Riporta ad Ascoltatore" onPress={() => quickRole(actionUser, "listener")} />
+              </>
+            ) : (
+              <>
+                <SheetItem testID="act-promote" icon="arrow-up-circle-outline" label="Promuovi a Collaboratore" onPress={() => openManage(actionUser)} />
+                <SheetItem testID="act-make-admin" icon="shield-checkmark-outline" label="Promuovi ad Amministratore" color={colors.warning} onPress={() => promoteAdmin(actionUser)} />
               </>
             )}
             {actionUser?.status === "suspended" ? (

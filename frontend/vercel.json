@@ -4,9 +4,8 @@
   "installCommand": "yarn install --frozen-lockfile --ignore-scripts",
   "buildCommand": "npx expo export -p web && node scripts/inject-pwa.js",
   "outputDirectory": "dist",
-  "cleanUrls": true,
   "rewrites": [
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/:path*", "destination": "/index.html" }
   ],
   "headers": [
     {
