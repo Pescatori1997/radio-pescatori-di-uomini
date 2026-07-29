@@ -14,6 +14,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { api } from "@/src/api";
 import { FishingNet, SeaWaves, SunriseGlow, LightRays, Bubbles } from "@/src/components/marine";
+import ShareVerseSheet from "@/src/components/ShareVerseSheet";
 import PressableScale from "@/src/components/PressableScale";
 import { colors, spacing, radius } from "@/src/theme";
 
@@ -21,6 +22,7 @@ export default function VerseOfDayCard() {
   const router = useRouter();
   const [verse, setVerse] = useState<any>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
+  const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
     api.verseToday().then(setVerse).catch(() => {});
@@ -59,6 +61,9 @@ export default function VerseOfDayCard() {
           <View style={styles.labelRow}>
             <View style={styles.iconBadge}><Text style={styles.iconEmoji}>📖</Text></View>
             <Text style={styles.label}>Versetto del Giorno</Text>
+            <PressableScale testID="verse-share" style={styles.shareIcon} onPress={() => setShareOpen(true)}>
+              <Ionicons name="share-social-outline" size={18} color={colors.white} />
+            </PressableScale>
           </View>
 
           <Text style={styles.verseText}>“{verse.text}”</Text>
@@ -74,6 +79,7 @@ export default function VerseOfDayCard() {
           </PressableScale>
         </View>
       </View>
+      <ShareVerseSheet verse={verse} visible={shareOpen} onClose={() => setShareOpen(false)} />
     </Animated.View>
   );
 }
@@ -93,6 +99,7 @@ const styles = StyleSheet.create({
   glowBorder: { borderRadius: radius.lg, borderWidth: 1.5, borderColor: colors.brandSecondary },
   content: { padding: spacing.xl },
   labelRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  shareIcon: { marginLeft: "auto", width: 34, height: 34, borderRadius: 17, backgroundColor: "rgba(255,255,255,0.12)", alignItems: "center", justifyContent: "center" },
   iconBadge: { width: 34, height: 34, borderRadius: 17, backgroundColor: "rgba(251,191,36,0.18)", borderWidth: 1, borderColor: "rgba(251,191,36,0.4)", alignItems: "center", justifyContent: "center" },
   iconEmoji: { fontSize: 16 },
   label: { color: "#FDE68A", fontSize: 13, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" },

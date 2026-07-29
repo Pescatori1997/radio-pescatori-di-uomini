@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { api } from "@/src/api";
 import { FishingNet, SeaWaves, SunriseGlow } from "@/src/components/marine";
+import ShareVerseSheet from "@/src/components/ShareVerseSheet";
 import PressableScale from "@/src/components/PressableScale";
 import { colors, spacing, radius } from "@/src/theme";
 
@@ -20,6 +21,7 @@ export default function Bibbia() {
   const [medLoading, setMedLoading] = useState(false);
   const [medError, setMedError] = useState(false);
   const [w, setW] = useState(0);
+  const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
     const fetch = verseId ? api.verse(verseId) : api.verseToday();
@@ -58,7 +60,9 @@ export default function Bibbia() {
             <Ionicons name="arrow-back" size={22} color={colors.white} />
           </PressableScale>
           <Text style={styles.topTitle}>Bibbia</Text>
-          <View style={{ width: 40 }} />
+          <PressableScale testID="bibbia-share" onPress={() => setShareOpen(true)} style={styles.iconBtn} disabled={!verse}>
+            <Ionicons name="share-social-outline" size={20} color={colors.white} />
+          </PressableScale>
         </View>
         <Text style={styles.heroChapter} numberOfLines={1}>{chapterTitle}</Text>
         {!!chapter && <Text style={styles.heroSub}>Capitolo {chapter}</Text>}
@@ -110,6 +114,7 @@ export default function Bibbia() {
           </Animated.View>
         </ScrollView>
       )}
+      <ShareVerseSheet verse={verse} visible={shareOpen} onClose={() => setShareOpen(false)} />
     </View>
   );
 }

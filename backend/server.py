@@ -249,6 +249,10 @@ async def register(body: RegisterIn):
         raise HTTPException(status_code=400, detail="Email già registrata")
     uid = new_id("user")
     email_l = body.email.lower()
+    # Admin allowlist accounts must authenticate via Google OAuth, not
+    # email/password — this prevents an attacker from claiming an admin email.
+    if email_l in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Questo indirizzo deve accedere con Google.")
     role = ROLE_ADMIN if email_l in ADMIN_EMAILS else ROLE_LISTENER
     await db.users.insert_one({
         "user_id": uid,
@@ -477,9 +481,9 @@ async def get_podcasts(search: Optional[str] = None, category: Optional[str] = N
         query["category"] = category
     if search:
         query["$or"] = [
-            {"title": {"$regex": search, "$options": "i"}},
-            {"description": {"$regex": search, "$options": "i"}},
-            {"subtitle": {"$regex": search, "$options": "i"}},
+            {"title": {"$regex": re.escape(search), "$options": "i"}},
+            {"description": {"$regex": re.escape(search), "$options": "i"}},
+            {"subtitle": {"$regex": re.escape(search), "$options": "i"}},
         ]
     docs = await db.podcasts.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     return docs
@@ -878,9 +882,9 @@ async def admin_applications(status: Optional[str] = None, sort: Optional[str] =
         query["status"] = status
     if search:
         query["$or"] = [
-            {"name": {"$regex": search, "$options": "i"}},
-            {"surname": {"$regex": search, "$options": "i"}},
-            {"email": {"$regex": search, "$options": "i"}},
+            {"name": {"$regex": re.escape(search), "$options": "i"}},
+            {"surname": {"$regex": re.escape(search), "$options": "i"}},
+            {"email": {"$regex": re.escape(search), "$options": "i"}},
         ]
     direction = 1 if sort == "oldest" else -1
     docs = await db.crew_applications.find(query, {"_id": 0}).sort("created_at", direction).to_list(500)
@@ -1027,7 +1031,7 @@ async def admin_podcasts(status: Optional[str] = None, search: Optional[str] = N
     elif status == "draft":
         query["published"] = {"$ne": True}
     if search:
-        query["$or"] = [{"title": {"$regex": search, "$options": "i"}}, {"author": {"$regex": search, "$options": "i"}}]
+        query["$or"] = [{"title": {"$regex": re.escape(search), "$options": "i"}}, {"author": {"$regex": re.escape(search), "$options": "i"}}]
     docs = await db.podcasts.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     return docs
 
@@ -1108,7 +1112,7 @@ async def admin_news(status: Optional[str] = None, search: Optional[str] = None,
     elif status == "draft":
         query["published"] = {"$ne": True}
     if search:
-        query["$or"] = [{"title": {"$regex": search, "$options": "i"}}, {"author": {"$regex": search, "$options": "i"}}]
+        query["$or"] = [{"title": {"$regex": re.escape(search), "$options": "i"}}, {"author": {"$regex": re.escape(search), "$options": "i"}}]
     docs = await db.news.find(query, {"_id": 0}).sort("date", -1).to_list(500)
     return docs
 
@@ -1180,7 +1184,7 @@ async def admin_prayers(status: Optional[str] = None, search: Optional[str] = No
     if status and status in PRAYER_STATUSES:
         query["status"] = status
     if search:
-        query["$or"] = [{"text": {"$regex": search, "$options": "i"}}, {"name": {"$regex": search, "$options": "i"}}]
+        query["$or"] = [{"text": {"$regex": re.escape(search), "$options": "i"}}, {"name": {"$regex": re.escape(search), "$options": "i"}}]
     docs = await db.prayer_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     for d in docs:
         d.setdefault("status", "new")
@@ -1232,7 +1236,7 @@ async def admin_messages(status: Optional[str] = None, type: Optional[str] = Non
     if type in ("message", "testimony"):
         query["type"] = type
     if search:
-        query["$or"] = [{"text": {"$regex": search, "$options": "i"}}, {"name": {"$regex": search, "$options": "i"}}]
+        query["$or"] = [{"text": {"$regex": re.escape(search), "$options": "i"}}, {"name": {"$regex": re.escape(search), "$options": "i"}}]
     docs = await db.messages.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     for d in docs:
         d.setdefault("status", "new")
@@ -1274,7 +1278,7 @@ async def admin_users(search: Optional[str] = None, role: Optional[str] = None,
                       admin=Depends(require_admin)):
     query = {}
     if search:
-        query["$or"] = [{"name": {"$regex": search, "$options": "i"}}, {"email": {"$regex": search, "$options": "i"}}]
+        query["$or"] = [{"name": {"$regex": re.escape(search), "$options": "i"}}, {"email": {"$regex": re.escape(search), "$options": "i"}}]
     if status in ("active", "suspended"):
         query["status"] = status if status == "suspended" else {"$ne": "suspended"}
     sort_field, sort_dir = ("created_at", -1)
@@ -1821,9 +1825,9 @@ async def get_products(search: Optional[str] = None, category: Optional[str] = N
         query["category"] = category
     if search:
         query["$or"] = [
-            {"name": {"$regex": search, "$options": "i"}},
-            {"description": {"$regex": search, "$options": "i"}},
-            {"category": {"$regex": search, "$options": "i"}},
+            {"name": {"$regex": re.escape(search), "$options": "i"}},
+            {"description": {"$regex": re.escape(search), "$options": "i"}},
+            {"category": {"$regex": re.escape(search), "$options": "i"}},
         ]
     docs = await db.products.find(query, {"_id": 0}).sort([("featured", -1), ("order", 1)]).to_list(500)
     return docs
@@ -1857,8 +1861,8 @@ async def admin_products(status: Optional[str] = None, category: Optional[str] =
         query["category"] = category
     if search:
         query["$or"] = [
-            {"name": {"$regex": search, "$options": "i"}},
-            {"description": {"$regex": search, "$options": "i"}},
+            {"name": {"$regex": re.escape(search), "$options": "i"}},
+            {"description": {"$regex": re.escape(search), "$options": "i"}},
         ]
     docs = await db.products.find(query, {"_id": 0}).sort([("featured", -1), ("order", 1)]).to_list(500)
     return docs
@@ -3160,7 +3164,7 @@ async def get_meditations(search: Optional[str] = None, category: Optional[str] 
     if category and category != "Tutti":
         query["category"] = category
     if search:
-        query["title"] = {"$regex": search, "$options": "i"}
+        query["title"] = {"$regex": re.escape(search), "$options": "i"}
     docs = await db.meditations.find(query, {"_id": 0}).sort("publish_date", -1).to_list(300)
     return [_decorate_meditation(d) for d in docs]
 
@@ -3189,7 +3193,7 @@ async def admin_meditations(status: Optional[str] = None, search: Optional[str] 
     elif status == "draft":
         query["published"] = {"$ne": True}
     if search:
-        query["title"] = {"$regex": search, "$options": "i"}
+        query["title"] = {"$regex": re.escape(search), "$options": "i"}
     docs = await db.meditations.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     return [_decorate_meditation(d) for d in docs]
 
@@ -3329,7 +3333,7 @@ async def get_contents(section: str, search: Optional[str] = None,
     if tag:
         query["tags"] = tag
     if search:
-        query["title"] = {"$regex": search, "$options": "i"}
+        query["title"] = {"$regex": re.escape(search), "$options": "i"}
     docs = await db.contents.find(query, {"_id": 0}).sort([("order", 1), ("publish_date", -1)]).to_list(300)
     return [_decorate_meditation(d) for d in docs]
 
@@ -3350,10 +3354,10 @@ async def admin_contents(section: str, status: Optional[str] = None, search: Opt
     if status:
         query["status"] = status
     if search:
-        query["$or"] = [{"title": {"$regex": search, "$options": "i"}},
-                        {"author": {"$regex": search, "$options": "i"}},
-                        {"category": {"$regex": search, "$options": "i"}},
-                        {"tags": {"$regex": search, "$options": "i"}}]
+        query["$or"] = [{"title": {"$regex": re.escape(search), "$options": "i"}},
+                        {"author": {"$regex": re.escape(search), "$options": "i"}},
+                        {"category": {"$regex": re.escape(search), "$options": "i"}},
+                        {"tags": {"$regex": re.escape(search), "$options": "i"}}]
     docs = await db.contents.find(query, {"_id": 0}).sort([("order", 1), ("created_at", -1)]).to_list(500)
     return [_decorate_meditation(d) for d in docs]
 
@@ -3485,10 +3489,10 @@ async def admin_reports(status: Optional[str] = None, category: Optional[str] = 
         query["category"] = category
     if search:
         query["$or"] = [
-            {"title": {"$regex": search, "$options": "i"}},
-            {"description": {"$regex": search, "$options": "i"}},
-            {"user_name": {"$regex": search, "$options": "i"}},
-            {"user_email": {"$regex": search, "$options": "i"}},
+            {"title": {"$regex": re.escape(search), "$options": "i"}},
+            {"description": {"$regex": re.escape(search), "$options": "i"}},
+            {"user_name": {"$regex": re.escape(search), "$options": "i"}},
+            {"user_email": {"$regex": re.escape(search), "$options": "i"}},
         ]
     order = 1 if sort == "asc" else -1
     # Exclude heavy base64 attachments from the list payload.
@@ -3587,8 +3591,8 @@ async def admin_verses(search: Optional[str] = None, admin=Depends(require_perm(
     query = {}
     if search:
         query["$or"] = [
-            {"text": {"$regex": search, "$options": "i"}},
-            {"reference": {"$regex": search, "$options": "i"}},
+            {"text": {"$regex": re.escape(search), "$options": "i"}},
+            {"reference": {"$regex": re.escape(search), "$options": "i"}},
         ]
     docs = await db.verses.find(query, {"_id": 0}).sort([("order", 1), ("created_at", 1)]).to_list(2000)
     return docs
@@ -3815,10 +3819,51 @@ async def _verse_notif_scheduler():
 
 app.include_router(api_router)
 
+# ---------------- Lightweight rate limiting (per IP, sliding window) ----------------
+from collections import defaultdict, deque
+import time as _time
+from starlette.responses import JSONResponse
+
+_rl_store: dict = defaultdict(deque)
+# (path_prefix, method_or_None, max_requests, window_seconds)
+_RL_RULES = [
+    ("/api/auth/login", "POST", 10, 60),
+    ("/api/auth/register", "POST", 5, 60),
+    ("/api/auth/session", "POST", 20, 60),
+    ("/api/contact", "POST", 8, 60),
+    ("/api/prayer-requests", "POST", 8, 60),
+    ("/api/messages", "POST", 8, 60),
+    ("/api/reports", "POST", 8, 60),
+]
+
+
+@app.middleware("http")
+async def _rate_limit(request, call_next):
+    path, method = request.url.path, request.method
+    for pref, meth, limit, window in _RL_RULES:
+        if path.startswith(pref) and (meth is None or meth == method):
+            xff = request.headers.get("x-forwarded-for", "")
+            ip = xff.split(",")[0].strip() if xff else (request.client.host if request.client else "?")
+            key = f"{ip}:{pref}"
+            dq = _rl_store[key]
+            now = _time.time()
+            while dq and now - dq[0] > window:
+                dq.popleft()
+            if len(dq) >= limit:
+                return JSONResponse({"detail": "Troppe richieste, riprova tra qualche istante."}, status_code=429)
+            dq.append(now)
+            break
+    return await call_next(request)
+
+
+# Token-based API → no cookies, so credentials are disabled (this makes the
+# permissive origin valid and safe). Restrict origins via CORS_ORIGINS if set.
+_cors_env = os.environ.get("CORS_ORIGINS", "").strip()
+_cors_origins = [o.strip() for o in _cors_env.split(",") if o.strip()] or ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=["*"],
+    allow_credentials=False,
+    allow_origins=_cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -3838,6 +3883,16 @@ async def startup():
     await db.upload_sessions.create_index("created_at", expireAfterSeconds=6 * 3600)
     await db.upload_chunks.create_index([("upload_id", 1), ("offset", 1)], unique=True)
     await db.upload_chunks.create_index("created_at", expireAfterSeconds=6 * 3600)
+    # Query performance indices (safe/idempotent).
+    try:
+        await db.contents.create_index([("section", 1), ("created_at", -1)])
+        await db.contents.create_index([("section", 1), ("featured", 1)])
+        await db.verses.create_index([("order", 1), ("created_at", 1)])
+        await db.programs.create_index("weekdays")
+        await db.prayer_requests.create_index("created_at")
+        await db.messages.create_index("created_at")
+    except Exception as e:
+        logger.warning("index creation: %s", e)
 
     if not await db.live_status.find_one({"_id": "current"}):
         await db.live_status.insert_one({
