@@ -26,7 +26,7 @@ type Status = {
 
 function proxyArt(url?: string) {
   if (!url) return "";
-  const base = process.env.EXPO_PUBLIC_BACKEND_URL || "";
+  const base = (process.env.EXPO_PUBLIC_BACKEND_URL || "").replace(/\/+$/, "");
   return url.startsWith("http://") ? `${base}/api/live/art?u=${encodeURIComponent(url)}` : url;
 }
 

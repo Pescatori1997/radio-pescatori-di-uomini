@@ -1,7 +1,10 @@
 import { storage } from "@/src/utils/storage";
 import { Platform } from "react-native";
 
-const BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
+// Normalise the backend base URL: strip any trailing slash so we never build
+// a request like `https://host//api/...` (a double slash breaks the ingress
+// `/api` routing and surfaces as CORS/520 errors, especially on uploads).
+const BASE = (process.env.EXPO_PUBLIC_BACKEND_URL || "").replace(/\/+$/, "");
 export const TOKEN_KEY = "pdu_session_token";
 
 /** Public streaming/download URL for an uploaded GridFS media file. */
