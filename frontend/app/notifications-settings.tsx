@@ -11,6 +11,7 @@ import { colors, spacing, radius } from "@/src/theme";
 const CATEGORIES: { key: string; label: string; desc: string; icon: string }[] = [
   { key: "podcasts", label: "Podcast", desc: "Nuovi podcast pubblicati", icon: "podcast" },
   { key: "meditations", label: "Meditazioni", desc: "Nuove meditazioni quotidiane", icon: "book-open-variant" },
+  { key: "verse", label: "Versetto del Giorno", desc: "La meditazione quotidiana è pronta", icon: "book-cross" },
   { key: "news", label: "Notizie", desc: "Nuovi articoli e novità", icon: "newspaper-variant" },
   { key: "live", label: "Dirette", desc: "Quando iniziamo una diretta", icon: "access-point" },
   { key: "announcements", label: "Annunci", desc: "Comunicazioni importanti", icon: "bullhorn" },

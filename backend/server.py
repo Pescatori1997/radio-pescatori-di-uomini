@@ -2390,11 +2390,11 @@ PUSH_BASE_URL = "https://integrations.emergentagent.com"
 PUSH_KEY = os.environ.get("EMERGENT_PUSH_KEY", "placeholder")
 push_client = httpx.AsyncClient(base_url=PUSH_BASE_URL, headers={"X-Push-Key": PUSH_KEY}, timeout=10.0)
 
-NOTIF_CATEGORIES = ["podcasts", "meditations", "news", "live", "announcements", "events", "prayers"]
+NOTIF_CATEGORIES = ["podcasts", "meditations", "news", "live", "announcements", "events", "prayers", "verse"]
 CATEGORY_LABELS = {
     "podcasts": "Podcast", "meditations": "Meditazioni", "news": "Notizie",
     "live": "Dirette", "announcements": "Annunci", "events": "Eventi in programma",
-    "prayers": "Richieste di preghiera",
+    "prayers": "Richieste di preghiera", "verse": "Versetto del Giorno",
 }
 
 
@@ -3701,6 +3701,117 @@ async def admin_regenerate_meditation(vid: str, admin=Depends(require_perm("vers
     return gen
 
 
+# ---------------- Daily Verse push notification ----------------
+VERSE_NOTIF_DEFAULTS = [
+    "📖 È disponibile la nuova meditazione di oggi. Aprila e prenditi qualche minuto per riflettere sulla Parola di Dio.",
+    "🌅 Nuovo Versetto del Giorno disponibile. Lasciati incoraggiare dalla Parola per affrontare questa giornata.",
+    "✨ La meditazione di oggi è pronta. Leggila e dedica un momento alla riflessione sulla Parola di Dio.",
+]
+
+
+async def _today_verse() -> Optional[dict]:
+    verses = await db.verses.find({"active": {"$ne": False}}, {"_id": 0}).sort(
+        [("order", 1), ("created_at", 1)]
+    ).to_list(2000)
+    if not verses:
+        return None
+    return verses[_rome_day_ordinal() % len(verses)]
+
+
+async def _send_verse_notification(force: bool = False) -> Optional[int]:
+    """Send the daily verse notification. Automatic path (force=False) claims the
+    Rome day atomically so it fires exactly once per day even with multiple workers."""
+    from pymongo.errors import DuplicateKeyError
+    cfg = await db.settings.find_one({"_id": "verse_notif"}) or {}
+    if not force and cfg.get("enabled") is False:
+        return None
+    today = _rome_day_ordinal()
+    if not force:
+        try:
+            res = await db.settings.update_one(
+                {"_id": "verse_notif", "last_sent_day": {"$ne": today}},
+                {"$set": {"last_sent_day": today}},
+                upsert=True,
+            )
+        except DuplicateKeyError:
+            return None  # another worker already claimed today
+        if res.modified_count == 0 and res.upserted_id is None:
+            return None  # already sent today
+    else:
+        await db.settings.update_one({"_id": "verse_notif"}, {"$set": {"last_sent_day": today}}, upsert=True)
+
+    verse = await _today_verse()
+    if not verse:
+        return None
+    # Pre-warm the meditation cache so the content is ready when users tap through.
+    if not (verse.get("meditation") or "").strip():
+        try:
+            gen = await _generate_meditation(verse)
+            await db.verses.update_one(
+                {"id": verse["id"]},
+                {"$set": {"meditation": gen["meditation"], "reflection": gen["reflection"],
+                          "meditation_locked": False, "meditation_generated": True}},
+            )
+        except Exception as e:
+            logger.warning("verse notif: meditation gen failed: %s", e)
+
+    title = (cfg.get("title") or "").strip() or "📖 Versetto del Giorno"
+    message = (cfg.get("message") or "").strip()
+    if message:
+        message = message.replace("{riferimento}", verse.get("reference", "")).replace("{reference}", verse.get("reference", ""))
+    else:
+        message = VERSE_NOTIF_DEFAULTS[today % len(VERSE_NOTIF_DEFAULTS)]
+    return await notify_category("verse", title, message, action_url=f"/bibbia?verseId={verse['id']}")
+
+
+class VerseNotifSettings(BaseModel):
+    enabled: Optional[bool] = None
+    title: Optional[str] = None
+    message: Optional[str] = None
+
+
+@api_router.get("/admin/verse-notification")
+async def admin_get_verse_notif(admin=Depends(require_perm("verses"))):
+    cfg = await db.settings.find_one({"_id": "verse_notif"}, {"_id": 0}) or {}
+    return {
+        "enabled": cfg.get("enabled", True),
+        "title": cfg.get("title") or "📖 Versetto del Giorno",
+        "message": cfg.get("message") or "",
+        "defaults": VERSE_NOTIF_DEFAULTS,
+    }
+
+
+@api_router.put("/admin/verse-notification")
+async def admin_update_verse_notif(body: VerseNotifSettings, admin=Depends(require_perm("verses"))):
+    updates = {k: v for k, v in body.model_dump(exclude_unset=True).items()}
+    if updates:
+        await db.settings.update_one({"_id": "verse_notif"}, {"$set": updates}, upsert=True)
+    await log_activity(admin, "ha aggiornato le notifiche del Versetto del Giorno", "verses")
+    return {"ok": True}
+
+
+@api_router.post("/admin/verses/notify-today")
+async def admin_notify_verse_today(admin=Depends(require_perm("verses"))):
+    """Manually send today's verse notification now (e.g. after publishing a
+    meditation manually). Bypasses the once-a-day guard."""
+    count = await _send_verse_notification(force=True)
+    if count is None:
+        raise HTTPException(status_code=400, detail="Nessun versetto disponibile da notificare")
+    await log_activity(admin, "ha inviato manualmente la notifica del Versetto del Giorno", "verses")
+    return {"ok": True, "recipients": count}
+
+
+async def _verse_notif_scheduler():
+    """Background loop: sends the daily verse notification once per Rome day."""
+    await asyncio.sleep(25)
+    while True:
+        try:
+            await _send_verse_notification(force=False)
+        except Exception as e:
+            logger.warning("verse notif scheduler error: %s", e)
+        await asyncio.sleep(300)
+
+
 
 app.include_router(api_router)
 
@@ -3925,6 +4036,13 @@ async def startup():
             })
         if docs:
             await db.verses.insert_many(docs)
+
+    # Default daily-verse notification config (idempotent).
+    if not await db.settings.find_one({"_id": "verse_notif"}):
+        await db.settings.insert_one({"_id": "verse_notif", "enabled": True, "title": "📖 Versetto del Giorno", "message": ""})
+
+    # Start the daily verse-notification scheduler (fires once per Rome day).
+    asyncio.create_task(_verse_notif_scheduler())
     logger.info("Seed complete")
 
 

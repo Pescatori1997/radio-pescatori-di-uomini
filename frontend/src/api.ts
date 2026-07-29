@@ -405,6 +405,10 @@ export const api = {
   adminEditVerse: (id: string, body: any) => request(`/admin/verses/${id}`, { method: "PATCH", body: JSON.stringify(body) }, true),
   adminDeleteVerse: (id: string) => request(`/admin/verses/${id}`, { method: "DELETE" }, true),
   adminRegenerateMeditation: (id: string) => request(`/admin/verses/${id}/regenerate-meditation`, { method: "POST" }, true),
+  adminVerseNotif: () => request("/admin/verse-notification", {}, true),
+  adminUpdateVerseNotif: (body: { enabled?: boolean; title?: string; message?: string }) =>
+    request("/admin/verse-notification", { method: "PUT", body: JSON.stringify(body) }, true),
+  adminNotifyVerseToday: () => request("/admin/verses/notify-today", { method: "POST" }, true),
 
   // generic CMS content (reused by every section)
   contentSections: () => request("/content-sections"),
