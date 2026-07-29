@@ -69,12 +69,16 @@ export async function uploadMediaChunked(
       }
     } catch {
       if (control?.cancelled) throw new Error("Caricamento annullato");
-      // Transient network/proxy hiccup: retry the same chunk (idempotent server-side).
-      if (attempt < 3) {
-        await new Promise((res) => setTimeout(res, 700 * (attempt + 1)));
+      // Transient failures (503/502/504 from the edge, network drops, timeouts)
+      // are common on slow/unstable connections. Retry the same chunk with
+      // exponential backoff — the write is idempotent server-side (keyed by
+      // byte offset) so retries never corrupt the file.
+      if (attempt < 5) {
+        const backoff = Math.min(1000 * 2 ** attempt, 15000);
+        await new Promise((res) => setTimeout(res, backoff));
         return putChunk(start, part, attempt + 1);
       }
-      throw new Error("Caricamento interrotto");
+      throw new Error("Caricamento interrotto. Connessione instabile: riprova, riprenderà da capo.");
     }
   };
   for (let start = 0; start < total; start += CHUNK) {
