@@ -3549,6 +3549,8 @@ class VerseEdit(BaseModel):
     verse: Optional[int] = None
     active: Optional[bool] = None
     order: Optional[int] = None
+    meditation: Optional[str] = None
+    reflection: Optional[str] = None
 
 
 def _rome_day_ordinal() -> int:
@@ -3608,6 +3610,10 @@ async def admin_create_verse(body: VerseIn, admin=Depends(require_perm("verses")
 @api_router.patch("/admin/verses/{vid}")
 async def admin_edit_verse(vid: str, body: VerseEdit, admin=Depends(require_perm("verses"))):
     updates = body.model_dump(exclude_unset=True)
+    # A manual meditation edit takes priority and must never be overwritten by
+    # automatic regeneration → lock it.
+    if "meditation" in updates:
+        updates["meditation_locked"] = bool((updates.get("meditation") or "").strip())
     if updates:
         res = await db.verses.update_one({"id": vid}, {"$set": updates})
         if res.matched_count == 0:
@@ -3621,6 +3627,78 @@ async def admin_delete_verse(vid: str, admin=Depends(require_perm("verses"))):
     await db.verses.delete_one({"id": vid})
     await log_activity(admin, "ha eliminato un versetto", "verses", {"id": vid})
     return {"ok": True}
+
+
+async def _generate_meditation(verse: dict) -> dict:
+    """Generate a short, faithful devotional meditation + a personal reflection
+    prompt for a verse, using Claude via the Emergent universal key. Returns
+    {"meditation": str, "reflection": str}. Raises on failure."""
+    from emergentintegrations.llm.chat import LlmChat, UserMessage
+    key = os.environ.get("EMERGENT_LLM_KEY")
+    if not key:
+        raise HTTPException(status_code=503, detail="Servizio meditazione non configurato")
+    system = (
+        "Sei un assistente che scrive brevi meditazioni bibliche quotidiane in italiano "
+        "per un'app di radio evangelica cristiana. Scrivi in modo semplice, caldo e incoraggiante, "
+        "rimanendo fedele al significato e al contesto del versetto, senza aggiungere interpretazioni "
+        "arbitrarie, polemiche dottrinali o contenuti confessionali specifici. Il focus è il significato "
+        "del versetto e la sua applicazione pratica nella vita di ogni giorno. "
+        "NON scrivere preghiere gia' formulate. "
+        "Rispondi ESCLUSIVAMENTE con un oggetto JSON valido con due campi: "
+        "\"meditation\" (una riflessione di 100-200 parole) e "
+        "\"reflection\" (una singola frase motivazionale breve o una domanda di riflessione personale, "
+        "es. 'In che modo puoi vivere oggi questa Parola?'). Nessun testo fuori dal JSON."
+    )
+    chat = LlmChat(api_key=key, session_id=f"verse-{verse.get('id')}", system_message=system).with_model("anthropic", "claude-sonnet-4-6")
+    prompt = f"Versetto: \"{verse.get('text','')}\"\nRiferimento: {verse.get('reference','')}\n\nScrivi la meditazione di oggi."
+    raw = await chat.send_message(UserMessage(text=prompt))
+    txt = (raw or "").strip()
+    # Strip markdown code fences if present.
+    if txt.startswith("```"):
+        txt = re.sub(r"^```[a-zA-Z]*\n?", "", txt).rsplit("```", 1)[0].strip()
+    try:
+        data = json.loads(txt)
+        meditation = (data.get("meditation") or "").strip()
+        reflection = (data.get("reflection") or "").strip()
+    except Exception:
+        # Fallback: treat the whole output as the meditation.
+        meditation = txt
+        reflection = "In che modo puoi vivere oggi questa Parola?"
+    if not meditation:
+        raise HTTPException(status_code=502, detail="Meditazione non disponibile, riprova")
+    return {"meditation": meditation, "reflection": reflection}
+
+
+@api_router.get("/verse/{vid}/meditation")
+async def verse_meditation(vid: str):
+    """Return the verse's meditation, generating & caching it on first access."""
+    verse = await db.verses.find_one({"id": vid})
+    if not verse:
+        raise HTTPException(status_code=404, detail="Versetto non trovato")
+    if (verse.get("meditation") or "").strip():
+        return {"meditation": verse["meditation"], "reflection": verse.get("reflection") or ""}
+    gen = await _generate_meditation(verse)
+    await db.verses.update_one(
+        {"id": vid},
+        {"$set": {"meditation": gen["meditation"], "reflection": gen["reflection"],
+                  "meditation_locked": False, "meditation_generated": True}},
+    )
+    return gen
+
+
+@api_router.post("/admin/verses/{vid}/regenerate-meditation")
+async def admin_regenerate_meditation(vid: str, admin=Depends(require_perm("verses"))):
+    verse = await db.verses.find_one({"id": vid})
+    if not verse:
+        raise HTTPException(status_code=404, detail="Versetto non trovato")
+    gen = await _generate_meditation(verse)
+    await db.verses.update_one(
+        {"id": vid},
+        {"$set": {"meditation": gen["meditation"], "reflection": gen["reflection"],
+                  "meditation_locked": False, "meditation_generated": True}},
+    )
+    await log_activity(admin, "ha rigenerato una meditazione", "verses", {"id": vid})
+    return gen
 
 
 

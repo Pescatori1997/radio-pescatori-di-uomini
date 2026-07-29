@@ -16,12 +16,25 @@ export default function Bibbia() {
   const { verseId } = useLocalSearchParams<{ verseId?: string }>();
   const [verse, setVerse] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [med, setMed] = useState<{ meditation: string; reflection: string } | null>(null);
+  const [medLoading, setMedLoading] = useState(false);
+  const [medError, setMedError] = useState(false);
   const [w, setW] = useState(0);
 
   useEffect(() => {
     const fetch = verseId ? api.verse(verseId) : api.verseToday();
     fetch.then(setVerse).catch(() => {}).finally(() => setLoading(false));
   }, [verseId]);
+
+  useEffect(() => {
+    if (!verse?.id) return;
+    setMedLoading(true);
+    setMedError(false);
+    api.verseMeditation(verse.id)
+      .then((d: any) => setMed({ meditation: d.meditation, reflection: d.reflection }))
+      .catch(() => setMedError(true))
+      .finally(() => setMedLoading(false));
+  }, [verse?.id]);
 
   const book = verse?.book || "";
   const chapter = verse?.chapter;
@@ -65,30 +78,35 @@ export default function Bibbia() {
             </View>
             <Text style={styles.reference}>— {verse.reference}</Text>
 
-            {/* Chapter placeholder (structure ready for a licensed Bible text source) */}
-            <View style={styles.noteCard}>
-              <View style={styles.noteIcon}><Ionicons name="book" size={18} color={colors.brandPrimary} /></View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.noteTitle}>Testo integrale del capitolo</Text>
-                <Text style={styles.noteBody}>
-                  Il capitolo completo di {chapterTitle} sarà presto disponibile qui, all'interno dell'app,
-                  con il versetto del giorno evidenziato. Stiamo collegando una fonte biblica autorizzata.
-                </Text>
-              </View>
+            {/* Meditazione di oggi */}
+            <View style={styles.medHeader}>
+              <View style={styles.medIcon}><Ionicons name="sparkles" size={16} color={colors.brandPrimary} /></View>
+              <Text style={styles.medTitle}>Meditazione di oggi</Text>
             </View>
 
-            {/* Faint chapter structure preview */}
-            <View style={styles.previewWrap}>
-              {Array.from({ length: 6 }).map((_, i) => (
-                <View key={i} style={styles.previewRow}>
-                  <Text style={styles.previewNum}>{(vnum || 1) + i}</Text>
-                  <View style={styles.previewLines}>
-                    <View style={[styles.previewLine, { width: "92%" }]} />
-                    <View style={[styles.previewLine, { width: "70%" }]} />
-                  </View>
+            {medLoading ? (
+              <View style={styles.medLoading}>
+                <ActivityIndicator color={colors.brandPrimary} />
+                <Text style={styles.medLoadingText}>Sto preparando la riflessione…</Text>
+              </View>
+            ) : medError ? (
+              <View style={styles.medCard}>
+                <Text style={styles.medBody}>Meditazione non disponibile al momento. Riprova più tardi.</Text>
+              </View>
+            ) : med ? (
+              <>
+                <View style={styles.medCard}>
+                  <Text style={styles.medBody}>{med.meditation}</Text>
                 </View>
-              ))}
-            </View>
+                {!!med.reflection && (
+                  <View style={styles.reflectCard}>
+                    <Ionicons name="help-circle-outline" size={20} color={colors.onBrandTertiary} />
+                    <Text style={styles.reflectText}>{med.reflection}</Text>
+                  </View>
+                )}
+                <Text style={styles.medFoot}>Prenditi un momento per parlarne personalmente con Dio.</Text>
+              </>
+            ) : null}
           </Animated.View>
         </ScrollView>
       )}
@@ -109,13 +127,14 @@ const styles = StyleSheet.create({
   vnum: { color: colors.brandPrimary, fontSize: 14, fontWeight: "800", marginTop: 3 },
   verseText: { flex: 1, color: colors.navy, fontSize: 19, fontWeight: "700", fontStyle: "italic", lineHeight: 29 },
   reference: { color: colors.onBrandTertiary, fontSize: 14, fontWeight: "800", marginTop: spacing.md, textAlign: "right" },
-  noteCard: { flexDirection: "row", gap: spacing.md, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, marginTop: spacing.xl },
-  noteIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center" },
-  noteTitle: { color: colors.onSurface, fontSize: 15, fontWeight: "800" },
-  noteBody: { color: colors.onSurfaceSecondary, fontSize: 13, lineHeight: 19, marginTop: 4 },
-  previewWrap: { marginTop: spacing.xl, opacity: 0.5 },
-  previewRow: { flexDirection: "row", gap: spacing.md, marginBottom: spacing.lg },
-  previewNum: { color: colors.muted, fontSize: 12, fontWeight: "800", width: 20 },
-  previewLines: { flex: 1, gap: 8 },
-  previewLine: { height: 10, borderRadius: 5, backgroundColor: colors.surfaceTertiary },
+  medHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing["2xl"], marginBottom: spacing.md },
+  medIcon: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center" },
+  medTitle: { color: colors.onSurface, fontSize: 18, fontWeight: "800" },
+  medLoading: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.lg, borderWidth: 1, borderColor: colors.border },
+  medLoadingText: { color: colors.onSurfaceSecondary, fontSize: 14, fontWeight: "600" },
+  medCard: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.lg, borderWidth: 1, borderColor: colors.border },
+  medBody: { color: colors.onSurfaceSecondary, fontSize: 15, lineHeight: 24 },
+  reflectCard: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.brandTertiary, borderRadius: radius.md, padding: spacing.lg, marginTop: spacing.md },
+  reflectText: { flex: 1, color: colors.onBrandTertiary, fontSize: 15, fontWeight: "700", fontStyle: "italic", lineHeight: 22 },
+  medFoot: { color: colors.muted, fontSize: 12.5, fontStyle: "italic", textAlign: "center", marginTop: spacing.lg },
 });

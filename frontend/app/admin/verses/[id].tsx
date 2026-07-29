@@ -14,14 +14,15 @@ export default function VerseEditor() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const isNew = id === "new";
-  const [f, setF] = useState<any>({ text: "", reference: "", book: "", chapter: "", verse: "", active: true });
+  const [f, setF] = useState<any>({ text: "", reference: "", book: "", chapter: "", verse: "", active: true, meditation: "", reflection: "" });
   const [loading, setLoading] = useState(!isNew);
   const [busy, setBusy] = useState(false);
+  const [regen, setRegen] = useState(false);
   const [msg, setMsg] = useState("");
   const set = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }));
 
   useEffect(() => {
-    if (!isNew && id) api.verse(id).then((v: any) => setF({ ...v, chapter: v.chapter?.toString() ?? "", verse: v.verse?.toString() ?? "" })).catch(() => {}).finally(() => setLoading(false));
+    if (!isNew && id) api.verse(id).then((v: any) => setF({ ...v, chapter: v.chapter?.toString() ?? "", verse: v.verse?.toString() ?? "", meditation: v.meditation ?? "", reflection: v.reflection ?? "" })).catch(() => {}).finally(() => setLoading(false));
   }, [id]);
 
   const payload = () => ({
@@ -31,6 +32,8 @@ export default function VerseEditor() {
     chapter: f.chapter ? parseInt(f.chapter, 10) : null,
     verse: f.verse ? parseInt(f.verse, 10) : null,
     active: f.active,
+    meditation: f.meditation ?? "",
+    reflection: f.reflection ?? "",
   });
 
   const save = async () => {
@@ -41,6 +44,17 @@ export default function VerseEditor() {
       if (isNew) { const r = await api.adminCreateVerse(payload()); router.replace(`/admin/verses/${r.id}`); }
       else { await api.adminEditVerse(id!, payload()); setMsg("Salvato"); }
     } catch (e: any) { setMsg(e.message || "Errore"); } finally { setBusy(false); }
+  };
+
+  const regenerate = async () => {
+    if (isNew) { setMsg("Salva prima il versetto, poi genera la meditazione"); return; }
+    setRegen(true); setMsg("");
+    try {
+      const r = await api.adminRegenerateMeditation(id!);
+      set("meditation", r.meditation);
+      set("reflection", r.reflection);
+      setMsg("Meditazione rigenerata (ricordati di salvare per bloccarla)");
+    } catch (e: any) { setMsg(e.message || "Errore nella generazione"); } finally { setRegen(false); }
   };
 
   const del = async () => { setBusy(true); try { await api.adminDeleteVerse(id!); router.back(); } catch (e: any) { setMsg(e.message); setBusy(false); } };
@@ -64,6 +78,21 @@ export default function VerseEditor() {
         </View>
         <ASwitch testID="verse-active" label="Attivo (incluso nella rotazione giornaliera)" value={f.active} onValueChange={(v: boolean) => set("active", v)} />
 
+        {!isNew && (
+          <View style={styles.medSection}>
+            <View style={styles.medHead}>
+              <Text style={styles.medTitle}>Meditazione di oggi</Text>
+              <PressableScale testID="verse-regen" style={[styles.regenBtn, regen && { opacity: 0.6 }]} onPress={regenerate} disabled={regen || busy}>
+                {regen ? <ActivityIndicator color={colors.brandPrimary} size="small" /> : <Ionicons name="sparkles" size={16} color={colors.brandPrimary} />}
+                <Text style={styles.regenText}>{regen ? "Genero…" : "Genera con AI"}</Text>
+              </PressableScale>
+            </View>
+            <Text style={styles.medHint}>Generata automaticamente dall'AI e modificabile. Le tue modifiche manuali hanno priorità e non vengono sovrascritte.</Text>
+            <AInput testID="verse-meditation" label="Testo della meditazione" value={f.meditation} onChangeText={(v: string) => set("meditation", v)} multiline />
+            <AInput testID="verse-reflection" label="Frase / domanda di riflessione" value={f.reflection} onChangeText={(v: string) => set("reflection", v)} multiline />
+          </View>
+        )}
+
         {msg ? <Text style={styles.msg}>{msg}</Text> : null}
         <PressableScale testID="verse-save" style={[styles.btn, { backgroundColor: colors.brandPrimary }, busy && { opacity: 0.6 }]} onPress={save} disabled={busy}>
           <Ionicons name="save-outline" size={18} color={colors.white} /><Text style={styles.btnText}>{isNew ? "Crea" : "Salva"}</Text>
@@ -85,6 +114,12 @@ const styles = StyleSheet.create({
   iconBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: ADMIN.card, alignItems: "center", justifyContent: "center" },
   headerTitle: { color: colors.white, fontSize: 18, fontWeight: "800" },
   rowInputs: { flexDirection: "row", gap: spacing.md },
+  medSection: { marginTop: spacing.lg, paddingTop: spacing.lg, borderTopWidth: 1, borderTopColor: ADMIN.border },
+  medHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  medTitle: { color: colors.white, fontSize: 16, fontWeight: "800" },
+  regenBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.brandPrimary + "22", borderWidth: 1, borderColor: colors.brandPrimary, paddingHorizontal: spacing.md, paddingVertical: 8, borderRadius: radius.pill },
+  regenText: { color: colors.brandSecondary, fontSize: 13, fontWeight: "800" },
+  medHint: { color: ADMIN.muted, fontSize: 12.5, lineHeight: 18, marginTop: 6, marginBottom: spacing.sm },
   msg: { color: colors.brandSecondary, fontSize: 14, textAlign: "center", marginBottom: spacing.md },
   btn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, paddingVertical: spacing.md, borderRadius: radius.pill },
   btnText: { color: colors.white, fontSize: 16, fontWeight: "800" },
