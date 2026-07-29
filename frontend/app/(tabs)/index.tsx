@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, RefreshControl, Linking } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -6,7 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, interpolate } from "react-native-reanimated";
 import { api } from "@/src/api";
 import { currentProgram } from "@/src/utils/onair";
 import { usePlayer } from "@/src/context/PlayerContext";
@@ -15,6 +15,8 @@ import WatchLiveModal from "@/src/components/WatchLiveModal";
 import WeatherWidget from "@/src/components/WeatherWidget";
 import Collaborators from "@/src/components/Collaborators";
 import WhatsAppSection from "@/src/components/WhatsAppSection";
+import VerseOfDayCard from "@/src/components/VerseOfDayCard";
+import { PulsingDot, SoundRings } from "@/src/components/LiveHeroFx";
 import PressableScale from "@/src/components/PressableScale";
 import Logo from "@/src/components/Logo";
 import { colors, spacing, radius } from "@/src/theme";
@@ -53,7 +55,16 @@ export default function Home() {
 
   const live = liveInfo;
   const isLivePlaying = track?.id === "live" && isPlaying;
+  const isLive = !!(liveInfo?.live_mode || live?.is_live);
   const onAir = currentProgram(programs);
+
+  // Gentle breathing glow + CTA pulse while on air (very light, UI-thread only).
+  const glow = useSharedValue(0);
+  useEffect(() => {
+    glow.value = withRepeat(withTiming(1, { duration: 2400, easing: Easing.inOut(Easing.ease) }), -1, true);
+  }, []);
+  const glowStyle = useAnimatedStyle(() => ({ opacity: interpolate(glow.value, [0, 1], [0.25, 0.55]), transform: [{ scale: interpolate(glow.value, [0, 1], [0.92, 1.08]) }] }));
+  const ctaPulse = useAnimatedStyle(() => (isLive ? { transform: [{ scale: interpolate(glow.value, [0, 1], [1, 1.025]) }] } : {}));
   const onAirImg = onAir ? (onAir.images?.[0] || onAir.presenters?.find((p: any) => p.image)?.image || "") : "";
 
   const onListen = () => {
@@ -102,8 +113,13 @@ export default function Home() {
         />
         <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(10,17,40,0.65)" }]} />
         <LinearGradient colors={["rgba(10,17,40,0.35)", "rgba(10,17,40,0.92)"]} style={StyleSheet.absoluteFill} />
+        {/* Soft blue glow that gently breathes */}
+        <Animated.View pointerEvents="none" style={[styles.heroGlow, glowStyle]} />
         <Animated.View entering={FadeInDown.duration(500)} style={styles.brandRow}>
-          <Logo size={52} shadow />
+          <View>
+            {isLive && <SoundRings size={52} />}
+            <Logo size={52} shadow />
+          </View>
           <View>
             <Text style={styles.brandName}>Pescatori di Uomini</Text>
             <Text style={styles.slogan}>La radio che annuncia il Vangelo</Text>
@@ -111,7 +127,7 @@ export default function Home() {
         </Animated.View>
 
         <Animated.View entering={FadeInDown.duration(500).delay(120)} style={styles.liveBadge} testID="live-indicator">
-          <View style={[styles.dot, { backgroundColor: (liveInfo?.live_mode || live?.is_live) ? colors.success : colors.error }]} />
+          {isLive ? <PulsingDot color={colors.success} size={8} /> : <View style={[styles.dot, { backgroundColor: colors.error }]} />}
           <Text style={styles.liveText}>{liveInfo?.live_mode ? "IN DIRETTA" : live?.is_live ? "IN DIRETTA ORA" : "NON IN ONDA"}</Text>
         </Animated.View>
 
@@ -121,10 +137,12 @@ export default function Home() {
               <Text style={styles.liveNowTitle}>🔴 Siamo in diretta</Text>
               <Text style={styles.liveNowSub}>Guarda la diretta streaming ora in corso</Text>
             </Animated.View>
-            <PressableScale testID="watch-live-button" style={styles.cta} onPress={openWatch}>
-              <Ionicons name="videocam" size={22} color={colors.navy} />
-              <Text style={styles.ctaText}>Guarda la diretta</Text>
-            </PressableScale>
+            <Animated.View style={ctaPulse}>
+              <PressableScale testID="watch-live-button" style={styles.cta} onPress={openWatch}>
+                <Ionicons name="videocam" size={22} color={colors.navy} />
+                <Text style={styles.ctaText}>Guarda la diretta</Text>
+              </PressableScale>
+            </Animated.View>
           </>
         ) : (
           <>
@@ -134,10 +152,12 @@ export default function Home() {
               <Text style={styles.nowArtist} numberOfLines={1}>{live?.artist}</Text>
             </Animated.View>
 
-            <PressableScale testID="listen-live-button" style={styles.cta} onPress={onListen}>
-              <Ionicons name={isLivePlaying ? "pause" : "play"} size={22} color={colors.navy} />
-              <Text style={styles.ctaText}>{isLivePlaying ? "In riproduzione" : "Ascolta la Diretta"}</Text>
-            </PressableScale>
+            <Animated.View style={ctaPulse}>
+              <PressableScale testID="listen-live-button" style={styles.cta} onPress={onListen}>
+                <Ionicons name={isLivePlaying ? "pause" : "play"} size={22} color={colors.navy} />
+                <Text style={styles.ctaText}>{isLivePlaying ? "In riproduzione" : "Ascolta la Diretta"}</Text>
+              </PressableScale>
+            </Animated.View>
           </>
         )}
       </View>
@@ -217,6 +237,8 @@ export default function Home() {
 
       <WhatsAppSection />
 
+      <VerseOfDayCard />
+
       <Pressable testID="prayer-cta" style={styles.prayerCta} onPress={() => router.push("/prayer")}>
         <Ionicons name="heart" size={20} color={colors.brandPrimary} />
         <Text style={styles.prayerCtaText}>Invia una richiesta di preghiera</Text>
@@ -240,6 +262,7 @@ function SectionHeader({ title, onPress }: { title: string; onPress: () => void 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
   hero: { padding: spacing.xl, paddingBottom: spacing.xl, overflow: "hidden" },
+  heroGlow: { position: "absolute", top: 40, alignSelf: "center", width: 320, height: 320, borderRadius: 160, backgroundColor: colors.brandPrimary },
   brandRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   brandName: { color: colors.white, fontSize: 17, fontWeight: "800" },
   slogan: { color: colors.brandSecondary, fontSize: 13, marginTop: 2 },

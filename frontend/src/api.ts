@@ -396,6 +396,14 @@ export const api = {
   adminUpdateReport: (id: string, status: string) => request(`/admin/reports/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }, true),
   adminDeleteReport: (id: string) => request(`/admin/reports/${id}`, { method: "DELETE" }, true),
 
+  // verse of the day
+  verseToday: () => request("/verse/today"),
+  verse: (id: string) => request(`/verse/${id}`),
+  adminVerses: (search?: string) => request(`/admin/verses${search ? `?search=${encodeURIComponent(search)}` : ""}`, {}, true),
+  adminCreateVerse: (body: any) => request("/admin/verses", { method: "POST", body: JSON.stringify(body) }, true),
+  adminEditVerse: (id: string, body: any) => request(`/admin/verses/${id}`, { method: "PATCH", body: JSON.stringify(body) }, true),
+  adminDeleteVerse: (id: string) => request(`/admin/verses/${id}`, { method: "DELETE" }, true),
+
   // generic CMS content (reused by every section)
   contentSections: () => request("/content-sections"),
   contents: (section: string, params?: { search?: string; category?: string; tag?: string }) => {

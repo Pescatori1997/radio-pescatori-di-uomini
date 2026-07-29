@@ -20,6 +20,12 @@ from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict
 from datetime import datetime, timezone, timedelta
+from verses_data import VERSES_SEED
+try:
+    from zoneinfo import ZoneInfo
+    ROME_TZ = ZoneInfo("Europe/Rome")
+except Exception:
+    ROME_TZ = None
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -687,7 +693,7 @@ async def get_history(authorization: Optional[str] = Header(None)):
 ADMIN_EMAILS = [e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()]
 ROLE_ADMIN, ROLE_COLLAB, ROLE_LISTENER = "administrator", "collaborator", "listener"
 # Sections that can be delegated to a collaborator (each maps to an existing admin area).
-PERM_SECTIONS = ["podcasts", "meditations", "news", "merch", "schedule", "prayers", "messages", "team", "radio"]
+PERM_SECTIONS = ["podcasts", "meditations", "news", "merch", "schedule", "prayers", "messages", "team", "radio", "verses"]
 
 # ---------------- Email (Emergent-managed Resend) ----------------
 EMAIL_BASE_URL = "https://integrations.emergentagent.com"
@@ -860,6 +866,7 @@ async def admin_stats(admin=Depends(require_admin)):
         "notifications": await db.notifications_log.count_documents({}),
         "reports": await db.reports.count_documents({}),
         "reports_new": await db.reports.count_documents({"read": {"$ne": True}}),
+        "verses": await db.verses.count_documents({}),
     }
 
 
@@ -3523,6 +3530,99 @@ async def admin_delete_report(rid: str, admin=Depends(require_admin)):
     return {"ok": True}
 
 
+# ---------------- Versetto del Giorno ----------------
+class VerseIn(BaseModel):
+    text: str
+    reference: str
+    book: Optional[str] = None
+    chapter: Optional[int] = None
+    verse: Optional[int] = None
+    active: bool = True
+    order: Optional[int] = None
+
+
+class VerseEdit(BaseModel):
+    text: Optional[str] = None
+    reference: Optional[str] = None
+    book: Optional[str] = None
+    chapter: Optional[int] = None
+    verse: Optional[int] = None
+    active: Optional[bool] = None
+    order: Optional[int] = None
+
+
+def _rome_day_ordinal() -> int:
+    """Ordinal day number in Italian (Europe/Rome) time — increments at 00:00 Rome."""
+    if ROME_TZ is not None:
+        return datetime.now(ROME_TZ).date().toordinal()
+    # Fallback: approximate Rome as UTC+1 (no DST) if zoneinfo is unavailable.
+    return (datetime.now(timezone.utc) + timedelta(hours=1)).date().toordinal()
+
+
+@api_router.get("/verse/today")
+async def verse_today():
+    """Deterministic daily verse (Europe/Rome). Cycles through the whole active
+    archive one per day so the same verse never repeats until all are shown."""
+    verses = await db.verses.find({"active": {"$ne": False}}, {"_id": 0}).sort(
+        [("order", 1), ("created_at", 1)]
+    ).to_list(2000)
+    if not verses:
+        raise HTTPException(status_code=404, detail="Nessun versetto disponibile")
+    idx = _rome_day_ordinal() % len(verses)
+    return verses[idx]
+
+
+@api_router.get("/verse/{vid}")
+async def verse_item(vid: str):
+    doc = await db.verses.find_one({"id": vid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Versetto non trovato")
+    return doc
+
+
+@api_router.get("/admin/verses")
+async def admin_verses(search: Optional[str] = None, admin=Depends(require_perm("verses"))):
+    query = {}
+    if search:
+        query["$or"] = [
+            {"text": {"$regex": search, "$options": "i"}},
+            {"reference": {"$regex": search, "$options": "i"}},
+        ]
+    docs = await db.verses.find(query, {"_id": 0}).sort([("order", 1), ("created_at", 1)]).to_list(2000)
+    return docs
+
+
+@api_router.post("/admin/verses", status_code=201)
+async def admin_create_verse(body: VerseIn, admin=Depends(require_perm("verses"))):
+    doc = body.model_dump()
+    doc["id"] = new_id("verse")
+    if doc.get("order") is None:
+        last = await db.verses.find_one({}, {"order": 1}, sort=[("order", -1)])
+        doc["order"] = ((last or {}).get("order", 0) or 0) + 1
+    doc["created_at"] = now_utc()
+    await db.verses.insert_one(dict(doc))
+    await log_activity(admin, f"ha aggiunto il versetto \"{doc.get('reference', '')}\"", "verses", {"id": doc["id"]})
+    return {"ok": True, "id": doc["id"]}
+
+
+@api_router.patch("/admin/verses/{vid}")
+async def admin_edit_verse(vid: str, body: VerseEdit, admin=Depends(require_perm("verses"))):
+    updates = body.model_dump(exclude_unset=True)
+    if updates:
+        res = await db.verses.update_one({"id": vid}, {"$set": updates})
+        if res.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Versetto non trovato")
+    await log_activity(admin, f"ha modificato un versetto", "verses", {"id": vid})
+    return {"ok": True}
+
+
+@api_router.delete("/admin/verses/{vid}")
+async def admin_delete_verse(vid: str, admin=Depends(require_perm("verses"))):
+    await db.verses.delete_one({"id": vid})
+    await log_activity(admin, "ha eliminato un versetto", "verses", {"id": vid})
+    return {"ok": True}
+
+
 
 app.include_router(api_router)
 
@@ -3729,6 +3829,24 @@ async def startup():
     # --- Workflow status migration (idempotent) ---
     await db.prayer_requests.update_many({"status": {"$exists": False}}, {"$set": {"status": "new"}})
     await db.messages.update_many({"status": {"$exists": False}}, {"$set": {"status": "new"}})
+
+    # --- Seed "Versetto del Giorno" archive (only if empty; admin-managed thereafter) ---
+    if await db.verses.count_documents({}) == 0:
+        docs = []
+        for i, v in enumerate(VERSES_SEED):
+            docs.append({
+                "id": new_id("verse"),
+                "text": v["text"],
+                "reference": v["reference"],
+                "book": v.get("book"),
+                "chapter": v.get("chapter"),
+                "verse": v.get("verse"),
+                "active": True,
+                "order": i,
+                "created_at": now_utc(),
+            })
+        if docs:
+            await db.verses.insert_many(docs)
     logger.info("Seed complete")
 
 

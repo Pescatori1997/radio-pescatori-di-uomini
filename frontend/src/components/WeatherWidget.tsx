@@ -4,9 +4,10 @@ import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useWeather } from "@/src/weather/WeatherContext";
-import { weatherVisual } from "@/src/weather/weatherCodes";
+import { weatherVisual, weatherCategory } from "@/src/weather/weatherCodes";
 import { cityLocalTime } from "@/src/weather/weatherApi";
 import CitySearchModal from "@/src/components/CitySearchModal";
+import WeatherAnimation from "@/src/components/WeatherAnimation";
 import PressableScale from "@/src/components/PressableScale";
 import { colors, spacing, radius } from "@/src/theme";
 
@@ -53,6 +54,7 @@ export default function WeatherWidget() {
 
   if (!weather) return null;
   const vis = weatherVisual(weather.code, weather.isDay);
+  const cat = weatherCategory(weather.code, weather.isDay);
   const cityName = city?.name || "—";
   const time = cityLocalTime(weather.utcOffsetSeconds);
 
@@ -61,7 +63,7 @@ export default function WeatherWidget() {
       <Animated.View entering={FadeIn.duration(400)}>
         <PressableScale testID="weather-widget" style={styles.card} onPress={() => router.push("/weather")}>
           <View style={styles.leftIcon}>
-            <MaterialCommunityIcons name={vis.icon as any} size={44} color={colors.brandPrimary} />
+            <WeatherAnimation category={cat} size={56} />
           </View>
           <View style={{ flex: 1 }}>
             <View style={styles.cityRow}>

@@ -353,3 +353,41 @@ frontend:
 agent_communication:
     -agent: "main"
     -message: "Test Universal CMS Phase 1. Admin login: POST /api/auth/login {email: pescatoridiuomini@outlook.it, password: AdminTestPwd1!} -> token; Bearer for /api/admin/*. BACKEND: (1) GET /api/content-sections returns 6 sections; (2) admin create content section=predicazioni status=draft -> 201, NOT in public GET /api/contents?section=predicazioni; (3) create status=published -> appears in public; (4) PATCH edit title/category; (5) POST /api/admin/contents/{id}/duplicate -> 201 new draft copy; (6) DELETE removes it; (7) invalid section -> 404; (8) filter public by category & search work (verify undefined params fix: GET /api/contents?section=studi-biblici returns the 2 seeded items 'Il Sermone sul Monte'/'La Fede di Abramo'); (9) auth guard 401 no token on admin content routes. Clean up all TEST_-prefixed content you create. FRONTEND (public only, admin behind Google gate): as Ospite from /welcome -> Home 'Biblioteca' banner -> hub shows Podcast/Meditazioni/Studi Biblici/Predicazioni/Video -> tap Studi Biblici -> list shows 2 items + category chips -> open item -> player + prev/next + related render."
+
+## --- Home immersiva + Versetto del Giorno (session fork) ---
+backend:
+  - task: "Versetto del Giorno: public today/by-id + admin CRUD + daily rotation (Europe/Rome)"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py, backend/verses_data.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Public GET /api/verse/today (deterministic daily pick by Europe/Rome ordinal % count over active verses sorted by order,created_at) and GET /api/verse/{id} (404 if missing). Admin (require_perm 'verses', added to PERM_SECTIONS): GET /api/admin/verses (search text/reference), POST (201, auto order, created_at), PATCH /{id} (404 if missing), DELETE /{id}. Seeded 124 public-domain verses on empty collection. admin/stats includes 'verses'."
+
+frontend:
+  - task: "Home immersive redesign: animated weather, live hero FX, marine WhatsApp, Verse of Day card + Bibbia page + admin verses CRUD UI"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/{WeatherAnimation,LiveHeroFx,marine,VerseOfDayCard,WhatsAppSection,WeatherWidget}.tsx, frontend/app/(tabs)/index.tsx, frontend/app/bibbia.tsx, frontend/app/admin/verses/*"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Verified via screenshots (guest): animated weather illustration (cloud drift for Roma), hero blue glow + sound rings + pulsing live dot, marine WhatsApp section (net/waves/bubbles/glass cards), Verse of Day marine card with sunrise/waves/net/bubbles + 'Leggi il contesto' -> Bibbia page (Numeri 6, verse 24 highlighted + chapter placeholder). Admin verses screens behind gate."
+
+test_plan:
+  current_focus:
+    - "Versetto del Giorno: public today/by-id + admin CRUD + daily rotation (Europe/Rome)"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    -agent: "main"
+    -message: "BACKEND-ONLY test the new Versetto del Giorno endpoints. Admin login: POST /api/auth/login {email: pescatoridiuomini@outlook.it, password: AdminTestPwd1!} -> token; Bearer for /api/admin/*. Verify: (1) GET /api/verse/today returns a verse doc {id,text,reference,book,chapter,verse}; called twice same-day returns SAME verse (deterministic); (2) GET /api/verse/{id} works and 404 for unknown; (3) admin GET /api/admin/verses returns list incl seeded 124; search by reference (e.g. 'Giovanni') and by text works; (4) POST create (201 + id) with text+reference -> appears in list and via /api/verse/{id}; (5) PATCH edit text/active; setting active:false removes it from rotation pool (today endpoint never returns inactive); 404 patch unknown; (6) DELETE removes it; (7) auth guard: /api/admin/verses no token -> 401. Clean up any TEST_-prefixed verses you create. Do NOT delete seeded verses."

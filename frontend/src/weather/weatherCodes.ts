@@ -34,3 +34,16 @@ export function weatherVisual(code: number, isDay: boolean = true): WeatherVisua
   };
   return map[code] || { icon: "weather-cloudy", label: "—" };
 }
+
+export type WeatherCategory = "sun" | "moon" | "cloud" | "rain" | "thunder" | "snow" | "fog";
+
+/** Map a WMO code (+ day/night) to a broad category used to pick the animated illustration. */
+export function weatherCategory(code: number, isDay: boolean = true): WeatherCategory {
+  if (code === 45 || code === 48) return "fog";
+  if (code >= 95) return "thunder";
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return "snow";
+  if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return "rain";
+  if (code === 0 || code === 1) return isDay ? "sun" : "moon";
+  // 2, 3 and anything else → clouds
+  return "cloud";
+}
