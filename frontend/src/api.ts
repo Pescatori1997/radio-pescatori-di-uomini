@@ -99,7 +99,33 @@ export async function uploadMediaChunked(
     const e = await c.json().catch(() => ({}));
     throw new Error(e.detail || "Finalizzazione non riuscita");
   }
-  return c.json();
+  const done = await c.json();
+  // Backward compat: an older backend finalises synchronously and already
+  // returns the media fields here.
+  if (done && done.media_id) return done;
+  // New backend finalises in the background (so /complete can't time out on big
+  // files). Poll the status until the media is ready.
+  const statusUrl = `${BASE}/api/admin/uploads/${upload_id}/complete/status`;
+  const deadline = Date.now() + 10 * 60 * 1000; // up to 10 min for very large files
+  while (Date.now() < deadline) {
+    if (control?.cancelled) throw new Error("Caricamento annullato");
+    await new Promise((res) => setTimeout(res, 2000));
+    let s: any;
+    try {
+      const r = await fetch(statusUrl, { headers: { ...authH } });
+      if (r.status === 500) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e.detail || "Errore durante l'elaborazione del file");
+      }
+      if (!r.ok) continue; // transient (e.g. 502/503/520) → keep polling
+      s = await r.json();
+    } catch (err: any) {
+      if (err?.message && !/fetch|network|Load failed/i.test(err.message)) throw err;
+      continue; // network blip → keep polling
+    }
+    if (s.status === "done" && s.media_id) return s;
+  }
+  throw new Error("Elaborazione del file troppo lunga. Riprova.");
 }
 
 async function authHeaders(): Promise<Record<string, string>> {

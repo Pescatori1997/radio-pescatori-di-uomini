@@ -2835,6 +2835,70 @@ async def upload_chunk(upload_id: str, request: Request, admin=Depends(require_u
     return {"ok": True}
 
 
+_finalize_tasks: set = set()
+
+
+async def _finalize_upload(upload_id: str):
+    """Heavy finalization (assemble chunks + ffmpeg + write to GridFS) runs in
+    the background so the HTTP `/complete` request returns instantly and never
+    hits the edge/proxy timeout (which surfaced as a 520 without CORS headers on
+    large videos). The client polls `/complete/status` for the result."""
+    part = UPLOAD_TMP / (upload_id + ".assemble")
+    try:
+        sess = await db.upload_sessions.find_one({"_id": upload_id})
+        if not sess:
+            return
+        filename = sess.get("filename") or "file"
+        mime = sess.get("mime") or "application/octet-stream"
+        media_type = _media_type_from_mime(mime)
+        # Assemble the MongoDB chunks (in order) into a local temp file.
+        with open(part, "wb") as fh:
+            async for ch in db.upload_chunks.find({"upload_id": upload_id}).sort("offset", 1):
+                fh.write(bytes(ch["data"]))
+        if part.stat().st_size == 0:
+            await db.upload_sessions.update_one({"_id": upload_id}, {"$set": {"status": "error", "error": "Nessun dato ricevuto"}})
+            return
+        duration = ""
+        thumbnail = None
+        if media_type in ("video", "audio"):
+            duration = await asyncio.to_thread(_ffmpeg_probe_duration, part)
+        if media_type == "video":
+            thumbnail = await asyncio.to_thread(_ffmpeg_grab_frame, part)
+        if media_type == "image":
+            new_path, new_mime, new_name = await asyncio.to_thread(_optimize_image, part)
+            if new_mime:
+                if new_path != part:
+                    part.unlink(missing_ok=True)
+                    part = new_path
+                mime, filename = new_mime, new_name
+        grid_in = fs_bucket.open_upload_stream(filename, metadata={"contentType": mime})
+        with open(part, "rb") as fh:
+            while True:
+                block = fh.read(8 * 1024 * 1024)
+                if not block:
+                    break
+                await grid_in.write(block)
+        await grid_in.close()
+        size = part.stat().st_size
+        await db.upload_sessions.update_one({"_id": upload_id}, {"$set": {
+            "status": "done",
+            "media_id": str(grid_in._id),
+            "media_type": media_type,
+            "media_mime": mime,
+            "media_filename": filename,
+            "size": size,
+            "duration": duration,
+            "thumbnail": thumbnail,
+            "finished_at": now_utc(),
+        }})
+    except Exception as e:
+        logger.exception("Upload finalization failed for %s", upload_id)
+        await db.upload_sessions.update_one({"_id": upload_id}, {"$set": {"status": "error", "error": str(e)[:300]}})
+    finally:
+        part.unlink(missing_ok=True)
+        await db.upload_chunks.delete_many({"upload_id": upload_id})
+
+
 @api_router.post("/admin/uploads/{upload_id}/complete")
 async def upload_complete(upload_id: str, admin=Depends(require_uploader)):
     sess = await db.upload_sessions.find_one({"_id": upload_id})
@@ -2843,53 +2907,31 @@ async def upload_complete(upload_id: str, admin=Depends(require_uploader)):
     filename = sess.get("filename") or "file"
     mime = sess.get("mime") or "application/octet-stream"
     _validate_media(filename, mime)
-    media_type = _media_type_from_mime(mime)
-    # Assemble the MongoDB chunks (in order) into a local temp file on this worker.
-    part = UPLOAD_TMP / (upload_id + ".assemble")
-    with open(part, "wb") as fh:
-        async for ch in db.upload_chunks.find({"upload_id": upload_id}).sort("offset", 1):
-            fh.write(bytes(ch["data"]))
-    if part.stat().st_size == 0:
-        part.unlink(missing_ok=True)
-        raise HTTPException(status_code=400, detail="Nessun dato ricevuto")
-    duration = ""
-    thumbnail = None
-    # Run ffmpeg/ffprobe off the event loop so the worker keeps serving requests.
-    if media_type in ("video", "audio"):
-        duration = await asyncio.to_thread(_ffmpeg_probe_duration, part)
-    if media_type == "video":
-        thumbnail = await asyncio.to_thread(_ffmpeg_grab_frame, part)
-    # Images: resize + convert to WebP for performance.
-    if media_type == "image":
-        new_path, new_mime, new_name = await asyncio.to_thread(_optimize_image, part)
-        if new_mime:
-            if new_path != part:
-                part.unlink(missing_ok=True)
-                part = new_path
-            mime, filename = new_mime, new_name
-    # Stream the assembled temp file into GridFS (large blocks = fewer round-trips).
-    grid_in = fs_bucket.open_upload_stream(filename, metadata={"contentType": mime})
-    with open(part, "rb") as fh:
-        while True:
-            block = fh.read(8 * 1024 * 1024)
-            if not block:
-                break
-            await grid_in.write(block)
-    await grid_in.close()
-    size = part.stat().st_size
-    part.unlink(missing_ok=True)
-    # Clean up the MongoDB staging data.
-    await db.upload_chunks.delete_many({"upload_id": upload_id})
-    await db.upload_sessions.delete_one({"_id": upload_id})
-    return {
-        "media_id": str(grid_in._id),
-        "media_type": media_type,
-        "media_mime": mime,
-        "media_filename": filename,
-        "size": size,
-        "duration": duration,
-        "thumbnail": thumbnail,
-    }
+    # Kick off finalization in the background and return immediately so the
+    # request cannot time out at the edge on large files.
+    if sess.get("status") not in ("processing", "done"):
+        await db.upload_sessions.update_one({"_id": upload_id}, {"$set": {"status": "processing"}})
+        task = asyncio.create_task(_finalize_upload(upload_id))
+        _finalize_tasks.add(task)
+        task.add_done_callback(_finalize_tasks.discard)
+    return {"status": "processing", "upload_id": upload_id}
+
+
+@api_router.get("/admin/uploads/{upload_id}/complete/status")
+async def upload_complete_status(upload_id: str, admin=Depends(require_uploader)):
+    sess = await db.upload_sessions.find_one({"_id": upload_id})
+    if not sess:
+        raise HTTPException(status_code=404, detail="Upload non trovato")
+    status = sess.get("status") or "pending"
+    if status == "error":
+        raise HTTPException(status_code=500, detail=sess.get("error") or "Errore durante la finalizzazione")
+    resp = {"status": status}
+    if status == "done":
+        for k in ("media_id", "media_type", "media_mime", "media_filename", "size", "duration", "thumbnail"):
+            resp[k] = sess.get(k)
+        # Result delivered; drop the session so it doesn't linger.
+        await db.upload_sessions.delete_one({"_id": upload_id})
+    return resp
 
 
 # ---------------- Media streaming (public, Range support) ----------------
