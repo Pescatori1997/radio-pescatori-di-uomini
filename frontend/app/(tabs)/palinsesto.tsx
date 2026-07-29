@@ -8,8 +8,6 @@ import { api } from "@/src/api";
 import { DAYS, romeNow } from "@/src/utils/onair";
 import { colors, spacing, radius } from "@/src/theme";
 
-const H24_DESC = "Musica cristiana, meditazioni, podcast e contenuti biblici in onda 24 ore su 24.";
-
 /** Vertical scale: pixels per hour. The whole day is a real 24h chronological scale. */
 const HOUR_H = 120;
 const DAY_H = 24 * HOUR_H;
@@ -25,24 +23,13 @@ function toMin(hm: string): number {
   return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
 }
 
-/** Build a continuous 00:00 → 24:00 sequence of slots: real programs positioned
- * at their time, with "Radio H24" fillers covering every gap so the day is complete. */
+/** Only real programs, positioned at their own time. Empty gaps stay empty
+ * (no "Radio H24" filler cards): the timeline shows just the scheduled shows. */
 function buildSlots(programs: any[]) {
-  const timed = programs
+  return programs
     .filter((p) => p.active !== false && p.start_time && p.end_time)
-    .map((p) => ({ ...p, _s: p.start_time, _e: p.end_time <= p.start_time ? "24:00" : p.end_time }))
-    .sort((a, b) => a._s.localeCompare(b._s));
-  const slots: any[] = [];
-  let cursor = "00:00";
-  for (const p of timed) {
-    if (p._s > cursor) slots.push({ type: "h24", start: cursor, end: p._s, id: `h24-${cursor}` });
-    if (p._e > cursor) {
-      slots.push({ type: "program", start: p._s, end: p._e, data: p, id: p.id });
-      cursor = p._e;
-    }
-  }
-  if (cursor < "24:00") slots.push({ type: "h24", start: cursor, end: "24:00", id: `h24-${cursor}-end` });
-  return slots;
+    .map((p) => ({ type: "program", start: p.start_time, end: p.end_time <= p.start_time ? "24:00" : p.end_time, data: p, id: p.id }))
+    .sort((a, b) => a.start.localeCompare(b.start));
 }
 
 function Avatars({ presenters, images, color }: { presenters: any[]; images: string[]; color?: string }) {
@@ -139,7 +126,7 @@ export default function Palinsesto() {
             {/* Vertical spine */}
             <View style={styles.spine} />
 
-            {/* Program / Radio H24 slots, positioned proportionally to their time */}
+            {/* Program slots, positioned proportionally to their time */}
             {slots.map((s, i) => {
               const startMin = toMin(s.start);
               const endMin = toMin(s.end);
@@ -147,30 +134,25 @@ export default function Palinsesto() {
               const h = Math.max(28, ((endMin - startMin) / 60) * HOUR_H - GAP);
               const compact = h < 92;
               const live = i === liveIdx;
-              const isH24 = s.type !== "program";
               const p = s.data;
-              const accent = isH24 ? colors.brandSecondary : (p.color || colors.brandPrimary);
+              const accent = p.color || colors.brandPrimary;
               const liveShadow = live ? (Platform.select({ web: { boxShadow: `0 0 16px ${colors.error}55` } as any, default: { shadowColor: colors.error, shadowOpacity: 0.5, shadowRadius: 12, shadowOffset: { width: 0, height: 0 }, elevation: 8 } }) as any) : null;
 
               return (
                 <View key={s.id} testID={`slot-${s.id}`} style={[styles.slot, { top, height: h }]}>
-                  <View style={[styles.card, isH24 && styles.h24Card, live && [styles.cardLive, { borderColor: colors.error }, liveShadow], !live && !isH24 && { borderColor: accent + "44" }]}>
-                    {isH24 ? (
-                      <View style={[styles.avatar, styles.h24Icon]}><Text style={{ fontSize: 20 }}>🎙️</Text></View>
-                    ) : (
-                      <Avatars presenters={p.presenters} images={p.images} color={p.color} />
-                    )}
+                  <View style={[styles.card, live && [styles.cardLive, { borderColor: colors.error }, liveShadow], !live && { borderColor: accent + "44" }]}>
+                    <Avatars presenters={p.presenters} images={p.images} color={p.color} />
                     <View style={{ flex: 1, minWidth: 0 }}>
                       {live && (
                         <View style={[styles.liveBadge, { backgroundColor: colors.error }]}><Text style={styles.liveText}>🔴 ORA IN ONDA</Text></View>
                       )}
-                      <Text style={styles.name} numberOfLines={1}>{isH24 ? "Radio H24" : p.title}</Text>
-                      {!isH24 && !!p.host && !compact && (
+                      <Text style={styles.name} numberOfLines={1}>{p.title}</Text>
+                      {!!p.host && !compact && (
                         <View style={styles.hostRow}><Ionicons name="mic-outline" size={13} color={accent} /><Text style={styles.host} numberOfLines={1}>{p.host}</Text></View>
                       )}
                       <Text style={styles.range}>{s.start} – {s.end}</Text>
-                      {!compact && !!(isH24 ? H24_DESC : p.description) && (
-                        <Text style={styles.desc} numberOfLines={h > 150 ? 3 : 2}>{isH24 ? H24_DESC : p.description}</Text>
+                      {!compact && !!p.description && (
+                        <Text style={styles.desc} numberOfLines={h > 150 ? 3 : 2}>{p.description}</Text>
                       )}
                     </View>
                   </View>
@@ -178,12 +160,16 @@ export default function Palinsesto() {
               );
             })}
 
-            {/* Single real-time cursor — only for today. Slides along the 24h scale. */}
+            {/* Single real-time cursor — only for today. Slides along the 24h scale.
+             * When no program is on air, it shows the "Diretta Radio" live status. */}
             {isToday && (
               <View style={[styles.cursor, { top: cursorTop }]} pointerEvents="none" testID="now-cursor">
                 <View style={styles.cursorPill}><Text style={styles.cursorPillText}>{now.hm}</Text></View>
                 <View style={styles.cursorDot} />
                 <View style={styles.cursorLine} />
+                {liveIdx < 0 && (
+                  <View style={styles.cursorLiveChip}><Text style={styles.cursorLiveText}>🔴 Diretta Radio</Text></View>
+                )}
               </View>
             )}
           </View>
@@ -215,8 +201,6 @@ const styles = StyleSheet.create({
   slot: { position: "absolute", left: CARD_LEFT, right: 0, overflow: "hidden" },
   card: { flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.sm, borderWidth: 1, borderColor: "transparent", overflow: "hidden" },
   cardLive: { borderWidth: 2 },
-  h24Card: { backgroundColor: colors.surfaceTertiary, borderColor: colors.border },
-  h24Icon: { alignItems: "center", justifyContent: "center", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   avatar: { width: AV, height: AV, borderRadius: AV / 2, borderWidth: 2, backgroundColor: colors.navy },
   avatarEmpty: { alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceTertiary },
   avatarStack: { flexDirection: "row", alignItems: "center" },
@@ -235,4 +219,6 @@ const styles = StyleSheet.create({
   cursorPillText: { color: colors.white, fontSize: 11, fontWeight: "800" },
   cursorDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: colors.error, marginLeft: SPINE_X - LABEL_W - 6, borderWidth: 2, borderColor: colors.surface },
   cursorLine: { flex: 1, height: 2, backgroundColor: colors.error, marginLeft: 2 },
+  cursorLiveChip: { position: "absolute", right: 0, top: -20, flexDirection: "row", alignItems: "center", backgroundColor: colors.error, paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill },
+  cursorLiveText: { color: colors.white, fontSize: 10, fontWeight: "800", letterSpacing: 0.3 },
 });
