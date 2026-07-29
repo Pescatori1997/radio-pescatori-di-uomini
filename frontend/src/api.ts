@@ -55,7 +55,11 @@ export async function uploadMediaChunked(
 
   const blob = file.blob || (await (await fetch(file.uri)).blob());
   const total = blob.size;
-  const CHUNK = 2 * 1024 * 1024;
+  // Larger chunks = far fewer round-trips (a 200MB file becomes ~40 requests
+  // instead of ~100), which is dramatically more reliable on high-latency
+  // connections and reduces the chance of transient 503s. Still safely under
+  // typical edge/proxy per-request body limits.
+  const CHUNK = 5 * 1024 * 1024;
   const putChunk = async (start: number, part: Blob, attempt = 0): Promise<void> => {
     const url = `${BASE}/api/admin/uploads/${upload_id}/chunk`;
     const headers = { ...authH, "X-Chunk-Offset": String(start) };
