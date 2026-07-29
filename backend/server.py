@@ -76,6 +76,72 @@ def now_utc():
     return datetime.now(timezone.utc)
 
 
+try:
+    from zoneinfo import ZoneInfo
+    _ROME_TZ = ZoneInfo("Europe/Rome")
+except Exception:  # pragma: no cover
+    _ROME_TZ = timezone.utc
+
+DAYS_IT = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"]
+
+
+def _normalize_program(d: dict) -> dict:
+    """Map a program document to the rich, forward-compatible shape used by the
+    app, filling gaps from legacy fields (name/time/day/host) so old data keeps
+    working after the palinsesto redesign."""
+    title = d.get("title") or d.get("name") or ""
+    presenters = d.get("presenters")
+    if not presenters:
+        host = (d.get("host") or "").strip()
+        presenters = [{"name": host, "image": ""}] if host else []
+    presenters = [{"name": (p or {}).get("name", ""), "image": (p or {}).get("image", "")} for p in presenters]
+    start = d.get("start_time") or d.get("time") or ""
+    weekdays = d.get("weekdays")
+    if not weekdays:
+        weekdays = [d.get("day")] if d.get("day") else []
+    weekdays = [w for w in weekdays if w in DAYS_IT]
+    images = d.get("images")
+    if not images:
+        images = [p["image"] for p in presenters if p.get("image")]
+    host_str = ", ".join([p["name"] for p in presenters if p.get("name")])
+    return {
+        "id": d.get("id"),
+        "title": title,
+        "name": title,
+        "presenters": presenters,
+        "host": host_str,
+        "description": d.get("description") or "",
+        "start_time": start,
+        "time": start,
+        "end_time": d.get("end_time") or "",
+        "weekdays": weekdays,
+        "images": images,
+        "color": d.get("color") or "",
+        "active": d.get("active", True),
+        "type": d.get("type") or "regular",
+        "date": d.get("date") or "",
+    }
+
+
+def _is_on_air(p: dict, now=None) -> bool:
+    """True if the (normalized) program is currently on air in Italian time."""
+    if not p.get("active", True):
+        return False
+    start = p.get("start_time")
+    end = p.get("end_time")
+    weekdays = p.get("weekdays") or []
+    if not start or not end:
+        return False
+    now = now or datetime.now(_ROME_TZ)
+    today = DAYS_IT[now.weekday()]
+    cur = now.strftime("%H:%M")
+    if end > start:
+        return today in weekdays and start <= cur < end
+    # crosses midnight
+    prev_day = DAYS_IT[(now.weekday() - 1) % 7]
+    return (today in weekdays and cur >= start) or (prev_day in weekdays and cur < end)
+
+
 def new_id(prefix="id"):
     return f"{prefix}_{uuid.uuid4().hex[:12]}"
 
@@ -313,6 +379,25 @@ async def live_status():
         })
     except Exception as e:
         logger.warning("Now Playing fetch failed: %s", e)
+    # When a scheduled program is on air, let the palinsesto drive the player
+    # label. Kept lightweight (no base64 image here — the widgets/player fetch
+    # /programs/current for the presenter photo).
+    try:
+        pdocs = await db.programs.find({}, {"_id": 0}).to_list(500)
+        for d in pdocs:
+            pr = _normalize_program(d)
+            if _is_on_air(pr):
+                result["current_program"] = {
+                    "id": pr["id"], "title": pr["title"], "host": pr["host"],
+                    "start_time": pr["start_time"], "end_time": pr["end_time"],
+                }
+                if pr["title"]:
+                    result["title"] = pr["title"]
+                if pr["host"]:
+                    result["artist"] = pr["host"]
+                break
+    except Exception as e:
+        logger.warning("current program lookup failed: %s", e)
     return result
 
 
@@ -447,8 +532,32 @@ async def get_news_item(news_id: str):
 
 @api_router.get("/programs")
 async def get_programs():
-    docs = await db.programs.find({}, {"_id": 0}).to_list(200)
-    return docs
+    docs = await db.programs.find({}, {"_id": 0}).to_list(500)
+    progs = [_normalize_program(d) for d in docs]
+    progs.sort(key=lambda p: (p.get("start_time") or "99:99"))
+    return progs
+
+
+@api_router.get("/programs/current")
+async def get_current_program():
+    docs = await db.programs.find({}, {"_id": 0}).to_list(500)
+    for d in docs:
+        p = _normalize_program(d)
+        if _is_on_air(p):
+            return p
+    return None
+
+
+@api_router.get("/programs/day/{weekday}")
+async def get_programs_by_day(weekday: str):
+    docs = await db.programs.find({}, {"_id": 0}).to_list(500)
+    out = []
+    for d in docs:
+        p = _normalize_program(d)
+        if p.get("active", True) and weekday in (p.get("weekdays") or []):
+            out.append(p)
+    out.sort(key=lambda p: (p.get("start_time") or "99:99"))
+    return out
 
 
 @api_router.get("/collaborators")
@@ -1363,34 +1472,56 @@ async def admin_activity(limit: int = 100, admin=Depends(require_admin)):
 
 
 # ---------------- Admin: Programs (Palinsesto) ----------------
+class PresenterIn(BaseModel):
+    name: Optional[str] = ""
+    image: Optional[str] = ""
+
+
 class ProgramIn(BaseModel):
-    name: str
-    time: str
-    day: str
-    host: Optional[str] = ""
+    title: str
+    start_time: str
+    end_time: Optional[str] = ""
+    weekdays: List[str] = []
+    presenters: List[PresenterIn] = []
     description: Optional[str] = ""
+    images: List[str] = []
+    color: Optional[str] = ""
+    active: bool = True
+    type: Optional[str] = "regular"
+    date: Optional[str] = ""
 
 
 class ProgramEdit(BaseModel):
-    name: Optional[str] = None
-    time: Optional[str] = None
-    day: Optional[str] = None
-    host: Optional[str] = None
+    title: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    weekdays: Optional[List[str]] = None
+    presenters: Optional[List[PresenterIn]] = None
     description: Optional[str] = None
+    images: Optional[List[str]] = None
+    color: Optional[str] = None
+    active: Optional[bool] = None
+    type: Optional[str] = None
+    date: Optional[str] = None
 
 
 @api_router.get("/admin/programs")
 async def admin_programs(admin=Depends(require_perm("schedule"))):
     docs = await db.programs.find({}, {"_id": 0}).to_list(500)
-    return docs
+    progs = [_normalize_program(d) for d in docs]
+    progs.sort(key=lambda p: (p.get("start_time") or "99:99"))
+    return progs
 
 
 @api_router.post("/admin/programs", status_code=201)
 async def admin_create_program(body: ProgramIn, admin=Depends(require_perm("schedule"))):
     doc = body.model_dump()
+    doc["presenters"] = [p for p in doc.get("presenters", [])]
     doc["id"] = new_id("prog")
+    doc["created_at"] = now_utc()
+    doc["updated_at"] = now_utc()
     await db.programs.insert_one(dict(doc))
-    await log_activity(admin, f"ha aggiunto il programma \"{doc.get('name', '')}\" al palinsesto", "schedule", {"id": doc["id"]})
+    await log_activity(admin, f"ha aggiunto il programma \"{doc.get('title', '')}\" al palinsesto", "schedule", {"id": doc["id"]})
     return {"ok": True, "id": doc["id"]}
 
 
@@ -1398,6 +1529,7 @@ async def admin_create_program(body: ProgramIn, admin=Depends(require_perm("sche
 async def admin_edit_program(prog_id: str, body: ProgramEdit, admin=Depends(require_perm("schedule"))):
     updates = body.model_dump(exclude_unset=True)
     if updates:
+        updates["updated_at"] = now_utc()
         await db.programs.update_one({"id": prog_id}, {"$set": updates})
     await log_activity(admin, "ha aggiornato il palinsesto", "schedule", {"id": prog_id})
     return {"ok": True}

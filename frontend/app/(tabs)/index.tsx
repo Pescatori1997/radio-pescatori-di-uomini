@@ -8,6 +8,7 @@ import { useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { api } from "@/src/api";
+import { currentProgram } from "@/src/utils/onair";
 import { usePlayer } from "@/src/context/PlayerContext";
 import { configuredPlatforms } from "@/src/livePlatforms";
 import WatchLiveModal from "@/src/components/WatchLiveModal";
@@ -52,6 +53,8 @@ export default function Home() {
 
   const live = liveInfo;
   const isLivePlaying = track?.id === "live" && isPlaying;
+  const onAir = currentProgram(programs);
+  const onAirImg = onAir ? (onAir.images?.[0] || onAir.presenters?.find((p: any) => p.image)?.image || "") : "";
 
   const onListen = () => {
     playLive();
@@ -174,18 +177,40 @@ export default function Home() {
         ))}
       </ScrollView>
 
-      {/* PROGRAMS */}
-      <SectionHeader title="Programmi della settimana" onPress={() => router.push("/palinsesto")} />
-      <View style={{ paddingHorizontal: spacing.lg, gap: spacing.sm }}>
-        {programs.slice(0, 4).map((pr) => (
-          <View key={pr.id} style={styles.progRow}>
-            <View style={styles.progTime}><Text style={styles.progTimeText}>{pr.time}</Text><Text style={styles.progDay}>{pr.day.slice(0, 3)}</Text></View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.progName} numberOfLines={1}>{pr.name}</Text>
-              <Text style={styles.progHost} numberOfLines={1}>{pr.host}</Text>
-            </View>
-          </View>
-        ))}
+      {/* ORA IN ONDA (compact widget) */}
+      <SectionHeader title="Palinsesto" onPress={() => router.push("/palinsesto")} />
+      <View style={{ paddingHorizontal: spacing.lg }}>
+        <PressableScale testID="home-onair" style={styles.onAirCard} onPress={() => router.push("/palinsesto")}>
+          {onAir ? (
+            <>
+              {onAirImg ? (
+                <Image source={{ uri: onAirImg }} style={styles.onAirAvatar} contentFit="cover" />
+              ) : (
+                <View style={[styles.onAirAvatar, styles.onAirAvatarEmpty]}><Ionicons name="mic" size={22} color={colors.brandPrimary} /></View>
+              )}
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <View style={styles.onAirBadge}><View style={styles.onAirDot} /><Text style={styles.onAirBadgeText}>IN ONDA</Text></View>
+                <Text style={styles.onAirTitle} numberOfLines={1}>{onAir.title}</Text>
+                {!!onAir.host && <Text style={styles.onAirHost} numberOfLines={1}>{onAir.host}</Text>}
+                {(onAir.start_time || onAir.end_time) ? <Text style={styles.onAirTime}>{onAir.start_time}{onAir.end_time ? ` – ${onAir.end_time}` : ""}</Text> : null}
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+            </>
+          ) : (
+            <>
+              <View style={[styles.onAirAvatar, styles.onAirAvatarEmpty]}><Ionicons name="radio-outline" size={22} color={colors.muted} /></View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.onAirTitle}>Nessun programma in onda</Text>
+                <Text style={styles.onAirHost}>Visualizza il palinsesto completo</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+            </>
+          )}
+        </PressableScale>
+        <PressableScale testID="home-view-schedule" style={styles.scheduleBtn} onPress={() => router.push("/palinsesto")}>
+          <Ionicons name="calendar-outline" size={18} color={colors.brandPrimary} />
+          <Text style={styles.scheduleBtnText}>Visualizza palinsesto</Text>
+        </PressableScale>
       </View>
 
       <Collaborators />
@@ -243,12 +268,17 @@ const styles = StyleSheet.create({
   newsBadge: { position: "absolute", top: spacing.md, left: spacing.md, backgroundColor: colors.brandPrimary, paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.sm },
   newsBadgeText: { color: colors.white, fontSize: 10, fontWeight: "700" },
   newsTitle: { position: "absolute", bottom: spacing.md, left: spacing.md, right: spacing.md, color: colors.white, fontSize: 15, fontWeight: "700" },
-  progRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.md },
-  progTime: { alignItems: "center", width: 52 },
-  progTimeText: { color: colors.onSurface, fontSize: 15, fontWeight: "800" },
-  progDay: { color: colors.muted, fontSize: 11, textTransform: "uppercase" },
-  progName: { color: colors.onSurface, fontSize: 15, fontWeight: "700" },
-  progHost: { color: colors.onSurfaceTertiary, fontSize: 13, marginTop: 2 },
+  onAirCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.border },
+  onAirAvatar: { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.navy, borderWidth: 2, borderColor: colors.brandPrimary },
+  onAirAvatarEmpty: { alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceTertiary, borderColor: colors.border },
+  onAirBadge: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 5, backgroundColor: colors.error, paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill, marginBottom: 4 },
+  onAirDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.white },
+  onAirBadgeText: { color: colors.white, fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
+  onAirTitle: { color: colors.onSurface, fontSize: 16, fontWeight: "800" },
+  onAirHost: { color: colors.onSurfaceTertiary, fontSize: 13, marginTop: 2 },
+  onAirTime: { color: colors.brandPrimary, fontSize: 12, fontWeight: "700", marginTop: 3 },
+  scheduleBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, marginTop: spacing.md, paddingVertical: spacing.md, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.brandPrimary },
+  scheduleBtnText: { color: colors.brandPrimary, fontSize: 14, fontWeight: "800" },
   prayerCta: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginHorizontal: spacing.lg, marginTop: spacing.xl, backgroundColor: colors.brandTertiary, padding: spacing.lg, borderRadius: radius.md },
   prayerCtaText: { flex: 1, color: colors.onBrandTertiary, fontSize: 15, fontWeight: "700" },
 });

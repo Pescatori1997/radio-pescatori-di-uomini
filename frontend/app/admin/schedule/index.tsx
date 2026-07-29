@@ -22,7 +22,7 @@ export default function AdminSchedule() {
   }, []);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const dayPrograms = items.filter((p) => p.day === day).sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+  const dayPrograms = items.filter((p) => (p.weekdays || []).includes(day)).sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
 
   return (
     <AdminShell title="Palinsesto" activeKey="schedule">
@@ -43,12 +43,14 @@ export default function AdminSchedule() {
         <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingTop: 0, paddingBottom: 40 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.brandPrimary} />}>
           {dayPrograms.length === 0 ? <Text style={styles.empty}>Nessun programma per {day}. Tocca + per aggiungere.</Text> : dayPrograms.map((p) => (
-            <PressableScale key={p.id} testID={`sched-row-${p.id}`} style={styles.row} onPress={() => router.push(`/admin/schedule/${p.id}`)}>
-              <View style={styles.timeCol}><Text style={styles.time}>{p.time}</Text></View>
+            <PressableScale key={p.id} testID={`sched-row-${p.id}`} style={[styles.row, p.active === false && { opacity: 0.5 }]} onPress={() => router.push(`/admin/schedule/${p.id}`)}>
+              <View style={styles.timeCol}><Text style={styles.time}>{p.start_time}</Text>{!!p.end_time && <Text style={styles.timeEnd}>{p.end_time}</Text>}</View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.name} numberOfLines={1}>{p.name}</Text>
+                <Text style={styles.name} numberOfLines={1}>{p.title}</Text>
                 {!!p.host && <Text style={styles.host} numberOfLines={1}>{p.host}</Text>}
+                <Text style={styles.days} numberOfLines={1}>{(p.weekdays || []).map((d: string) => d.slice(0, 3)).join(" · ")}</Text>
               </View>
+              {p.active === false && <View style={styles.offBadge}><Text style={styles.offText}>OFF</Text></View>}
               <Ionicons name="chevron-forward" size={18} color={ADMIN.muted} />
             </PressableScale>
           ))}
@@ -71,6 +73,10 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: ADMIN.card, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md, borderWidth: 1, borderColor: ADMIN.border },
   timeCol: { width: 54 },
   time: { color: colors.brandPrimary, fontSize: 15, fontWeight: "800" },
+  timeEnd: { color: ADMIN.muted, fontSize: 12, fontWeight: "600", marginTop: 1 },
   name: { color: colors.white, fontSize: 15, fontWeight: "800" },
   host: { color: ADMIN.muted, fontSize: 13, marginTop: 2 },
+  days: { color: colors.brandSecondary, fontSize: 11, marginTop: 3, fontWeight: "600" },
+  offBadge: { backgroundColor: colors.error, borderRadius: radius.sm, paddingHorizontal: 6, paddingVertical: 2 },
+  offText: { color: colors.white, fontSize: 10, fontWeight: "800" },
 });

@@ -6,17 +6,22 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/src/api";
 import { ADMIN } from "@/src/components/AdminShell";
 import PressableScale from "@/src/components/PressableScale";
-import { AInput } from "@/src/components/adminForm";
+import { AInput, AImagePicker, ASwitch } from "@/src/components/adminForm";
 import { colors, spacing, radius } from "@/src/theme";
 
 const DAYS = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"];
+const COLORS = ["", "#E11D48", "#F97316", "#EAB308", "#22C55E", "#0EA5E9", "#6366F1", "#A855F7"];
 
 export default function ProgramEditor() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { id, day: initDay } = useLocalSearchParams<{ id: string; day?: string }>();
   const isNew = id === "new";
-  const [f, setF] = useState<any>({ name: "", time: "", day: initDay || "Lunedì", host: "", description: "" });
+  const [f, setF] = useState<any>({
+    title: "", start_time: "", end_time: "",
+    weekdays: initDay ? [initDay] : [], presenters: [{ name: "", image: "" }],
+    description: "", color: "", active: true,
+  });
   const [loading, setLoading] = useState(!isNew);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -26,16 +31,32 @@ export default function ProgramEditor() {
     if (!isNew && id) {
       api.adminPrograms().then((list: any[]) => {
         const p = list.find((x) => x.id === id);
-        if (p) setF({ name: p.name, time: p.time, day: p.day, host: p.host || "", description: p.description || "" });
+        if (p) setF({
+          title: p.title || "", start_time: p.start_time || "", end_time: p.end_time || "",
+          weekdays: p.weekdays || [], presenters: (p.presenters && p.presenters.length ? p.presenters : [{ name: "", image: "" }]),
+          description: p.description || "", color: p.color || "", active: p.active !== false,
+        });
       }).catch(() => {}).finally(() => setLoading(false));
     }
   }, [id]);
 
+  const toggleDay = (d: string) => set("weekdays", f.weekdays.includes(d) ? f.weekdays.filter((x: string) => x !== d) : [...f.weekdays, d]);
+  const setPresenter = (i: number, k: string, v: any) => set("presenters", f.presenters.map((p: any, idx: number) => idx === i ? { ...p, [k]: v } : p));
+  const addPresenter = () => set("presenters", [...f.presenters, { name: "", image: "" }]);
+  const removePresenter = (i: number) => set("presenters", f.presenters.filter((_: any, idx: number) => idx !== i));
+
   const save = async () => {
-    if (!f.name?.trim()) { setMsg("Il nome è obbligatorio"); return; }
-    if (!f.time?.trim()) { setMsg("L'orario è obbligatorio"); return; }
+    if (!f.title?.trim()) { setMsg("Il titolo è obbligatorio"); return; }
+    if (!f.start_time?.trim()) { setMsg("L'ora di inizio è obbligatoria"); return; }
+    if (!f.weekdays.length) { setMsg("Seleziona almeno un giorno"); return; }
     setBusy(true); setMsg("");
-    const payload = { name: f.name, time: f.time, day: f.day, host: f.host, description: f.description };
+    const presenters = f.presenters.filter((p: any) => p.name?.trim() || p.image);
+    const images = presenters.map((p: any) => p.image).filter(Boolean);
+    const payload = {
+      title: f.title, start_time: f.start_time, end_time: f.end_time,
+      weekdays: f.weekdays, presenters, images, description: f.description,
+      color: f.color, active: f.active, type: "regular",
+    };
     try {
       if (isNew) { await api.adminCreateProgram(payload); router.back(); }
       else { await api.adminEditProgram(id!, payload); setMsg("Salvato"); }
@@ -53,18 +74,57 @@ export default function ProgramEditor() {
         <View style={{ width: 40 }} />
       </View>
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: insets.bottom + 40 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <AInput testID="prog-name" label="Nome programma *" value={f.name} onChangeText={(v: string) => set("name", v)} />
-        <AInput testID="prog-time" label="Orario * (es. 18:00)" value={f.time} onChangeText={(v: string) => set("time", v)} placeholder="HH:MM" />
-        <Text style={styles.label}>Giorno *</Text>
+        <AInput testID="prog-title" label="Titolo programma *" value={f.title} onChangeText={(v: string) => set("title", v)} />
+        <View style={styles.timeRow}>
+          <View style={{ flex: 1 }}><AInput testID="prog-start" label="Ora inizio * (HH:MM)" value={f.start_time} onChangeText={(v: string) => set("start_time", v)} placeholder="09:00" /></View>
+          <View style={{ flex: 1 }}><AInput testID="prog-end" label="Ora fine (HH:MM)" value={f.end_time} onChangeText={(v: string) => set("end_time", v)} placeholder="11:00" /></View>
+        </View>
+
+        <Text style={styles.label}>Giorni della settimana *</Text>
         <View style={styles.dayRow}>
           {DAYS.map((d) => (
-            <Pressable key={d} testID={`prog-day-${d}`} onPress={() => set("day", d)} style={[styles.dayChip, f.day === d && styles.dayChipActive]}>
-              <Text style={[styles.dayText, f.day === d && styles.dayTextActive]}>{d.slice(0, 3)}</Text>
+            <Pressable key={d} testID={`prog-day-${d}`} onPress={() => toggleDay(d)} style={[styles.dayChip, f.weekdays.includes(d) && styles.dayChipActive]}>
+              <Text style={[styles.dayText, f.weekdays.includes(d) && styles.dayTextActive]}>{d.slice(0, 3)}</Text>
             </Pressable>
           ))}
         </View>
-        <AInput testID="prog-host" label="Conduttore" value={f.host} onChangeText={(v: string) => set("host", v)} />
+
+        <Text style={styles.label}>Conduttori</Text>
+        {f.presenters.map((p: any, i: number) => (
+          <View key={i} style={styles.presenterCard}>
+            <View style={styles.presenterHead}>
+              <Text style={styles.presenterIdx}>Conduttore {i + 1}</Text>
+              {f.presenters.length > 1 && (
+                <Pressable testID={`prog-presenter-remove-${i}`} onPress={() => removePresenter(i)} hitSlop={10}><Ionicons name="trash-outline" size={18} color={colors.error} /></Pressable>
+              )}
+            </View>
+            <AInput testID={`prog-presenter-name-${i}`} label="Nome" value={p.name} onChangeText={(v: string) => setPresenter(i, "name", v)} />
+            <AImagePicker testID={`prog-presenter-img-${i}`} label="Foto (quadrata, mostrata in cerchio)" value={p.image} onChange={(v: string) => setPresenter(i, "image", v)} aspect={[1, 1]} />
+          </View>
+        ))}
+        <PressableScale testID="prog-add-presenter" style={styles.addBtn} onPress={addPresenter}>
+          <Ionicons name="add" size={18} color={colors.brandPrimary} /><Text style={styles.addText}>Aggiungi conduttore</Text>
+        </PressableScale>
+
         <AInput testID="prog-desc" label="Descrizione" value={f.description} onChangeText={(v: string) => set("description", v)} multiline />
+
+        <Text style={styles.label}>Colore programma</Text>
+        <View style={styles.dayRow}>
+          {COLORS.map((c) => (
+            <Pressable key={c || "none"} testID={`prog-color-${c || "none"}`} onPress={() => set("color", c)} style={[styles.swatch, c ? { backgroundColor: c } : styles.swatchNone, f.color === c && styles.swatchActive]}>
+              {!c && <Ionicons name="ban-outline" size={16} color={ADMIN.muted} />}
+              {f.color === c && !!c && <Ionicons name="checkmark" size={16} color={colors.white} />}
+            </Pressable>
+          ))}
+        </View>
+
+        <View style={styles.switchRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.switchLabel}>Stato</Text>
+            <Text style={styles.switchHint}>{f.active ? "Attivo (visibile nel palinsesto)" : "Disattivato"}</Text>
+          </View>
+          <ASwitch value={f.active} onValueChange={(v: boolean) => set("active", v)} />
+        </View>
 
         {msg ? <Text style={styles.msg}>{msg}</Text> : null}
         <PressableScale testID="prog-save" style={[styles.btn, { backgroundColor: colors.brandPrimary }, busy && { opacity: 0.6 }]} onPress={save} disabled={busy}>
@@ -86,12 +146,24 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: ADMIN.border },
   iconBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: ADMIN.card, alignItems: "center", justifyContent: "center" },
   headerTitle: { color: colors.white, fontSize: 18, fontWeight: "800" },
+  timeRow: { flexDirection: "row", gap: spacing.md },
   label: { color: ADMIN.muted, fontSize: 13, fontWeight: "700", marginBottom: 6 },
   dayRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginBottom: spacing.md },
   dayChip: { paddingHorizontal: spacing.md, paddingVertical: 8, borderRadius: radius.pill, backgroundColor: ADMIN.card, borderWidth: 1, borderColor: ADMIN.border },
   dayChipActive: { backgroundColor: colors.white, borderColor: colors.white },
   dayText: { color: ADMIN.muted, fontSize: 13, fontWeight: "700" },
   dayTextActive: { color: colors.navy, fontWeight: "800" },
+  presenterCard: { backgroundColor: ADMIN.card, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md, borderWidth: 1, borderColor: ADMIN.border },
+  presenterHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.sm },
+  presenterIdx: { color: colors.white, fontSize: 13, fontWeight: "800" },
+  addBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: ADMIN.border, borderStyle: "dashed", marginBottom: spacing.lg },
+  addText: { color: colors.brandPrimary, fontSize: 14, fontWeight: "700" },
+  swatch: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "transparent" },
+  swatchNone: { backgroundColor: ADMIN.card, borderColor: ADMIN.border },
+  swatchActive: { borderColor: colors.white },
+  switchRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: ADMIN.card, borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: ADMIN.border, marginBottom: spacing.lg },
+  switchLabel: { color: colors.white, fontSize: 15, fontWeight: "800" },
+  switchHint: { color: ADMIN.muted, fontSize: 12, marginTop: 2 },
   msg: { color: colors.brandSecondary, fontSize: 14, textAlign: "center", marginBottom: spacing.md },
   btn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, paddingVertical: spacing.md, borderRadius: radius.pill },
   btnText: { color: colors.white, fontSize: 16, fontWeight: "800" },
