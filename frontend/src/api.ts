@@ -422,6 +422,15 @@ export const api = {
   getBibleState: () => request("/me/bible/state", {}, true),
   setBibleState: (body: { translation?: string; book_nr: number; chapter: number; verse?: number }) =>
     request("/me/bible/state", { method: "PUT", body: JSON.stringify(body) }, true),
+  bibleAnnotations: (book_nr: number, chapter: number, translation?: string) =>
+    request(`/me/bible/annotations?book_nr=${book_nr}&chapter=${chapter}${translation ? `&translation=${translation}` : ""}`, {}, true),
+  bibleBookmarks: () => request("/me/bible/bookmarks", {}, true),
+  bibleSaveBookmark: (body: any) => request("/me/bible/bookmarks", { method: "POST", body: JSON.stringify(body) }, true),
+  bibleDeleteBookmark: (id: string) => request(`/me/bible/bookmarks/${id}`, { method: "DELETE" }, true),
+  bibleNotes: () => request("/me/bible/notes", {}, true),
+  bibleCreateNote: (body: any) => request("/me/bible/notes", { method: "POST", body: JSON.stringify(body) }, true),
+  bibleEditNote: (id: string, note: string) => request(`/me/bible/notes/${id}`, { method: "PATCH", body: JSON.stringify({ note }) }, true),
+  bibleDeleteNote: (id: string) => request(`/me/bible/notes/${id}`, { method: "DELETE" }, true),
 
   // generic CMS content (reused by every section)
   contentSections: () => request("/content-sections"),

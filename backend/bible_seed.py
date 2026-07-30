@@ -30,6 +30,8 @@ async def seed_bible(db, logger):
         await db.bible_books.create_index([("translation", 1), ("book_nr", 1)])
         await db.bible_books.create_index([("translation", 1), ("name", 1)])
         await db.user_bible_state.create_index("user_id", unique=True)
+        await db.bible_bookmarks.create_index([("user_id", 1), ("book_nr", 1), ("chapter", 1)])
+        await db.bible_notes.create_index([("user_id", 1), ("book_nr", 1), ("chapter", 1)])
 
     if await db.bible_verses.count_documents({"translation": TRANSLATION["code"]}) > 0:
         await _indices()

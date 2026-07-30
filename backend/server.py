@@ -3995,6 +3995,99 @@ async def set_bible_state(body: BibleState, authorization: Optional[str] = Heade
     return {"ok": True}
 
 
+class BookmarkIn(BaseModel):
+    translation: str = DEFAULT_BIBLE
+    book_nr: int
+    book_name: Optional[str] = None
+    chapter: int
+    verse: int
+    color: str = "yellow"
+    text: Optional[str] = None
+
+
+class NoteIn(BaseModel):
+    translation: str = DEFAULT_BIBLE
+    book_nr: int
+    book_name: Optional[str] = None
+    chapter: int
+    verse: int
+    note: str
+    text: Optional[str] = None
+
+
+class NoteEdit(BaseModel):
+    note: str
+
+
+@api_router.get("/me/bible/annotations")
+async def bible_annotations(book_nr: int, chapter: int, translation: str = DEFAULT_BIBLE, authorization: Optional[str] = Header(None)):
+    """Bookmarks + notes for a single chapter (used by the reader)."""
+    user = await get_current_user(authorization)
+    flt = {"user_id": user["user_id"], "translation": translation, "book_nr": book_nr, "chapter": chapter}
+    bookmarks = await db.bible_bookmarks.find(flt, {"_id": 0}).to_list(400)
+    notes = await db.bible_notes.find(flt, {"_id": 0}).to_list(400)
+    return {"bookmarks": bookmarks, "notes": notes}
+
+
+@api_router.get("/me/bible/bookmarks")
+async def list_bookmarks(authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    return await db.bible_bookmarks.find({"user_id": user["user_id"]}, {"_id": 0}).sort([("book_nr", 1), ("chapter", 1), ("verse", 1)]).to_list(2000)
+
+
+@api_router.post("/me/bible/bookmarks")
+async def upsert_bookmark(body: BookmarkIn, authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    key = {"user_id": user["user_id"], "translation": body.translation, "book_nr": body.book_nr, "chapter": body.chapter, "verse": body.verse}
+    existing = await db.bible_bookmarks.find_one(key)
+    if existing:
+        await db.bible_bookmarks.update_one(key, {"$set": {"color": body.color}})
+        return {"ok": True, "id": existing["id"]}
+    doc = {"id": new_id("bm"), **key, "book_name": body.book_name, "color": body.color, "text": body.text, "created_at": now_utc()}
+    await db.bible_bookmarks.insert_one(dict(doc))
+    return {"ok": True, "id": doc["id"]}
+
+
+@api_router.delete("/me/bible/bookmarks/{bid}")
+async def delete_bookmark(bid: str, authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    await db.bible_bookmarks.delete_one({"id": bid, "user_id": user["user_id"]})
+    return {"ok": True}
+
+
+@api_router.get("/me/bible/notes")
+async def list_notes(authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    return await db.bible_notes.find({"user_id": user["user_id"]}, {"_id": 0}).sort("updated_at", -1).to_list(2000)
+
+
+@api_router.post("/me/bible/notes")
+async def create_note(body: NoteIn, authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    now = now_utc()
+    doc = {"id": new_id("note"), "user_id": user["user_id"], "translation": body.translation,
+           "book_nr": body.book_nr, "book_name": body.book_name, "chapter": body.chapter, "verse": body.verse,
+           "note": body.note.strip(), "text": body.text, "created_at": now, "updated_at": now}
+    await db.bible_notes.insert_one(dict(doc))
+    return {"ok": True, "id": doc["id"]}
+
+
+@api_router.patch("/me/bible/notes/{nid}")
+async def edit_note(nid: str, body: NoteEdit, authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    res = await db.bible_notes.update_one({"id": nid, "user_id": user["user_id"]}, {"$set": {"note": body.note.strip(), "updated_at": now_utc()}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Nota non trovata")
+    return {"ok": True}
+
+
+@api_router.delete("/me/bible/notes/{nid}")
+async def delete_note(nid: str, authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    await db.bible_notes.delete_one({"id": nid, "user_id": user["user_id"]})
+    return {"ok": True}
+
+
 
 app.include_router(api_router)
 

@@ -40,7 +40,10 @@ export default function BibleHome() {
         <View style={styles.topBar}>
           <PressableScale onPress={() => router.back()} style={styles.iconBtn}><Ionicons name="arrow-back" size={22} color={colors.white} /></PressableScale>
           <Text style={styles.topTitle}>Bibbia</Text>
-          <PressableScale testID="bible-search-open" onPress={() => router.push("/lettore/search")} style={styles.iconBtn}><Ionicons name="search" size={20} color={colors.white} /></PressableScale>
+          <View style={{ flexDirection: "row", gap: spacing.sm }}>
+            <PressableScale testID="bible-saved-open" onPress={() => router.push("/lettore/salvati")} style={styles.iconBtn}><Ionicons name="bookmark" size={18} color={colors.white} /></PressableScale>
+            <PressableScale testID="bible-search-open" onPress={() => router.push("/lettore/search")} style={styles.iconBtn}><Ionicons name="search" size={20} color={colors.white} /></PressableScale>
+          </View>
         </View>
         <Text style={styles.heroSub}>Riveduta (Luzzi 1927)</Text>
       </View>
