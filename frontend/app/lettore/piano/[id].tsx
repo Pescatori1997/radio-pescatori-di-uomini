@@ -39,7 +39,7 @@ export default function PlanDetail() {
 
   const requireLogin = () => {
     alertMessage("Accedi per continuare", "Crea un account gratuito per iniziare i piani di lettura e salvare i tuoi progressi.");
-    router.push("/auth");
+    router.push("/login");
   };
 
   const enroll = async () => {
