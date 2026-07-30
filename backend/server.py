@@ -157,6 +157,9 @@ class PrayerRequest(BaseModel):
     text: str
     name: Optional[str] = None
     anonymous: bool = False
+    visibility: str = "private"   # "board" (public bacheca, needs approval) | "private" (admins only)
+    show_name: bool = False       # when board: show name (True) or publish anonymously (False)
+    client_id: Optional[str] = None
 
 
 class ContactMessage(BaseModel):
@@ -621,12 +624,93 @@ async def create_application(body: ApplicationIn):
 
 
 @api_router.post("/prayer-requests")
-async def create_prayer(body: PrayerRequest):
+async def create_prayer(body: PrayerRequest, authorization: Optional[str] = Header(None)):
+    visibility = body.visibility if body.visibility in ("board", "private") else "private"
+    # Capture the author if authenticated (shown to admins, never leaked publicly).
+    author_id = author_name = author_email = None
+    try:
+        u = await get_current_user(authorization)
+        author_id = u.get("user_id"); author_name = u.get("name"); author_email = u.get("email")
+    except Exception:
+        pass
+    if visibility == "board":
+        show_name = bool(body.show_name)
+        display_name = (body.name or author_name) if show_name else None
+        anonymous = not show_name
+    else:
+        show_name = False
+        display_name = body.name or author_name
+        anonymous = False
     doc = {"id": new_id("pray"), "text": body.text,
-           "name": None if body.anonymous else body.name,
-           "anonymous": body.anonymous, "created_at": now_utc().isoformat(), "status": "new"}
+           "name": display_name, "anonymous": anonymous,
+           "visibility": visibility, "show_name": show_name,
+           "published": False, "praying_count": 0,
+           "author_id": author_id, "author_name": author_name, "author_email": author_email,
+           "created_at": now_utc().isoformat(), "status": "new"}
     await db.prayer_requests.insert_one(dict(doc))
     return {"ok": True}
+
+
+class PrayBody(BaseModel):
+    client_id: Optional[str] = None
+
+
+def _board_key(user: Optional[dict], client_id: Optional[str]) -> Optional[str]:
+    if user and user.get("user_id"):
+        return f"u:{user['user_id']}"
+    if client_id:
+        return f"c:{client_id}"
+    return None
+
+
+@api_router.get("/prayer-board")
+async def prayer_board(authorization: Optional[str] = Header(None), client_id: Optional[str] = None):
+    """Public prayer board: only admin-approved (published) board requests."""
+    docs = await db.prayer_requests.find(
+        {"visibility": "board", "published": True, "status": {"$ne": "archived"}}, {"_id": 0}
+    ).sort("published_at", -1).to_list(500)
+    user = None
+    try:
+        user = await get_current_user(authorization)
+    except Exception:
+        pass
+    key = _board_key(user, client_id)
+    prayed_ids = set()
+    if key:
+        marks = await db.prayer_prayers.find({"prayer_id": {"$in": [d["id"] for d in docs]}, "key": key}, {"_id": 0, "prayer_id": 1}).to_list(1000)
+        prayed_ids = {m["prayer_id"] for m in marks}
+    out = []
+    for d in docs:
+        show = d.get("show_name") and d.get("name")
+        out.append({
+            "id": d["id"], "text": d["text"],
+            "display_name": d["name"] if show else "Anonimo",
+            "created_at": d.get("published_at") or d.get("created_at"),
+            "praying_count": d.get("praying_count", 0),
+            "prayed": d["id"] in prayed_ids,
+        })
+    return out
+
+
+@api_router.post("/prayer-board/{pid}/pray")
+async def pray_for(pid: str, body: PrayBody, authorization: Optional[str] = Header(None)):
+    doc = await db.prayer_requests.find_one({"id": pid, "visibility": "board", "published": True})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Richiesta non trovata")
+    user = None
+    try:
+        user = await get_current_user(authorization)
+    except Exception:
+        pass
+    key = _board_key(user, body.client_id)
+    if not key:
+        raise HTTPException(status_code=400, detail="Identificativo mancante")
+    existing = await db.prayer_prayers.find_one({"prayer_id": pid, "key": key})
+    if existing:
+        return {"ok": True, "already": True, "praying_count": doc.get("praying_count", 0)}
+    await db.prayer_prayers.insert_one({"prayer_id": pid, "key": key, "created_at": now_utc()})
+    await db.prayer_requests.update_one({"id": pid}, {"$inc": {"praying_count": 1}})
+    return {"ok": True, "praying_count": doc.get("praying_count", 0) + 1}
 
 
 @api_router.post("/messages")
@@ -1176,18 +1260,32 @@ PRAYER_STATUSES = ["new", "in_progress", "prayed", "archived"]
 class PrayerEdit(BaseModel):
     status: Optional[str] = None
     admin_notes: Optional[str] = None
+    published: Optional[bool] = None
+    text: Optional[str] = None
 
 
 @api_router.get("/admin/prayers")
-async def admin_prayers(status: Optional[str] = None, search: Optional[str] = None, admin=Depends(require_perm("prayers"))):
-    query = {}
-    if status and status in PRAYER_STATUSES:
-        query["status"] = status
+async def admin_prayers(filter: Optional[str] = None, status: Optional[str] = None, search: Optional[str] = None, admin=Depends(require_perm("prayers"))):
+    conds = []
+    f = filter or status  # tolerate legacy `status` param
+    if f == "pending":
+        conds.append({"visibility": "board", "published": {"$ne": True}, "status": {"$ne": "archived"}})
+    elif f == "published":
+        conds.append({"visibility": "board", "published": True, "status": {"$ne": "archived"}})
+    elif f == "private":
+        conds.append({"visibility": {"$ne": "board"}, "status": {"$ne": "archived"}})
+    elif f == "archived":
+        conds.append({"status": "archived"})
     if search:
-        query["$or"] = [{"text": {"$regex": re.escape(search), "$options": "i"}}, {"name": {"$regex": re.escape(search), "$options": "i"}}]
+        rx = {"$regex": re.escape(search), "$options": "i"}
+        conds.append({"$or": [{"text": rx}, {"name": rx}, {"author_name": rx}, {"author_email": rx}]})
+    query = {"$and": conds} if conds else {}
     docs = await db.prayer_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     for d in docs:
         d.setdefault("status", "new")
+        d.setdefault("visibility", "private")
+        d.setdefault("published", False)
+        d.setdefault("praying_count", 0)
     return docs
 
 
@@ -1197,22 +1295,47 @@ async def admin_prayer(pid: str, admin=Depends(require_perm("prayers"))):
     if not doc:
         raise HTTPException(status_code=404, detail="Richiesta non trovata")
     doc.setdefault("status", "new")
+    doc.setdefault("visibility", "private")
+    doc.setdefault("published", False)
+    doc.setdefault("praying_count", 0)
     return doc
 
 
 @api_router.patch("/admin/prayers/{pid}")
 async def admin_edit_prayer(pid: str, body: PrayerEdit, admin=Depends(require_perm("prayers"))):
+    existing = await db.prayer_requests.find_one({"id": pid})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Richiesta non trovata")
     updates = body.model_dump(exclude_unset=True)
     if "status" in updates and updates["status"] not in PRAYER_STATUSES:
         raise HTTPException(status_code=400, detail="Stato non valido")
+    just_published = False
+    if "published" in updates:
+        if updates["published"] and not existing.get("published"):
+            updates["published_at"] = now_utc().isoformat()
+            just_published = True
+        if not updates["published"]:
+            updates["published_at"] = None
     if updates:
         await db.prayer_requests.update_one({"id": pid}, {"$set": updates})
+    if just_published:
+        await log_activity(admin, "ha pubblicato una richiesta sulla Bacheca di Preghiera", "prayers")
+        try:
+            await notify_category(
+                "prayers",
+                "🙏 Nuova richiesta di preghiera",
+                "Un fratello ha chiesto il sostegno della comunità. Prenditi un momento per pregare.",
+                action_url="/prayer-board",
+            )
+        except Exception as e:
+            logger.warning("notify prayer board failed: %s", e)
     return {"ok": True}
 
 
 @api_router.delete("/admin/prayers/{pid}")
 async def admin_delete_prayer(pid: str, admin=Depends(require_perm("prayers"))):
     await db.prayer_requests.delete_one({"id": pid})
+    await db.prayer_prayers.delete_many({"prayer_id": pid})
     return {"ok": True}
 
 
@@ -4378,6 +4501,8 @@ async def startup():
         await db.verses.create_index([("order", 1), ("created_at", 1)])
         await db.programs.create_index("weekdays")
         await db.prayer_requests.create_index("created_at")
+        await db.prayer_requests.create_index([("visibility", 1), ("published", 1)])
+        await db.prayer_prayers.create_index([("prayer_id", 1), ("key", 1)], unique=True)
         await db.messages.create_index("created_at")
     except Exception as e:
         logger.warning("index creation: %s", e)

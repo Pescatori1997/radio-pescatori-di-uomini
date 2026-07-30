@@ -194,7 +194,9 @@ export const api = {
   crew: () => request("/crew"),
   crewMember: (id: string) => request(`/crew/${id}`),
   applyCrew: (body: any) => request("/crew/applications", { method: "POST", body: JSON.stringify(body) }),
-  prayer: (body: any) => request("/prayer-requests", { method: "POST", body: JSON.stringify(body) }),
+  prayer: (body: any) => request("/prayer-requests", { method: "POST", body: JSON.stringify(body) }, true),
+  prayerBoard: (clientId?: string) => request(`/prayer-board${clientId ? `?client_id=${encodeURIComponent(clientId)}` : ""}`, {}, true),
+  prayFor: (id: string, clientId?: string) => request(`/prayer-board/${id}/pray`, { method: "POST", body: JSON.stringify({ client_id: clientId }) }, true),
   message: (body: any) => request("/messages", { method: "POST", body: JSON.stringify(body) }),
   contact: (body: any) => request("/contact", { method: "POST", body: JSON.stringify(body) }),
   // auth
@@ -250,9 +252,9 @@ export const api = {
   adminEditNews: (id: string, body: any) => request(`/admin/news/${id}`, { method: "PATCH", body: JSON.stringify(body) }, true),
   adminDeleteNews: (id: string) => request(`/admin/news/${id}`, { method: "DELETE" }, true),
   // admin prayers
-  adminPrayers: (status?: string, search?: string) => {
+  adminPrayers: (filter?: string, search?: string) => {
     const q = new URLSearchParams();
-    if (status) q.set("status", status);
+    if (filter) q.set("filter", filter);
     if (search) q.set("search", search);
     return request(`/admin/prayers?${q.toString()}`, {}, true);
   },

@@ -248,6 +248,15 @@ export default function Home() {
         <Ionicons name="chevron-forward" size={18} color={colors.muted} />
       </Pressable>
 
+      <Pressable testID="prayer-board-cta" style={styles.boardCta} onPress={() => router.push("/prayer-board")}>
+        <View style={styles.boardIcon}><Ionicons name="heart" size={20} color={colors.white} /></View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.boardTitle}>Bacheca delle Richieste di Preghiera</Text>
+          <Text style={styles.boardSub}>Prega per i tuoi fratelli e sorelle</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.7)" />
+      </Pressable>
+
       <WatchLiveModal visible={watchOpen} links={liveInfo?.live_links} onClose={() => setWatchOpen(false)} />
     </ScrollView>
   );
@@ -307,4 +316,8 @@ const styles = StyleSheet.create({
   scheduleBtnText: { color: colors.brandPrimary, fontSize: 14, fontWeight: "800" },
   prayerCta: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginHorizontal: spacing.lg, marginTop: spacing.xl, backgroundColor: colors.brandTertiary, padding: spacing.lg, borderRadius: radius.md },
   prayerCtaText: { flex: 1, color: colors.onBrandTertiary, fontSize: 15, fontWeight: "700" },
+  boardCta: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginHorizontal: spacing.lg, marginTop: spacing.md, backgroundColor: colors.navy, padding: spacing.lg, borderRadius: radius.md },
+  boardIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: "#EF4444", alignItems: "center", justifyContent: "center" },
+  boardTitle: { color: colors.white, fontSize: 15, fontWeight: "800" },
+  boardSub: { color: colors.brandSecondary, fontSize: 12.5, fontWeight: "600", marginTop: 2 },
 });

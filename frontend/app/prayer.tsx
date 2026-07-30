@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, KeyboardAvoidingView, Platform, Switch } from "react-native";
+import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -13,7 +13,8 @@ export default function Prayer() {
   const { user } = useAuth();
   const [text, setText] = useState("");
   const [name, setName] = useState("");
-  const [anon, setAnon] = useState(false);
+  const [visibility, setVisibility] = useState<"board" | "private">("private");
+  const [showName, setShowName] = useState(true); // board only: true = show name, false = anonymous
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
@@ -23,7 +24,12 @@ export default function Prayer() {
     if (text.trim().length < 3) { setError("Scrivi la tua richiesta"); return; }
     setSending(true); setError("");
     try {
-      await api.prayer({ text: text.trim(), name: anon ? null : name.trim() || null, anonymous: anon });
+      await api.prayer({
+        text: text.trim(),
+        visibility,
+        show_name: visibility === "board" ? showName : false,
+        name: name.trim() || null,
+      });
       setSent(true);
     } catch (e: any) {
       setError(e.message || "Errore di invio");
@@ -37,7 +43,7 @@ export default function Prayer() {
       <View style={[styles.container, styles.center]}>
         <View style={styles.successIcon}><Ionicons name="heart" size={40} color={colors.brandPrimary} /></View>
         <Text style={styles.successTitle}>Grazie per la tua richiesta</Text>
-        <Text style={styles.successSub}>Pregheremo insieme a te. "L'Eterno è vicino a chi ha il cuore spezzato." (Salmo 34:18)</Text>
+        <Text style={styles.successSub}>{visibility === "board" ? "La tua richiesta sarà pubblicata sulla Bacheca dopo l'approvazione di un amministratore." : "Pregheremo insieme a te."} "L'Eterno è vicino a chi ha il cuore spezzato." (Salmo 34:18)</Text>
         <Pressable testID="prayer-done" style={styles.primaryBtn} onPress={() => router.back()}>
           <Text style={styles.primaryBtnText}>Torna alla Home</Text>
         </Pressable>
@@ -50,7 +56,7 @@ export default function Prayer() {
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <Pressable testID="prayer-back" onPress={() => router.back()} hitSlop={12}><Ionicons name="arrow-back" size={24} color={colors.onSurface} /></Pressable>
         <Text style={styles.headerTitle}>Richiesta di Preghiera</Text>
-        <View style={{ width: 24 }} />
+        <Pressable testID="open-prayer-board" onPress={() => router.push("/prayer-board")} hitSlop={12}><Ionicons name="heart-circle" size={26} color={colors.brandPrimary} /></Pressable>
       </View>
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }} keyboardShouldPersistTaps="handled">
         <Text style={styles.intro}>Condividi ciò che hai nel cuore. La tua richiesta arriverà al nostro team di preghiera.</Text>
@@ -74,17 +80,43 @@ export default function Prayer() {
           style={[styles.input, styles.textArea]}
         />
 
-        <View style={styles.switchRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.switchLabel}>Invia in forma anonima</Text>
-            <Text style={styles.switchSub}>Il tuo nome non verrà mostrato</Text>
-          </View>
-          <Switch testID="prayer-anon" value={anon} onValueChange={setAnon} trackColor={{ true: colors.brandPrimary }} />
+        <Text style={styles.label}>Dove vuoi inviarla?</Text>
+        <View style={styles.optionCol}>
+          <Pressable testID="prayer-vis-board" onPress={() => setVisibility("board")} style={[styles.optionCard, visibility === "board" && styles.optionCardOn]}>
+            <Ionicons name={visibility === "board" ? "radio-button-on" : "radio-button-off"} size={20} color={visibility === "board" ? colors.brandPrimary : colors.muted} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.optionTitle}>📢 Pubblica sulla Bacheca</Text>
+              <Text style={styles.optionSub}>Visibile alla comunità dopo l'approvazione di un amministratore.</Text>
+            </View>
+          </Pressable>
+          <Pressable testID="prayer-vis-private" onPress={() => setVisibility("private")} style={[styles.optionCard, visibility === "private" && styles.optionCardOn]}>
+            <Ionicons name={visibility === "private" ? "radio-button-on" : "radio-button-off"} size={20} color={visibility === "private" ? colors.brandPrimary : colors.muted} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.optionTitle}>🔒 Invia solo agli amministratori</Text>
+              <Text style={styles.optionSub}>Solo il team di preghiera vedrà la tua richiesta.</Text>
+            </View>
+          </Pressable>
         </View>
 
-        {!anon && (
+        {visibility === "board" && (
           <>
-            <Text style={styles.label}>Nome (facoltativo)</Text>
+            <Text style={styles.label}>Come vuoi apparire sulla Bacheca?</Text>
+            <View style={styles.optionCol}>
+              <Pressable testID="prayer-showname-yes" onPress={() => setShowName(true)} style={[styles.optionCard, showName && styles.optionCardOn]}>
+                <Ionicons name={showName ? "radio-button-on" : "radio-button-off"} size={20} color={showName ? colors.brandPrimary : colors.muted} />
+                <Text style={styles.optionTitle}>Mostra il mio nome</Text>
+              </Pressable>
+              <Pressable testID="prayer-showname-no" onPress={() => setShowName(false)} style={[styles.optionCard, !showName && styles.optionCardOn]}>
+                <Ionicons name={!showName ? "radio-button-on" : "radio-button-off"} size={20} color={!showName ? colors.brandPrimary : colors.muted} />
+                <Text style={styles.optionTitle}>Pubblica in forma anonima</Text>
+              </Pressable>
+            </View>
+          </>
+        )}
+
+        {((visibility === "board" && showName) || visibility === "private") && (
+          <>
+            <Text style={styles.label}>Nome {visibility === "private" ? "(facoltativo)" : ""}</Text>
             <TextInput testID="prayer-name" value={name} onChangeText={setName} placeholder="Il tuo nome" placeholderTextColor={colors.muted} style={styles.input} />
           </>
         )}
@@ -114,6 +146,11 @@ const styles = StyleSheet.create({
   switchRow: { flexDirection: "row", alignItems: "center", marginTop: spacing.xl },
   switchLabel: { fontSize: 15, fontWeight: "700", color: colors.onSurface },
   switchSub: { fontSize: 13, color: colors.muted, marginTop: 2 },
+  optionCol: { gap: spacing.sm, marginTop: spacing.sm },
+  optionCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.md, borderWidth: 1.5, borderColor: colors.border },
+  optionCardOn: { borderColor: colors.brandPrimary, backgroundColor: colors.brandTertiary },
+  optionTitle: { fontSize: 15, fontWeight: "800", color: colors.onSurface },
+  optionSub: { fontSize: 12.5, color: colors.onSurfaceSecondary, marginTop: 2 },
   error: { color: colors.error, marginTop: spacing.md, fontSize: 14 },
   footer: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border },
   primaryBtn: { backgroundColor: colors.navy, paddingVertical: spacing.md, borderRadius: radius.pill, alignItems: "center" },

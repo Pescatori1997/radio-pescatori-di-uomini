@@ -507,3 +507,38 @@ test_plan:
 agent_communication:
     -agent: "main"
     -message: "BACKEND test Fase 3 reading plans. Admin login POST /api/auth/login {pescatoridiuomini@outlook.it / AdminTestPwd1!} -> token. Verify: (1) GET /api/reading-plans returns 2 published plans with duration_days 7 and 30. (2) GET /api/reading-plans/{id} returns full days array (len==duration_days), each day has readings with book_nr/chapter, enrollment null when unauth. (3) As a normal user (register test user), POST enroll -> GET /api/me/reading-plans shows plan with progress percent 0. (4) POST day/1 {done:true} -> progress completed_count 1; toggle day/1 {done:false} -> 0; invalid day (0 or >duration) -> 400. (5) DELETE /api/me/reading-plans/{id} resets (my plans empty). (6) Admin CRUD: POST /api/admin/reading-plans (201) create draft with 1 day/1 reading; it must NOT appear in public list (draft); PUT to published -> appears; DELETE removes it AND its enrollments. Non-admin listener calling admin endpoints -> 403. Do NOT delete the 2 seeded plans."
+
+## --- Bacheca Richieste di Preghiera (moderata) ---
+backend:
+  - task: "Prayer board: visibility (board/private), moderation (published), Sto pregando counter (dedupe), admin filters, notification on publish"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Extended existing prayer system (NOT rewritten). PrayerRequest now has visibility(board|private), show_name, client_id; create_prayer captures author via optional auth, board requests created published=false status=new. New public: GET /api/prayer-board (only visibility=board & published=true & !archived; display_name = name if show_name else 'Anonimo'; prayed flag via ?client_id or auth), POST /api/prayer-board/{id}/pray (unique per user_id or client_id, $inc praying_count, returns already/count). Admin GET /api/admin/prayers?filter=pending|published|private|archived (+search over text/name/author). PATCH /api/admin/prayers/{id} supports published(bool)+text+status; publishing (false->true) sets published_at and fires notify_category('prayers', '🙏 Nuova richiesta di preghiera', ...). DELETE also removes prayer_prayers marks. Unique index prayer_prayers(prayer_id,key). Curl-verified: board hidden until approve; approve->appears; pray once ok, twice already; author shown to admin."
+frontend:
+  - task: "Prayer submit visibility choice + public Bacheca screen (Sto pregando) + admin filters/badges/approve"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/prayer.tsx, frontend/app/prayer-board.tsx, frontend/app/(tabs)/index.tsx, frontend/app/admin/prayers/index.tsx, frontend/app/admin/prayers/[id].tsx, frontend/src/utils/clientId.ts, frontend/src/api.ts"
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "prayer.tsx: radio choice 📢 Bacheca / 🔒 Solo admin; when board -> 'Mostra il mio nome' vs 'Pubblica in forma anonima'; name input conditional. Requires login to submit (router.push /login). Success text notes board needs approval. Header heart icon -> /prayer-board. New /prayer-board.tsx lists approved requests (❤️ display_name, text, date, '🙏 Sto pregando' button once per user/device via clientId, counter). Home: new card 'Bacheca delle Richieste di Preghiera' -> /prayer-board. Admin list: filters Tutte/In attesa/Pubblicate/Private/Archiviate, badges (Bacheca/Privata, stato, Nome/Anonima), author+date+pray count. Admin detail: edit text/notes, Approva e pubblica, Rimuovi dalla Bacheca, Rifiuta/Archivia, Ripristina, Elimina."
+
+test_plan:
+  current_focus:
+    - "Prayer board: visibility, moderation, Sto pregando counter, admin filters, notification"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    -agent: "main"
+    -message: "TEST prayer board (feature extends existing prayer system). Admin: pescatoridiuomini@outlook.it / AdminTestPwd1!. Backend flow: (1) POST /api/prayer-requests {text, visibility:'board', show_name:true, name:'Luigi'} -> 200; must NOT appear in GET /api/prayer-board yet. (2) Register a normal user, POST /api/prayer-requests WITH Authorization header {visibility:'private'} -> author captured; appears under admin filter=private not on board. (3) Admin GET /api/admin/prayers?filter=pending shows the board one with author info; PATCH published:true -> appears in /api/prayer-board with display_name 'Luigi'. Anonymous board (show_name:false) -> display_name 'Anonimo'. (4) POST /api/prayer-board/{id}/pray {client_id:'x'} -> count 1; repeat -> already:true count still 1; different client_id -> count 2. Pray with a logged user (Authorization) counts once separately. (5) Non-admin user hitting /api/admin/prayers -> 403; no token -> 401. (6) DELETE admin prayer removes it and its pray marks. Clean up any test rows you create. Frontend: verify prayer.tsx visibility radios + conditional name; /prayer-board list + Sto pregando disables after tap + counter increments; Home 'Bacheca' card navigates; admin filters switch lists and detail Approva/Archivia/Elimina work."
