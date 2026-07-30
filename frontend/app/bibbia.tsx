@@ -107,6 +107,11 @@ export default function Bibbia() {
             </View>
             <Text style={styles.reference}>— {verse.reference}</Text>
 
+            <PressableScale testID="read-chapter" style={styles.readChapterBtn} onPress={() => router.push(`/lettore/read?ref=${encodeURIComponent(verse.reference)}&highlight=${verse.verse || 1}`)}>
+              <Ionicons name="book-outline" size={18} color={colors.white} />
+              <Text style={styles.readChapterText}>Leggi il capitolo nella Bibbia</Text>
+            </PressableScale>
+
             {/* Meditazione di oggi */}
             <View style={styles.medHeader}>
               <View style={styles.medIcon}><Ionicons name="sparkles" size={16} color={colors.brandPrimary} /></View>
@@ -160,6 +165,8 @@ const styles = StyleSheet.create({
   vnum: { color: colors.brandPrimary, fontSize: 14, fontWeight: "800", marginTop: 3 },
   verseText: { flex: 1, color: colors.navy, fontSize: 19, fontWeight: "700", fontStyle: "italic", lineHeight: 29 },
   reference: { color: colors.onBrandTertiary, fontSize: 14, fontWeight: "800", marginTop: spacing.md, textAlign: "right" },
+  readChapterBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, backgroundColor: colors.navy, paddingVertical: spacing.md, borderRadius: radius.pill, marginTop: spacing.lg },
+  readChapterText: { color: colors.white, fontSize: 15, fontWeight: "800" },
   medHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing["2xl"], marginBottom: spacing.md },
   medIcon: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center" },
   medTitle: { color: colors.onSurface, fontSize: 18, fontWeight: "800" },

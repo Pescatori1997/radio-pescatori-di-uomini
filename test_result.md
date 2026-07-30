@@ -437,3 +437,38 @@ test_plan:
 agent_communication:
     -agent: "main"
     -message: "BACKEND retest for v1.1. Admin login POST /api/auth/login {pescatoridiuomini@outlook.it / AdminTestPwd1!} -> token. Verify: (1) Rate limit: 11 rapid POST /api/auth/login (bad creds) -> first 10 return 401, then 429. (2) Regex safety: GET /api/podcasts?search=(a+)+ returns 200 (no hang/500). (3) TTS: GET /api/verse/today -> id; GET /api/verse/{id}/meditation returns {meditation,reflection,audio}; within ~15s GET /api/verse/{id}/meditation/audio returns 200 audio/mpeg (>10KB). If EMERGENT_LLM_KEY missing it should degrade gracefully (meditation still returned, audio endpoint 404). (4) Verse notif config: GET /api/admin/verse-notification has send_time,send_days,all_days; PUT with send_time '08:00' and send_days subset persists; invalid days filtered out. (5) Manual meditation edit via PATCH /api/admin/verses/{id} {meditation:'x'} sets meditation_locked true AND clears audio (audio endpoint 404 after). Clean up TEST_ verses. Do NOT delete seeded verses. Existing endpoints (verse today/CRUD, notify-today) must still work. NOTE: native push relay returns non-fatal error in dev (EMERGENT_PUSH_KEY placeholder) — expected."
+
+## --- Bibbia Fase 1: Lettore biblico (Riveduta 1927 self-hosted) ---
+backend:
+  - task: "Bible reader API + Riveduta 1927 seed (self-hosted, multi-translation ready)"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py, backend/bible_seed.py, backend/data/riveduta_1927.json"
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Seeded Riveduta 1927 (public domain) into bible_verses (31102 verses), bible_books (66), bible_translations. Endpoints: GET /api/bible/translations; GET /api/bible/books (grouped at/nt); GET /api/bible/chapter?book=&chapter= (verses + chapters_count); GET /api/bible/resolve?reference=Giovanni 3:16 (also book+chapter+verse); GET /api/bible/search?q= (Mongo text index italian, regex fallback, escaped); GET/PUT /api/me/bible/state (auth, last read position). Text index default_language italian."
+frontend:
+  - task: "Bible reader UI (books, chapter reader, search, remember position) + Leggi il capitolo wiring"
+    implemented: true
+    working: true
+    file: "frontend/app/lettore/{index,read,search}.tsx, frontend/src/components/VerseOfDayCard.tsx, frontend/app/bibbia.tsx"
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Verified via screenshots: /lettore books AT/NT + chapter picker; /lettore/read chapter reader (Giovanni 3, numbered verses, font toggle, chapter selector, prev/next, remembers last position via AsyncStorage + /me/bible/state); /lettore/search full-text with highlight (pescatori->11 results) and tap opens reader with verse highlighted + autoscroll. VerseOfDayCard gained 'Apri la Bibbia'; meditation page gained 'Leggi il capitolo nella Bibbia'."
+
+test_plan:
+  current_focus:
+    - "Bible reader API + Riveduta 1927 seed (self-hosted, multi-translation ready)"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    -agent: "main"
+    -message: "BACKEND test the new Bible reader endpoints (public, no auth except /me/bible/state). Verify: (1) GET /api/bible/translations returns >=1 with riveduta_1927 is_default true. (2) GET /api/bible/books returns at(39 books) + nt(27 books). (3) GET /api/bible/chapter?book=43&chapter=3 returns book_name 'Giovanni', chapters_count 21, and verse 16 text contains 'Iddio ha tanto amato il mondo'. 404 for book=999. (4) GET /api/bible/resolve?reference=Giovanni 3:16 -> book_nr 43, chapter 3, verse 16. Also resolve?book=Salmi&chapter=23&verse=1 works. (5) GET /api/bible/search?q=pescatori returns >=5 results including Marco/Matteo; q with special regex chars returns 200 (no 500). (6) /me/bible/state PUT (auth Bearer, admin token via /api/auth/login pescatoridiuomini@outlook.it/AdminTestPwd1!) then GET returns saved book_nr/chapter. Do not modify seeded data."

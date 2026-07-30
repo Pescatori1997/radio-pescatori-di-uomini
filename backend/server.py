@@ -3888,6 +3888,113 @@ async def _verse_notif_scheduler():
         await asyncio.sleep(300)
 
 
+# ---------------- Bible reader (Riveduta 1927, self-hosted) ----------------
+DEFAULT_BIBLE = "riveduta_1927"
+
+
+@api_router.get("/bible/translations")
+async def bible_translations():
+    return await db.bible_translations.find({}, {"_id": 0}).sort("order", 1).to_list(50)
+
+
+@api_router.get("/bible/books")
+async def bible_books(translation: str = DEFAULT_BIBLE):
+    books = await db.bible_books.find({"translation": translation}, {"_id": 0}).sort("book_nr", 1).to_list(200)
+    return {
+        "translation": translation,
+        "at": [b for b in books if b["testament"] == "AT"],
+        "nt": [b for b in books if b["testament"] == "NT"],
+    }
+
+
+@api_router.get("/bible/chapter")
+async def bible_chapter(book: int, chapter: int, translation: str = DEFAULT_BIBLE):
+    meta = await db.bible_books.find_one({"translation": translation, "book_nr": book}, {"_id": 0})
+    if not meta:
+        raise HTTPException(status_code=404, detail="Libro non trovato")
+    verses = await db.bible_verses.find(
+        {"translation": translation, "book_nr": book, "chapter": chapter}, {"_id": 0, "text": 1, "verse": 1}
+    ).sort("verse", 1).to_list(400)
+    if not verses:
+        raise HTTPException(status_code=404, detail="Capitolo non trovato")
+    return {
+        "translation": translation,
+        "book_nr": book,
+        "book_name": meta["name"],
+        "chapter": chapter,
+        "chapters_count": meta["chapters_count"],
+        "verses": verses,
+    }
+
+
+@api_router.get("/bible/resolve")
+async def bible_resolve(reference: Optional[str] = None, book: Optional[str] = None,
+                        chapter: Optional[int] = None, verse: Optional[int] = None,
+                        translation: str = DEFAULT_BIBLE):
+    """Resolve a verse reference to book_nr/chapter/verse for the reader.
+    Accepts either a `book` name (+chapter+verse) or a `reference` string."""
+    name = book
+    if reference and not name:
+        m = re.match(r"^\s*(.+?)\s+(\d+):(\d+)", reference)
+        if m:
+            name, chapter, verse = m.group(1), int(m.group(2)), int(m.group(3))
+    if not name:
+        raise HTTPException(status_code=400, detail="Riferimento non valido")
+    doc = await db.bible_books.find_one(
+        {"translation": translation, "name": {"$regex": f"^{re.escape(name.strip())}$", "$options": "i"}}, {"_id": 0}
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Libro non trovato")
+    return {"translation": translation, "book_nr": doc["book_nr"], "book_name": doc["name"],
+            "chapter": chapter or 1, "verse": verse or 1, "chapters_count": doc["chapters_count"]}
+
+
+@api_router.get("/bible/search")
+async def bible_search(q: str, translation: str = DEFAULT_BIBLE, book: Optional[int] = None, limit: int = 40):
+    q = (q or "").strip()
+    if len(q) < 2:
+        return {"results": [], "count": 0}
+    query: dict = {"translation": translation, "$text": {"$search": q}}
+    if book:
+        query["book_nr"] = book
+    try:
+        cur = db.bible_verses.find(query, {"_id": 0, "book_nr": 1, "book_name": 1, "chapter": 1, "verse": 1, "text": 1,
+                                           "score": {"$meta": "textScore"}}).sort([("score", {"$meta": "textScore"})]).limit(min(limit, 100))
+        results = await cur.to_list(100)
+    except Exception:
+        # Fallback to (escaped) regex if the text index is unavailable.
+        rq = {"translation": translation, "text": {"$regex": re.escape(q), "$options": "i"}}
+        if book:
+            rq["book_nr"] = book
+        results = await db.bible_verses.find(rq, {"_id": 0, "book_nr": 1, "book_name": 1, "chapter": 1, "verse": 1, "text": 1}).limit(min(limit, 100)).to_list(100)
+    return {"results": results, "count": len(results)}
+
+
+class BibleState(BaseModel):
+    translation: str = DEFAULT_BIBLE
+    book_nr: int
+    chapter: int
+    verse: Optional[int] = None
+
+
+@api_router.get("/me/bible/state")
+async def get_bible_state(authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    doc = await db.user_bible_state.find_one({"user_id": user["user_id"]}, {"_id": 0, "user_id": 0})
+    return doc or {}
+
+
+@api_router.put("/me/bible/state")
+async def set_bible_state(body: BibleState, authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    await db.user_bible_state.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {**body.model_dump(), "updated_at": now_utc()}},
+        upsert=True,
+    )
+    return {"ok": True}
+
+
 
 app.include_router(api_router)
 
@@ -4170,6 +4277,12 @@ async def startup():
 
     # Start the daily verse-notification scheduler (fires once per Rome day).
     asyncio.create_task(_verse_notif_scheduler())
+    # Import the Bible text (Riveduta 1927) once, if not present.
+    try:
+        from bible_seed import seed_bible
+        await seed_bible(db, logger)
+    except Exception as e:
+        logger.warning("bible seed error: %s", e)
     logger.info("Seed complete")
 
 

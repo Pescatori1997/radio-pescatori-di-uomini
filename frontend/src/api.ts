@@ -410,6 +410,19 @@ export const api = {
     request("/admin/verse-notification", { method: "PUT", body: JSON.stringify(body) }, true),
   adminNotifyVerseToday: () => request("/admin/verses/notify-today", { method: "POST" }, true),
 
+  // bible reader
+  bibleTranslations: () => request("/bible/translations"),
+  bibleBooks: (translation?: string) => request(`/bible/books${translation ? `?translation=${translation}` : ""}`),
+  bibleChapter: (book: number, chapter: number, translation?: string) =>
+    request(`/bible/chapter?book=${book}&chapter=${chapter}${translation ? `&translation=${translation}` : ""}`),
+  bibleResolve: (reference: string, translation?: string) =>
+    request(`/bible/resolve?reference=${encodeURIComponent(reference)}${translation ? `&translation=${translation}` : ""}`),
+  bibleSearch: (q: string, book?: number, translation?: string) =>
+    request(`/bible/search?q=${encodeURIComponent(q)}${book ? `&book=${book}` : ""}${translation ? `&translation=${translation}` : ""}`),
+  getBibleState: () => request("/me/bible/state", {}, true),
+  setBibleState: (body: { translation?: string; book_nr: number; chapter: number; verse?: number }) =>
+    request("/me/bible/state", { method: "PUT", body: JSON.stringify(body) }, true),
+
   // generic CMS content (reused by every section)
   contentSections: () => request("/content-sections"),
   contents: (section: string, params?: { search?: string; category?: string; tag?: string }) => {

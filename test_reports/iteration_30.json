@@ -1,0 +1,32 @@
+{
+  "summary": "Backend-only testing of new Bibbia (Bible reader — Riveduta 1927 Luzzi) endpoints. All 6 requested endpoint groups verified via pytest: /api/bible/translations, /api/bible/books, /api/bible/chapter, /api/bible/resolve, /api/bible/search, and authenticated /api/me/bible/state (GET+PUT). 12/12 tests PASSED. Verified: 39 AT + 27 NT books, Giovanni 3:16 contains 'Iddio ha tanto amato il mondo' with chapters_count=21, resolve of 'Giovanni 3:16' → book_nr 43, Salmi → 19, unknown book/chapter → 404, search 'pescatori' returns >=5 results including Marco/Matteo, regex-special query '(a+)+' returns 200 (no 500 / no hang), unauthenticated state calls → 401, and PUT→GET persistence for admin user works.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_bible.py",
+    "/app/test_reports/pytest/iteration_30_bible.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now 4292 lines — should be split into focused modules (bible.py, auth.py, admin.py, donations.py, etc.). Not blocking, but past the >700-line guideline.",
+    "bible_search fallback swallows the original exception silently with a bare `except Exception:` — recommend logging the underlying error for diagnostics.",
+    "bible_resolve returns 400 'Riferimento non valido' only when both `book` and `reference` are missing; malformed `reference` (unparseable regex) silently produces the same 400 — acceptable but could be more explicit."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_bible.py (new)"
+  ],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "not tested (per request)"},
+  "seed_data_creation": "None. Reused existing admin user (pescatoridiuomini@outlook.it / AdminTestPwd1!) and seeded Bible collections (bible_translations, bible_books, bible_verses) already present via startup bible_seed.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Bible endpoints live at /api/bible/* (translations, books, chapter, resolve, search) and /api/me/bible/state. Default translation code is 'riveduta_1927'. Text index on bible_verses is language='italian'. Login endpoint is rate-limited 10/60s — reuse the session fixture. Test file at /app/backend/tests/test_bible.py is fully passing.",
+  "rca_of_issue": "N/A — no bugs found. All requested behaviors match spec."
+}
