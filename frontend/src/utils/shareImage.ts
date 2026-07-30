@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Platform } from "react-native";
 import { captureRef } from "react-native-view-shot";
 import * as Sharing from "expo-sharing";
@@ -20,82 +21,127 @@ async function capture(cardRef: any, opts: CaptureOpts = {}): Promise<string> {
   return captureRef(cardRef, { format: "png", quality: 1, ...opts });
 }
 
-/**
- * Capture the referenced card and open the native share sheet.
- * - Native: expo-sharing (WhatsApp, Telegram, Instagram, Mail, ...). If sharing
- *   is unavailable, the image is saved to the gallery as a fallback.
- * - Web: Web Share API with file support, falling back to an automatic download.
- */
-export async function shareCard(cardRef: any, opts: {
-  filename: string;
-  message?: string;
-  captureSize?: CaptureOpts;
-}): Promise<void> {
-  const { filename, message = "", captureSize } = opts;
-  const uri = await capture(cardRef, captureSize);
-
-  if (Platform.OS === "web") {
-    const resp = await fetch(uri);
-    const blob = await resp.blob();
-    const file = new File([blob], filename, { type: "image/png" });
-    const nav: any = navigator;
-    if (nav.share && nav.canShare && nav.canShare({ files: [file] })) {
-      await nav.share({ files: [file], text: message });
-    } else {
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(a.href);
-    }
-    return;
-  }
-
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(uri, { mimeType: "image/png", dialogTitle: message || "Condividi" });
-  } else {
-    // Device can't present a share sheet -> save the card to the gallery instead.
-    await saveCard(cardRef, { captureSize, silent: false, preUri: uri });
-  }
+/** Web only: capture the card into a File object so the native share sheet can be
+ * invoked directly from the click handler (preserving the user-activation that
+ * iOS Safari requires). Uses html2canvas directly on the DOM node because
+ * react-native-view-shot's captureRef relies on findNodeHandle, which is not
+ * supported on modern react-native-web. */
+async function captureWebFile(cardRef: any, filename: string): Promise<File> {
+  const node = cardRef?.current as any;
+  if (!node) throw new Error("card node not ready");
+  const html2canvas = (await import("html2canvas")).default;
+  const canvas = await html2canvas(node, { backgroundColor: null, useCORS: true, scale: 2, logging: false });
+  const blob: Blob = await new Promise((resolve, reject) =>
+    canvas.toBlob((b: Blob | null) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/png"),
+  );
+  return new File([blob], filename, { type: "image/png" });
 }
 
-/**
- * Capture and save the card image to the device gallery (native) or download it
- * (web). Handles the media-library permission flow.
- */
-export async function saveCard(cardRef: any, opts: {
-  captureSize?: CaptureOpts;
-  silent?: boolean;
-  preUri?: string;
-} = {}): Promise<void> {
-  const { captureSize, silent, preUri } = opts;
+function downloadWebFile(file: File) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(file);
+  a.download = file.name || "pescatori-di-uomini.png";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
 
-  if (Platform.OS === "web") {
-    const uri = preUri || (await capture(cardRef, captureSize));
-    const resp = await fetch(uri);
-    const blob = await resp.blob();
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "pescatori-di-uomini.png";
-    a.click();
-    URL.revokeObjectURL(a.href);
-    return;
-  }
-
-  // Native: request permission contextually (only when the user taps "Salva").
+async function saveNative(cardRef: any, captureSize?: CaptureOpts, preUri?: string, silent = false): Promise<void> {
   const cur = await MediaLibrary.getPermissionsAsync();
   let status = cur.status;
-  if (status !== "granted" && cur.canAskAgain) {
-    status = (await MediaLibrary.requestPermissionsAsync()).status;
-  }
+  if (status !== "granted" && cur.canAskAgain) status = (await MediaLibrary.requestPermissionsAsync()).status;
   if (status !== "granted") {
-    alertMessage(
-      "Permesso necessario",
-      "Consenti l'accesso alle foto per salvare la card. Puoi abilitarlo dalle impostazioni del dispositivo.",
-    );
+    alertMessage("Permesso necessario", "Consenti l'accesso alle foto per salvare la card. Puoi abilitarlo dalle impostazioni del dispositivo.");
     return;
   }
   const uri = preUri || (await capture(cardRef, captureSize));
   await MediaLibrary.saveToLibraryAsync(uri);
   if (!silent) alertMessage("Salvata", "La card è stata salvata nella tua galleria.");
+}
+
+/**
+ * Hook that wires up "Condividi" + "Salva/Scarica" for a captured card.
+ * On web it PRE-CAPTURES the image when the sheet opens, then calls
+ * navigator.share() directly on tap (so iOS Safari keeps the user gesture).
+ */
+export function useShareCard(cardRef: any, opts: {
+  visible: boolean;
+  filename: string;
+  message?: string;
+  captureSize?: CaptureOpts;
+}) {
+  const { visible, filename, message = "", captureSize } = opts;
+  const [file, setFile] = useState<File | null>(null);
+  const [sharing, setSharing] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Pre-capture on web once the modal is visible (allow a beat for layout).
+  useEffect(() => {
+    if (Platform.OS !== "web" || !visible) { setFile(null); return; }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const f = await captureWebFile(cardRef, filename);
+        if (!cancelled) setFile(f);
+      } catch { /* ignore; onShare will retry */ }
+    }, 450);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [visible, filename]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const onShare = async () => {
+    if (Platform.OS === "web") {
+      const nav: any = typeof navigator !== "undefined" ? navigator : {};
+      // Fast path: prepared file + Web Share API -> call share() immediately (no prior await).
+      if (file && nav.share && (!nav.canShare || nav.canShare({ files: [file] }))) {
+        try {
+          await nav.share({ files: [file], text: message });
+        } catch (e: any) {
+          if (e && e.name === "AbortError") return; // user cancelled
+          try { downloadWebFile(file); } catch { /* ignore */ }
+        }
+        return;
+      }
+      // Fallback: capture (if needed) then either share text or download the image.
+      setSharing(true);
+      try {
+        const f = file || (await captureWebFile(cardRef, filename));
+        if (nav.share && (!nav.canShare || nav.canShare({ files: [f] }))) {
+          await nav.share({ files: [f], text: message }).catch(() => downloadWebFile(f));
+        } else {
+          downloadWebFile(f);
+        }
+      } catch {
+        alertMessage("Condivisione non riuscita", "Riprova o usa il pulsante Scarica.");
+      } finally {
+        setSharing(false);
+      }
+      return;
+    }
+
+    // Native: expo-sharing (share sheet). Falls back to gallery save if unavailable.
+    setSharing(true);
+    try {
+      const uri = await capture(cardRef, captureSize);
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: "image/png", dialogTitle: message || "Condividi" });
+      } else {
+        await saveNative(cardRef, captureSize, uri);
+      }
+    } catch { /* cancelled */ } finally { setSharing(false); }
+  };
+
+  const onSave = async () => {
+    setSaving(true);
+    try {
+      if (Platform.OS === "web") {
+        const f = file || (await captureWebFile(cardRef, filename));
+        downloadWebFile(f);
+      } else {
+        await saveNative(cardRef, captureSize);
+      }
+    } catch { /* ignore */ } finally { setSaving(false); }
+  };
+
+  // On web the Condividi button waits until the pre-capture is ready.
+  const ready = Platform.OS !== "web" || !!file;
+  return { onShare, onSave, sharing, saving, ready };
 }

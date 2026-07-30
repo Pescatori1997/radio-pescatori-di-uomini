@@ -1,11 +1,11 @@
-import React, { useRef, useState } from "react";
+import React, { useRef } from "react";
 import { View, Text, StyleSheet, Modal, Platform, useWindowDimensions, ActivityIndicator } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { FishingNet, SeaWaves, SunriseGlow, LightRays } from "@/src/components/marine";
 import Logo from "@/src/components/Logo";
 import PressableScale from "@/src/components/PressableScale";
-import { shareCard, saveCard, siteBaseUrl } from "@/src/utils/shareImage";
+import { useShareCard, siteBaseUrl } from "@/src/utils/shareImage";
 import { colors, spacing, radius } from "@/src/theme";
 
 /** A shareable, marine-themed image of the verse of the day. Works on native
@@ -13,8 +13,6 @@ import { colors, spacing, radius } from "@/src/theme";
 export default function ShareVerseSheet({ verse, visible, onClose }: { verse: any; visible: boolean; onClose: () => void }) {
   const { width } = useWindowDimensions();
   const cardRef = useRef<View>(null);
-  const [busy, setBusy] = useState(false);
-  const [saving, setSaving] = useState(false);
 
   const cardW = Math.min(width - 48, 360);
   const cardH = Math.round(cardW * 1.25);
@@ -22,27 +20,9 @@ export default function ShareVerseSheet({ verse, visible, onClose }: { verse: an
   const linkUrl = verse ? `${siteBaseUrl()}/bibbia?verseId=${verse.id}` : siteBaseUrl();
   const message = verse ? `📖 ${verse.reference}\n«${verse.text}»\n\nRadio Pescatori di Uomini — Leggi di più:\n${linkUrl}` : "";
 
-  const doShare = async () => {
-    setBusy(true);
-    try {
-      await shareCard(cardRef, { filename: "versetto-del-giorno.png", message, captureSize: { width: 1080, height: 1350 } });
-    } catch (e) {
-      // user-cancelled share -> ignore
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const doSave = async () => {
-    setSaving(true);
-    try {
-      await saveCard(cardRef, { captureSize: { width: 1080, height: 1350 } });
-    } catch (e) {
-      // ignore
-    } finally {
-      setSaving(false);
-    }
-  };
+  const { onShare, onSave, sharing, saving, ready } = useShareCard(cardRef, {
+    visible, filename: "versetto-del-giorno.png", message, captureSize: { width: 1080, height: 1350 },
+  });
 
   if (!verse) return null;
 
@@ -81,15 +61,15 @@ export default function ShareVerseSheet({ verse, visible, onClose }: { verse: an
         </View>
 
         <View style={styles.actions}>
-          <PressableScale testID="share-action" style={styles.shareBtn} onPress={doShare} disabled={busy}>
-            {busy ? <ActivityIndicator color={colors.navy} /> : (
+          <PressableScale testID="share-action" style={[styles.shareBtn, !ready && { opacity: 0.6 }]} onPress={onShare} disabled={sharing || !ready}>
+            {(sharing || !ready) ? <ActivityIndicator color={colors.navy} /> : (
               <>
                 <Ionicons name="share-social" size={20} color={colors.navy} />
                 <Text style={styles.shareText}>Condividi</Text>
               </>
             )}
           </PressableScale>
-          <PressableScale testID="share-save" style={styles.saveBtn} onPress={doSave} disabled={saving}>
+          <PressableScale testID="share-save" style={styles.saveBtn} onPress={onSave} disabled={saving}>
             {saving ? <ActivityIndicator color={colors.white} /> : (
               <>
                 <Ionicons name={Platform.OS === "web" ? "download-outline" : "image-outline"} size={20} color={colors.white} />

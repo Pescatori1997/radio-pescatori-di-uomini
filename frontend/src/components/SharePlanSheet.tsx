@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useRef } from "react";
 import { View, Text, StyleSheet, Modal, Platform, useWindowDimensions, ActivityIndicator } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -6,7 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { FishingNet, SeaWaves, SunriseGlow, LightRays } from "@/src/components/marine";
 import Logo from "@/src/components/Logo";
 import PressableScale from "@/src/components/PressableScale";
-import { shareCard, saveCard, siteBaseUrl } from "@/src/utils/shareImage";
+import { useShareCard, siteBaseUrl } from "@/src/utils/shareImage";
 import { colors, spacing, radius } from "@/src/theme";
 
 /**
@@ -24,40 +24,29 @@ export default function SharePlanSheet({
 }) {
   const { width } = useWindowDimensions();
   const cardRef = useRef<View>(null);
-  const [busy, setBusy] = useState(false);
-  const [saving, setSaving] = useState(false);
 
   const cardW = Math.min(width - 48, 360);
   const cardH = Math.round(cardW * 1.25);
 
-  if (!plan) return null;
-
   const isDay = !!day;
-  const duration = plan.duration_days || (plan.days?.length ?? 0);
+  const duration = plan?.duration_days || (plan?.days?.length ?? 0);
   const readingsLabel = isDay ? (day.readings || []).map((r: any) => r.label || `${r.book_name} ${r.chapter}`).join(" · ") : "";
 
-  const linkUrl = isDay
-    ? `${siteBaseUrl()}/lettore/piano/${plan.id}?day=${day.day}`
-    : `${siteBaseUrl()}/lettore/piano/${plan.id}`;
+  const linkUrl = plan
+    ? (isDay ? `${siteBaseUrl()}/lettore/piano/${plan.id}?day=${day.day}` : `${siteBaseUrl()}/lettore/piano/${plan.id}`)
+    : siteBaseUrl();
 
-  const message = isDay
+  const message = !plan ? "" : (isDay
     ? `📖 ${plan.title}\nGiorno ${day.day} di ${duration}${day.title ? ` — ${day.title}` : ""}\n${readingsLabel ? `📚 ${readingsLabel}\n` : ""}\nSegui il piano su Radio Pescatori di Uomini:\n${linkUrl}`
-    : `📖 ${plan.title}\n${plan.subtitle || `${duration} giorni`}\n${plan.description ? `\n${plan.description}\n` : ""}\nInizia il piano su Radio Pescatori di Uomini:\n${linkUrl}`;
+    : `📖 ${plan.title}\n${plan.subtitle || `${duration} giorni`}\n${plan.description ? `\n${plan.description}\n` : ""}\nInizia il piano su Radio Pescatori di Uomini:\n${linkUrl}`);
 
-  const filename = isDay ? `piano-giorno-${day.day}.png` : "piano-di-lettura.png";
+  const filename = isDay ? `piano-giorno-${day?.day}.png` : "piano-di-lettura.png";
 
-  const doShare = async () => {
-    setBusy(true);
-    try { await shareCard(cardRef, { filename, message, captureSize: { width: 1080, height: 1350 } }); }
-    catch { /* cancelled */ }
-    finally { setBusy(false); }
-  };
-  const doSave = async () => {
-    setSaving(true);
-    try { await saveCard(cardRef, { captureSize: { width: 1080, height: 1350 } }); }
-    catch { /* ignore */ }
-    finally { setSaving(false); }
-  };
+  const { onShare, onSave, sharing, saving, ready } = useShareCard(cardRef, {
+    visible, filename, message, captureSize: { width: 1080, height: 1350 },
+  });
+
+  if (!plan) return null;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -116,13 +105,13 @@ export default function SharePlanSheet({
         </View>
 
         <View style={styles.actions}>
-          <PressableScale testID="share-plan-action" style={styles.shareBtn} onPress={doShare} disabled={busy}>
-            {busy ? <ActivityIndicator color={colors.navy} /> : (<>
+          <PressableScale testID="share-plan-action" style={[styles.shareBtn, !ready && { opacity: 0.6 }]} onPress={onShare} disabled={sharing || !ready}>
+            {(sharing || !ready) ? <ActivityIndicator color={colors.navy} /> : (<>
               <Ionicons name="share-social" size={20} color={colors.navy} />
               <Text style={styles.shareText}>Condividi</Text>
             </>)}
           </PressableScale>
-          <PressableScale testID="share-plan-save" style={styles.saveBtn} onPress={doSave} disabled={saving}>
+          <PressableScale testID="share-plan-save" style={styles.saveBtn} onPress={onSave} disabled={saving}>
             {saving ? <ActivityIndicator color={colors.white} /> : (<>
               <Ionicons name={Platform.OS === "web" ? "download-outline" : "image-outline"} size={20} color={colors.white} />
               <Text style={styles.saveText}>{Platform.OS === "web" ? "Scarica" : "Salva"}</Text>
