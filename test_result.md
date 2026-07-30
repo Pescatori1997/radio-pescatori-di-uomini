@@ -472,3 +472,38 @@ test_plan:
 agent_communication:
     -agent: "main"
     -message: "BACKEND test the new Bible reader endpoints (public, no auth except /me/bible/state). Verify: (1) GET /api/bible/translations returns >=1 with riveduta_1927 is_default true. (2) GET /api/bible/books returns at(39 books) + nt(27 books). (3) GET /api/bible/chapter?book=43&chapter=3 returns book_name 'Giovanni', chapters_count 21, and verse 16 text contains 'Iddio ha tanto amato il mondo'. 404 for book=999. (4) GET /api/bible/resolve?reference=Giovanni 3:16 -> book_nr 43, chapter 3, verse 16. Also resolve?book=Salmi&chapter=23&verse=1 works. (5) GET /api/bible/search?q=pescatori returns >=5 results including Marco/Matteo; q with special regex chars returns 200 (no 500). (6) /me/bible/state PUT (auth Bearer, admin token via /api/auth/login pescatoridiuomini@outlook.it/AdminTestPwd1!) then GET returns saved book_nr/chapter. Do not modify seeded data."
+
+## --- Bibbia Fase 3: Piani di Lettura (Reading Plans) ---
+backend:
+  - task: "Reading plans API (public list/detail, enroll, day toggle, progress) + admin CRUD + seed 2 plans"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py, backend/reading_plans_seed.py"
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "New reading plans. Seeded 2 published plans idempotently (seed_key): 'Incontra Gesu - 7 giorni nei Vangeli' (7 days) and 'Le Promesse di Dio - 30 giorni di speranza' (30 days). Public: GET /api/reading-plans (published only, trimmed), GET /api/reading-plans/{id} (full days + enrollment if auth). Auth (me): GET /api/me/reading-plans (my enrollments+progress), POST /api/me/reading-plans/{id}/enroll, POST /api/me/reading-plans/{id}/day/{day} {done:bool} toggle (returns progress, marks completed_at when all done), DELETE /api/me/reading-plans/{id} (reset). Admin (require_perm verses): GET /api/admin/reading-plans, GET/POST(201)/PUT/DELETE /api/admin/reading-plans/{id}. Collections: reading_plans, plan_enrollments."
+frontend:
+  - task: "Reading plans UI (Bible home entry, plans list with progress, plan detail enroll/day-complete/open-reading) + admin list & nested editor"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/lettore/{index,piani}.tsx, frontend/app/lettore/piano/[id].tsx, frontend/app/admin/reading-plans/{index,[id]}.tsx, frontend/src/components/AdminShell.tsx, frontend/src/api.ts"
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Bible home (/lettore) gained a 'Piani di Lettura' card + header icon -> /lettore/piani. /lettore/piani lists 'I miei piani' (progress bars) + available plans. /lettore/piano/[id] shows plan detail, Inizia il piano (enroll; guests prompted to login), per-day checkbox toggle (optimistic), and readings that open the reader with highlight. Admin sidebar item 'Piani di Lettura' (perm verses); /admin/reading-plans list + /admin/reading-plans/[id] editor (new/existing) with nested days & readings (book picker modal, chapter/verse fields), status draft/published, featured, delete."
+
+test_plan:
+  current_focus:
+    - "Reading plans API (public list/detail, enroll, day toggle, progress) + admin CRUD + seed 2 plans"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    -agent: "main"
+    -message: "BACKEND test Fase 3 reading plans. Admin login POST /api/auth/login {pescatoridiuomini@outlook.it / AdminTestPwd1!} -> token. Verify: (1) GET /api/reading-plans returns 2 published plans with duration_days 7 and 30. (2) GET /api/reading-plans/{id} returns full days array (len==duration_days), each day has readings with book_nr/chapter, enrollment null when unauth. (3) As a normal user (register test user), POST enroll -> GET /api/me/reading-plans shows plan with progress percent 0. (4) POST day/1 {done:true} -> progress completed_count 1; toggle day/1 {done:false} -> 0; invalid day (0 or >duration) -> 400. (5) DELETE /api/me/reading-plans/{id} resets (my plans empty). (6) Admin CRUD: POST /api/admin/reading-plans (201) create draft with 1 day/1 reading; it must NOT appear in public list (draft); PUT to published -> appears; DELETE removes it AND its enrollments. Non-admin listener calling admin endpoints -> 403. Do NOT delete the 2 seeded plans."

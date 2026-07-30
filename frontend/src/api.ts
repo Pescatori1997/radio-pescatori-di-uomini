@@ -452,6 +452,21 @@ export const api = {
   adminEditContent: (id: string, body: any) => request(`/admin/contents/${id}`, { method: "PATCH", body: JSON.stringify(body) }, true),
   adminDuplicateContent: (id: string) => request(`/admin/contents/${id}/duplicate`, { method: "POST" }, true),
   adminDeleteContent: (id: string) => request(`/admin/contents/${id}`, { method: "DELETE" }, true),
+
+  // Bible reading plans (Piani di Lettura)
+  readingPlans: () => request("/reading-plans"),
+  readingPlan: (id: string) => request(`/reading-plans/${id}`, {}, true),
+  myReadingPlans: () => request("/me/reading-plans", {}, true),
+  enrollPlan: (id: string) => request(`/me/reading-plans/${id}/enroll`, { method: "POST" }, true),
+  togglePlanDay: (id: string, day: number, done: boolean) =>
+    request(`/me/reading-plans/${id}/day/${day}`, { method: "POST", body: JSON.stringify({ done }) }, true),
+  unenrollPlan: (id: string) => request(`/me/reading-plans/${id}`, { method: "DELETE" }, true),
+  // admin reading plans
+  adminReadingPlans: () => request("/admin/reading-plans", {}, true),
+  adminReadingPlan: (id: string) => request(`/admin/reading-plans/${id}`, {}, true),
+  adminCreatePlan: (body: any) => request("/admin/reading-plans", { method: "POST", body: JSON.stringify(body) }, true),
+  adminUpdatePlan: (id: string, body: any) => request(`/admin/reading-plans/${id}`, { method: "PUT", body: JSON.stringify(body) }, true),
+  adminDeletePlan: (id: string) => request(`/admin/reading-plans/${id}`, { method: "DELETE" }, true),
 };
 
 // HTTPS pass-through URL for the live radio stream (works on web + native).

@@ -4088,6 +4088,222 @@ async def delete_note(nid: str, authorization: Optional[str] = Header(None)):
     return {"ok": True}
 
 
+# ---------------- Bible reading plans (Piani di Lettura) ----------------
+class PlanReading(BaseModel):
+    book_nr: int
+    book_name: Optional[str] = None
+    chapter: int
+    verse_start: Optional[int] = None
+    verse_end: Optional[int] = None
+    label: Optional[str] = None
+
+
+class PlanDay(BaseModel):
+    day: int
+    title: Optional[str] = None
+    meditation: Optional[str] = None
+    readings: List[PlanReading] = []
+
+
+class ReadingPlanIn(BaseModel):
+    title: str
+    subtitle: Optional[str] = None
+    description: Optional[str] = None
+    cover: Optional[str] = None
+    category: Optional[str] = None
+    days: List[PlanDay] = []
+    featured: bool = False
+    status: str = "draft"  # draft | published
+    order: int = 0
+
+
+def _plan_public(p: dict) -> dict:
+    """Trim a plan document for public list responses (no full days payload)."""
+    return {
+        "id": p["id"], "title": p.get("title"), "subtitle": p.get("subtitle"),
+        "description": p.get("description"), "cover": p.get("cover"),
+        "category": p.get("category"), "featured": p.get("featured", False),
+        "duration_days": p.get("duration_days") or len(p.get("days") or []),
+        "order": p.get("order", 0),
+    }
+
+
+@api_router.get("/reading-plans")
+async def list_reading_plans():
+    plans = await db.reading_plans.find({"status": "published"}, {"_id": 0}).sort([("order", 1), ("created_at", 1)]).to_list(200)
+    return [_plan_public(p) for p in plans]
+
+
+@api_router.get("/reading-plans/{pid}")
+async def get_reading_plan(pid: str, authorization: Optional[str] = Header(None)):
+    p = await db.reading_plans.find_one({"id": pid, "status": "published"}, {"_id": 0, "seed_key": 0})
+    if not p:
+        raise HTTPException(status_code=404, detail="Piano non trovato")
+    p["duration_days"] = p.get("duration_days") or len(p.get("days") or [])
+    # Attach the user's progress if authenticated.
+    enrollment = None
+    try:
+        user = await get_current_user(authorization)
+        e = await db.plan_enrollments.find_one({"user_id": user["user_id"], "plan_id": pid}, {"_id": 0, "user_id": 0})
+        if e:
+            enrollment = e
+    except Exception:
+        pass
+    p["enrollment"] = enrollment
+    return p
+
+
+def _progress(enrollment: dict, duration: int) -> dict:
+    done = sorted(set(enrollment.get("completed_days") or []))
+    return {
+        "completed_days": done,
+        "completed_count": len(done),
+        "duration_days": duration,
+        "percent": round(len(done) / duration * 100) if duration else 0,
+        "status": "completed" if duration and len(done) >= duration else "active",
+    }
+
+
+@api_router.get("/me/reading-plans")
+async def my_reading_plans(authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    enrollments = await db.plan_enrollments.find({"user_id": user["user_id"]}, {"_id": 0, "user_id": 0}).to_list(200)
+    out = []
+    for e in enrollments:
+        p = await db.reading_plans.find_one({"id": e["plan_id"]}, {"_id": 0, "days": 0, "seed_key": 0})
+        if not p or p.get("status") != "published":
+            continue
+        duration = p.get("duration_days") or 0
+        out.append({**_plan_public(p), "progress": _progress(e, duration), "started_at": e.get("started_at")})
+    out.sort(key=lambda x: x.get("started_at") or "", reverse=True)
+    return out
+
+
+@api_router.post("/me/reading-plans/{pid}/enroll")
+async def enroll_plan(pid: str, authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    p = await db.reading_plans.find_one({"id": pid, "status": "published"})
+    if not p:
+        raise HTTPException(status_code=404, detail="Piano non trovato")
+    existing = await db.plan_enrollments.find_one({"user_id": user["user_id"], "plan_id": pid})
+    if existing:
+        return {"ok": True, "already": True}
+    now = now_utc()
+    await db.plan_enrollments.insert_one({
+        "id": new_id("enr"), "user_id": user["user_id"], "plan_id": pid,
+        "completed_days": [], "started_at": now, "updated_at": now, "completed_at": None,
+    })
+    return {"ok": True}
+
+
+class DayToggle(BaseModel):
+    done: bool = True
+
+
+@api_router.post("/me/reading-plans/{pid}/day/{day}")
+async def toggle_plan_day(pid: str, day: int, body: DayToggle, authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    p = await db.reading_plans.find_one({"id": pid, "status": "published"}, {"_id": 0})
+    if not p:
+        raise HTTPException(status_code=404, detail="Piano non trovato")
+    duration = p.get("duration_days") or len(p.get("days") or [])
+    if day < 1 or day > duration:
+        raise HTTPException(status_code=400, detail="Giorno non valido")
+    e = await db.plan_enrollments.find_one({"user_id": user["user_id"], "plan_id": pid})
+    if not e:
+        now = now_utc()
+        e = {"id": new_id("enr"), "user_id": user["user_id"], "plan_id": pid,
+             "completed_days": [], "started_at": now, "updated_at": now, "completed_at": None}
+        await db.plan_enrollments.insert_one(dict(e))
+    done = set(e.get("completed_days") or [])
+    if body.done:
+        done.add(day)
+    else:
+        done.discard(day)
+    completed_at = now_utc() if len(done) >= duration else None
+    await db.plan_enrollments.update_one(
+        {"user_id": user["user_id"], "plan_id": pid},
+        {"$set": {"completed_days": sorted(done), "updated_at": now_utc(), "completed_at": completed_at}},
+    )
+    return {"ok": True, "progress": _progress({"completed_days": list(done)}, duration)}
+
+
+@api_router.delete("/me/reading-plans/{pid}")
+async def unenroll_plan(pid: str, authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    await db.plan_enrollments.delete_one({"user_id": user["user_id"], "plan_id": pid})
+    return {"ok": True}
+
+
+# ----- Admin: reading plans CRUD -----
+@api_router.get("/admin/reading-plans")
+async def admin_list_plans(admin=Depends(require_perm("verses"))):
+    plans = await db.reading_plans.find({}, {"_id": 0, "days": 0}).sort([("order", 1), ("created_at", 1)]).to_list(500)
+    for p in plans:
+        p["duration_days"] = p.get("duration_days") or 0
+    return plans
+
+
+@api_router.get("/admin/reading-plans/{pid}")
+async def admin_get_plan(pid: str, admin=Depends(require_perm("verses"))):
+    p = await db.reading_plans.find_one({"id": pid}, {"_id": 0})
+    if not p:
+        raise HTTPException(status_code=404, detail="Piano non trovato")
+    return p
+
+
+@api_router.post("/admin/reading-plans", status_code=201)
+async def admin_create_plan(body: ReadingPlanIn, admin=Depends(require_perm("verses"))):
+    if not (body.title or "").strip():
+        raise HTTPException(status_code=400, detail="Il titolo è obbligatorio")
+    if body.status not in ("draft", "published"):
+        raise HTTPException(status_code=400, detail="Stato non valido")
+    now = now_utc()
+    days = [d.model_dump() for d in body.days]
+    doc = {
+        "id": new_id("plan"), "title": body.title.strip(), "subtitle": body.subtitle,
+        "description": body.description, "cover": body.cover, "category": body.category,
+        "featured": body.featured, "status": body.status, "order": body.order,
+        "days": days, "duration_days": len(days),
+        "created_at": now, "updated_at": now,
+        "published_at": now if body.status == "published" else None,
+    }
+    await db.reading_plans.insert_one(dict(doc))
+    await log_activity(admin, f"ha creato il piano di lettura '{body.title}'", "verses")
+    return {"ok": True, "id": doc["id"]}
+
+
+@api_router.put("/admin/reading-plans/{pid}")
+async def admin_update_plan(pid: str, body: ReadingPlanIn, admin=Depends(require_perm("verses"))):
+    p = await db.reading_plans.find_one({"id": pid})
+    if not p:
+        raise HTTPException(status_code=404, detail="Piano non trovato")
+    if body.status not in ("draft", "published"):
+        raise HTTPException(status_code=400, detail="Stato non valido")
+    days = [d.model_dump() for d in body.days]
+    updates = {
+        "title": body.title.strip(), "subtitle": body.subtitle, "description": body.description,
+        "cover": body.cover, "category": body.category, "featured": body.featured,
+        "status": body.status, "order": body.order, "days": days, "duration_days": len(days),
+        "updated_at": now_utc(),
+    }
+    if body.status == "published" and not p.get("published_at"):
+        updates["published_at"] = now_utc()
+    await db.reading_plans.update_one({"id": pid}, {"$set": updates})
+    await log_activity(admin, f"ha aggiornato il piano di lettura '{body.title}'", "verses")
+    return {"ok": True}
+
+
+@api_router.delete("/admin/reading-plans/{pid}")
+async def admin_delete_plan(pid: str, admin=Depends(require_perm("verses"))):
+    p = await db.reading_plans.find_one({"id": pid})
+    if not p:
+        raise HTTPException(status_code=404, detail="Piano non trovato")
+    await db.reading_plans.delete_one({"id": pid})
+    await db.plan_enrollments.delete_many({"plan_id": pid})
+    await log_activity(admin, f"ha eliminato il piano di lettura '{p.get('title')}'", "verses")
+    return {"ok": True}
+
 
 app.include_router(api_router)
 
@@ -4376,6 +4592,12 @@ async def startup():
         await seed_bible(db, logger)
     except Exception as e:
         logger.warning("bible seed error: %s", e)
+    # Seed example reading plans (idempotent).
+    try:
+        from reading_plans_seed import seed_reading_plans
+        await seed_reading_plans(db, logger, new_id, now_utc)
+    except Exception as e:
+        logger.warning("reading plans seed error: %s", e)
     logger.info("Seed complete")
 
 

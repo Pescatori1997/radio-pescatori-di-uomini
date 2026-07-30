@@ -41,6 +41,7 @@ export default function BibleHome() {
           <PressableScale onPress={() => router.back()} style={styles.iconBtn}><Ionicons name="arrow-back" size={22} color={colors.white} /></PressableScale>
           <Text style={styles.topTitle}>Bibbia</Text>
           <View style={{ flexDirection: "row", gap: spacing.sm }}>
+            <PressableScale testID="bible-plans-open" onPress={() => router.push("/lettore/piani")} style={styles.iconBtn}><Ionicons name="reader" size={18} color={colors.white} /></PressableScale>
             <PressableScale testID="bible-saved-open" onPress={() => router.push("/lettore/salvati")} style={styles.iconBtn}><Ionicons name="bookmark" size={18} color={colors.white} /></PressableScale>
             <PressableScale testID="bible-search-open" onPress={() => router.push("/lettore/search")} style={styles.iconBtn}><Ionicons name="search" size={20} color={colors.white} /></PressableScale>
           </View>
@@ -60,6 +61,15 @@ export default function BibleHome() {
               <Ionicons name="play" size={18} color={colors.brandPrimary} />
             </PressableScale>
           )}
+
+          <PressableScale testID="bible-plans-card" style={styles.plansCard} onPress={() => router.push("/lettore/piani")}>
+            <View style={styles.plansIcon}><Ionicons name="reader" size={22} color={colors.white} /></View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.plansTitle}>Piani di Lettura</Text>
+              <Text style={styles.plansSub}>Segui un cammino guidato nella Parola</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.white} />
+          </PressableScale>
 
           <View style={styles.tabs}>
             {(["AT", "NT"] as const).map((t) => (
@@ -110,6 +120,10 @@ const styles = StyleSheet.create({
   continueIcon: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
   continueLabel: { color: colors.onBrandTertiary, fontSize: 12, fontWeight: "700" },
   continueRef: { color: colors.navy, fontSize: 16, fontWeight: "800", marginTop: 2 },
+  plansCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.navy, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.lg },
+  plansIcon: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
+  plansTitle: { color: colors.white, fontSize: 16, fontWeight: "800" },
+  plansSub: { color: colors.brandSecondary, fontSize: 12, fontWeight: "600", marginTop: 2 },
   tabs: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.lg },
   tab: { flex: 1, paddingVertical: 10, borderRadius: radius.pill, backgroundColor: colors.surfaceTertiary, alignItems: "center" },
   tabOn: { backgroundColor: colors.navy },

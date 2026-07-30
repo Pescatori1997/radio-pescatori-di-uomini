@@ -1,0 +1,31 @@
+{
+  "summary": "Bible Reading Plans (Phase 3) backend fully tested — all 15 pytest tests pass (100%). Covered: public list/detail, listener enroll/toggle/unenroll/progress, admin CRUD (draft-not-public → publish → delete), authorization (listener 403, missing/invalid token 401), and Bible endpoint regression. Two seeded plans (durations 7 and 30) present. Enrollments correctly cascade-delete when admin removes a plan.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_reading_plans.py",
+    "/app/test_reports/pytest/iteration_31_reading_plans.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is 4607 lines — should be split into modules (routers) for maintainability. Not blocking, but reported previously as well.",
+    "GET /api/bible/books returns a dict (at/nt) rather than a flat list — frontend consumers must handle this shape."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_reading_plans.py (new)"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "None persisted — all admin-created TEST_ plans are deleted in test teardown. Seeded plans (seed_key='incontra-gesu-7', 'promesse-di-dio-30') were left untouched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Reading Plans endpoints under /api/reading-plans (public), /api/me/reading-plans (listener), /api/admin/reading-plans (verses perm). Admin login: pescatoridiuomini@outlook.it / AdminTestPwd1!. Fresh listener registered per run via POST /api/auth/register. Tests use pytest-xdist (already configured in backend pytest.ini).",
+  "rca_of_issue": "N/A — feature working correctly."
+}
