@@ -13,6 +13,7 @@ import Animated, {
   interpolate,
 } from "react-native-reanimated";
 import { api } from "@/src/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { FishingNet, SeaWaves, SunriseGlow, LightRays, Bubbles } from "@/src/components/marine";
 import ShareVerseSheet from "@/src/components/ShareVerseSheet";
 import PressableScale from "@/src/components/PressableScale";
@@ -25,7 +26,12 @@ export default function VerseOfDayCard() {
   const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
-    api.verseToday().then(setVerse).catch(() => {});
+    api.verseToday()
+      .then((v: any) => { setVerse(v); AsyncStorage.setItem("votd_cache", JSON.stringify(v)).catch(() => {}); })
+      .catch(async () => {
+        const c = await AsyncStorage.getItem("votd_cache").catch(() => null);
+        if (c) setVerse(JSON.parse(c));
+      });
   }, []);
 
   // Slow shimmer on the card border.

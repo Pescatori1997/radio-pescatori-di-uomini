@@ -3615,9 +3615,11 @@ async def admin_create_verse(body: VerseIn, admin=Depends(require_perm("verses")
 async def admin_edit_verse(vid: str, body: VerseEdit, admin=Depends(require_perm("verses"))):
     updates = body.model_dump(exclude_unset=True)
     # A manual meditation edit takes priority and must never be overwritten by
-    # automatic regeneration → lock it.
+    # automatic regeneration → lock it, and invalidate the cached audio.
     if "meditation" in updates:
         updates["meditation_locked"] = bool((updates.get("meditation") or "").strip())
+        updates["meditation_audio_ready"] = False
+        updates["meditation_audio_b64"] = None
     if updates:
         res = await db.verses.update_one({"id": vid}, {"$set": updates})
         if res.matched_count == 0:
@@ -3679,15 +3681,60 @@ async def verse_meditation(vid: str):
     verse = await db.verses.find_one({"id": vid})
     if not verse:
         raise HTTPException(status_code=404, detail="Versetto non trovato")
-    if (verse.get("meditation") or "").strip():
-        return {"meditation": verse["meditation"], "reflection": verse.get("reflection") or ""}
-    gen = await _generate_meditation(verse)
-    await db.verses.update_one(
-        {"id": vid},
-        {"$set": {"meditation": gen["meditation"], "reflection": gen["reflection"],
-                  "meditation_locked": False, "meditation_generated": True}},
-    )
-    return gen
+    if not (verse.get("meditation") or "").strip():
+        gen = await _generate_meditation(verse)
+        await db.verses.update_one(
+            {"id": vid},
+            {"$set": {"meditation": gen["meditation"], "reflection": gen["reflection"],
+                      "meditation_locked": False, "meditation_generated": True}},
+        )
+        verse = {**verse, **gen}
+    # Kick off audio generation in the background if not ready (best-effort, optional).
+    audio_ready = bool(verse.get("meditation_audio_ready"))
+    if not audio_ready and os.environ.get("EMERGENT_LLM_KEY"):
+        asyncio.create_task(_ensure_meditation_audio(vid))
+    return {"meditation": verse["meditation"], "reflection": verse.get("reflection") or "", "audio": audio_ready}
+
+
+async def _generate_meditation_audio(verse: dict) -> bytes:
+    """Generate an MP3 of the meditation via OpenAI TTS (Emergent key)."""
+    from emergentintegrations.llm.openai.text_to_speech import OpenAITextToSpeech
+    key = os.environ.get("EMERGENT_LLM_KEY")
+    if not key:
+        raise RuntimeError("TTS non configurato")
+    text = (verse.get("meditation") or "").strip()
+    refl = (verse.get("reflection") or "").strip()
+    if refl:
+        text = f"{text}\n\n{refl}"
+    text = text[:4000]
+    tts = OpenAITextToSpeech(api_key=key)
+    return await tts.generate_speech(text=text, model="tts-1", voice="nova", response_format="mp3")
+
+
+async def _ensure_meditation_audio(vid: str) -> bool:
+    """Generate & cache the meditation audio if missing. Never raises."""
+    try:
+        verse = await db.verses.find_one({"id": vid})
+        if not verse or verse.get("meditation_audio_ready") or not (verse.get("meditation") or "").strip():
+            return bool(verse and verse.get("meditation_audio_ready"))
+        audio = await _generate_meditation_audio(verse)
+        await db.verses.update_one(
+            {"id": vid},
+            {"$set": {"meditation_audio_b64": base64.b64encode(audio).decode(), "meditation_audio_ready": True}},
+        )
+        return True
+    except Exception as e:
+        logger.warning("meditation audio gen failed (%s): %s", vid, e)
+        return False
+
+
+@api_router.get("/verse/{vid}/meditation/audio")
+async def verse_meditation_audio(vid: str):
+    verse = await db.verses.find_one({"id": vid}, {"meditation_audio_b64": 1, "meditation_audio_ready": 1})
+    if not verse or not verse.get("meditation_audio_ready") or not verse.get("meditation_audio_b64"):
+        raise HTTPException(status_code=404, detail="Audio non disponibile")
+    data = base64.b64decode(verse["meditation_audio_b64"])
+    return Response(content=data, media_type="audio/mpeg", headers={"Cache-Control": "public, max-age=86400"})
 
 
 @api_router.post("/admin/verses/{vid}/regenerate-meditation")
@@ -3699,7 +3746,8 @@ async def admin_regenerate_meditation(vid: str, admin=Depends(require_perm("vers
     await db.verses.update_one(
         {"id": vid},
         {"$set": {"meditation": gen["meditation"], "reflection": gen["reflection"],
-                  "meditation_locked": False, "meditation_generated": True}},
+                  "meditation_locked": False, "meditation_generated": True,
+                  "meditation_audio_ready": False, "meditation_audio_b64": None}},
     )
     await log_activity(admin, "ha rigenerato una meditazione", "verses", {"id": vid})
     return gen
@@ -3711,6 +3759,9 @@ VERSE_NOTIF_DEFAULTS = [
     "🌅 Nuovo Versetto del Giorno disponibile. Lasciati incoraggiare dalla Parola per affrontare questa giornata.",
     "✨ La meditazione di oggi è pronta. Leggila e dedica un momento alla riflessione sulla Parola di Dio.",
 ]
+
+
+VERSE_NOTIF_DAYS = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"]
 
 
 async def _today_verse() -> Optional[dict]:
@@ -3727,10 +3778,22 @@ async def _send_verse_notification(force: bool = False) -> Optional[int]:
     Rome day atomically so it fires exactly once per day even with multiple workers."""
     from pymongo.errors import DuplicateKeyError
     cfg = await db.settings.find_one({"_id": "verse_notif"}) or {}
-    if not force and cfg.get("enabled") is False:
-        return None
     today = _rome_day_ordinal()
     if not force:
+        if cfg.get("enabled") is False:
+            return None
+        # Respect the configured send time & weekdays (Europe/Rome).
+        now_rome = datetime.now(ROME_TZ) if ROME_TZ else (datetime.now(timezone.utc) + timedelta(hours=1))
+        send_days = cfg.get("send_days") or VERSE_NOTIF_DAYS
+        if VERSE_NOTIF_DAYS[now_rome.weekday()] not in send_days:
+            return None
+        st = cfg.get("send_time") or "00:00"
+        try:
+            sh, sm = int(st.split(":")[0]), int(st.split(":")[1])
+        except Exception:
+            sh, sm = 0, 0
+        if (now_rome.hour * 60 + now_rome.minute) < (sh * 60 + sm):
+            return None  # not yet time to send today
         try:
             res = await db.settings.update_one(
                 {"_id": "verse_notif", "last_sent_day": {"$ne": today}},
@@ -3758,6 +3821,8 @@ async def _send_verse_notification(force: bool = False) -> Optional[int]:
             )
         except Exception as e:
             logger.warning("verse notif: meditation gen failed: %s", e)
+    # Pre-warm the meditation audio too (best-effort, optional).
+    await _ensure_meditation_audio(verse["id"])
 
     title = (cfg.get("title") or "").strip() or "📖 Versetto del Giorno"
     message = (cfg.get("message") or "").strip()
@@ -3772,6 +3837,8 @@ class VerseNotifSettings(BaseModel):
     enabled: Optional[bool] = None
     title: Optional[str] = None
     message: Optional[str] = None
+    send_time: Optional[str] = None
+    send_days: Optional[List[str]] = None
 
 
 @api_router.get("/admin/verse-notification")
@@ -3781,6 +3848,9 @@ async def admin_get_verse_notif(admin=Depends(require_perm("verses"))):
         "enabled": cfg.get("enabled", True),
         "title": cfg.get("title") or "📖 Versetto del Giorno",
         "message": cfg.get("message") or "",
+        "send_time": cfg.get("send_time") or "00:00",
+        "send_days": cfg.get("send_days") or VERSE_NOTIF_DAYS,
+        "all_days": VERSE_NOTIF_DAYS,
         "defaults": VERSE_NOTIF_DEFAULTS,
     }
 
@@ -3788,6 +3858,8 @@ async def admin_get_verse_notif(admin=Depends(require_perm("verses"))):
 @api_router.put("/admin/verse-notification")
 async def admin_update_verse_notif(body: VerseNotifSettings, admin=Depends(require_perm("verses"))):
     updates = {k: v for k, v in body.model_dump(exclude_unset=True).items()}
+    if "send_days" in updates:
+        updates["send_days"] = [d for d in (updates["send_days"] or []) if d in VERSE_NOTIF_DAYS]
     if updates:
         await db.settings.update_one({"_id": "verse_notif"}, {"$set": updates}, upsert=True)
     await log_activity(admin, "ha aggiornato le notifiche del Versetto del Giorno", "verses")
@@ -4094,7 +4166,7 @@ async def startup():
 
     # Default daily-verse notification config (idempotent).
     if not await db.settings.find_one({"_id": "verse_notif"}):
-        await db.settings.insert_one({"_id": "verse_notif", "enabled": True, "title": "📖 Versetto del Giorno", "message": ""})
+        await db.settings.insert_one({"_id": "verse_notif", "enabled": True, "title": "📖 Versetto del Giorno", "message": "", "send_time": "07:30", "send_days": VERSE_NOTIF_DAYS})
 
     # Start the daily verse-notification scheduler (fires once per Rome day).
     asyncio.create_task(_verse_notif_scheduler())

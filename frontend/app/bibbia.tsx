@@ -5,9 +5,11 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
-import { api } from "@/src/api";
+import { api, verseMeditationAudioUrl } from "@/src/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { FishingNet, SeaWaves, SunriseGlow } from "@/src/components/marine";
 import ShareVerseSheet from "@/src/components/ShareVerseSheet";
+import MeditationAudioButton from "@/src/components/MeditationAudioButton";
 import PressableScale from "@/src/components/PressableScale";
 import { colors, spacing, radius } from "@/src/theme";
 
@@ -20,22 +22,45 @@ export default function Bibbia() {
   const [med, setMed] = useState<{ meditation: string; reflection: string } | null>(null);
   const [medLoading, setMedLoading] = useState(false);
   const [medError, setMedError] = useState(false);
+  const [audioReady, setAudioReady] = useState(false);
   const [w, setW] = useState(0);
   const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
     const fetch = verseId ? api.verse(verseId) : api.verseToday();
-    fetch.then(setVerse).catch(() => {}).finally(() => setLoading(false));
+    fetch
+      .then((v: any) => { setVerse(v); AsyncStorage.setItem(`verse_${v.id}`, JSON.stringify(v)).catch(() => {}); })
+      .catch(async () => {
+        const key = verseId ? `verse_${verseId}` : "votd_cache";
+        const c = await AsyncStorage.getItem(key).catch(() => null);
+        if (c) setVerse(JSON.parse(c));
+      })
+      .finally(() => setLoading(false));
   }, [verseId]);
 
   useEffect(() => {
     if (!verse?.id) return;
     setMedLoading(true);
     setMedError(false);
+    let retry: any;
     api.verseMeditation(verse.id)
-      .then((d: any) => setMed({ meditation: d.meditation, reflection: d.reflection }))
-      .catch(() => setMedError(true))
+      .then((d: any) => {
+        setMed({ meditation: d.meditation, reflection: d.reflection });
+        setAudioReady(!!d.audio);
+        AsyncStorage.setItem(`med_${verse.id}`, JSON.stringify({ meditation: d.meditation, reflection: d.reflection })).catch(() => {});
+        if (!d.audio) {
+          retry = setTimeout(() => {
+            api.verseMeditation(verse.id).then((d2: any) => setAudioReady(!!d2.audio)).catch(() => {});
+          }, 7000);
+        }
+      })
+      .catch(async () => {
+        const c = await AsyncStorage.getItem(`med_${verse.id}`).catch(() => null);
+        if (c) setMed(JSON.parse(c));
+        else setMedError(true);
+      })
       .finally(() => setMedLoading(false));
+    return () => { if (retry) clearTimeout(retry); };
   }, [verse?.id]);
 
   const book = verse?.book || "";
@@ -102,6 +127,9 @@ export default function Bibbia() {
                 <View style={styles.medCard}>
                   <Text style={styles.medBody}>{med.meditation}</Text>
                 </View>
+                {audioReady && verse?.id && (
+                  <MeditationAudioButton audioUrl={verseMeditationAudioUrl(verse.id)} />
+                )}
                 {!!med.reflection && (
                   <View style={styles.reflectCard}>
                     <Ionicons name="help-circle-outline" size={20} color={colors.onBrandTertiary} />

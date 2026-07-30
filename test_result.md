@@ -391,3 +391,49 @@ test_plan:
 agent_communication:
     -agent: "main"
     -message: "BACKEND-ONLY test the new Versetto del Giorno endpoints. Admin login: POST /api/auth/login {email: pescatoridiuomini@outlook.it, password: AdminTestPwd1!} -> token; Bearer for /api/admin/*. Verify: (1) GET /api/verse/today returns a verse doc {id,text,reference,book,chapter,verse}; called twice same-day returns SAME verse (deterministic); (2) GET /api/verse/{id} works and 404 for unknown; (3) admin GET /api/admin/verses returns list incl seeded 124; search by reference (e.g. 'Giovanni') and by text works; (4) POST create (201 + id) with text+reference -> appears in list and via /api/verse/{id}; (5) PATCH edit text/active; setting active:false removes it from rotation pool (today endpoint never returns inactive); 404 patch unknown; (6) DELETE removes it; (7) auth guard: /api/admin/verses no token -> 401. Clean up any TEST_-prefixed verses you create. Do NOT delete seeded verses."
+
+## --- v1.1: Hardening + Share + TTS + Verse notif time/days (session fork) ---
+backend:
+  - task: "Security/perf hardening: rate limit, CORS, anti-ReDoS regex, DB indices, admin bootstrap block"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Added in-memory sliding-window rate limiter (login 10/60s, register 5/60s, contact/prayer/messages/reports 8/60s -> 429). CORS: allow_credentials=False, origins from CORS_ORIGINS env (default *). All search regexes now re.escape()'d (anti-ReDoS). New DB indices (contents, verses, programs, prayer_requests, messages). Register now blocks ADMIN_EMAILS allowlist addresses (must use Google) — NOTE: ADMIN_EMAILS env is EMPTY in this env, so this guard is inert here and existing email/password admin login is unaffected."
+  - task: "Meditation TTS (OpenAI via Emergent) optional/cached + verse notif send_time/send_days"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "GET /api/verse/{id}/meditation now returns {meditation,reflection,audio:bool} and fire-and-forget generates MP3 (OpenAI tts-1, voice nova) cached as base64. GET /api/verse/{id}/meditation/audio streams audio/mpeg (404 if not ready). Manual meditation edit + regenerate invalidate cached audio. Verse notification config gained send_time (HH:MM) + send_days (Italian weekday names); scheduler only fires past send_time on allowed weekday (Europe/Rome), once/day atomic. GET/PUT /api/admin/verse-notification include send_time/send_days/all_days. TTS failures must NOT break meditation text."
+frontend:
+  - task: "Share verse card, TTS player, offline cache, admin notif time/days UI"
+    implemented: true
+    working: true
+    file: "frontend/src/components/{ShareVerseSheet,MeditationAudioButton}.tsx, frontend/app/bibbia.tsx, frontend/app/admin/verses/index.tsx, frontend/src/components/VerseOfDayCard.tsx"
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Verified via screenshot: share card renders (marine themed, capture+share/download), audio 'Ascolta la meditazione' button appears when audio ready. Offline: verse+meditation cached in AsyncStorage. Admin notif card gained send_time input + weekday chips."
+
+test_plan:
+  current_focus:
+    - "Security/perf hardening: rate limit, CORS, anti-ReDoS regex, DB indices, admin bootstrap block"
+    - "Meditation TTS (OpenAI via Emergent) optional/cached + verse notif send_time/send_days"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    -agent: "main"
+    -message: "BACKEND retest for v1.1. Admin login POST /api/auth/login {pescatoridiuomini@outlook.it / AdminTestPwd1!} -> token. Verify: (1) Rate limit: 11 rapid POST /api/auth/login (bad creds) -> first 10 return 401, then 429. (2) Regex safety: GET /api/podcasts?search=(a+)+ returns 200 (no hang/500). (3) TTS: GET /api/verse/today -> id; GET /api/verse/{id}/meditation returns {meditation,reflection,audio}; within ~15s GET /api/verse/{id}/meditation/audio returns 200 audio/mpeg (>10KB). If EMERGENT_LLM_KEY missing it should degrade gracefully (meditation still returned, audio endpoint 404). (4) Verse notif config: GET /api/admin/verse-notification has send_time,send_days,all_days; PUT with send_time '08:00' and send_days subset persists; invalid days filtered out. (5) Manual meditation edit via PATCH /api/admin/verses/{id} {meditation:'x'} sets meditation_locked true AND clears audio (audio endpoint 404 after). Clean up TEST_ verses. Do NOT delete seeded verses. Existing endpoints (verse today/CRUD, notify-today) must still work. NOTE: native push relay returns non-fatal error in dev (EMERGENT_PUSH_KEY placeholder) — expected."

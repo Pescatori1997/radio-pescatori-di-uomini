@@ -28,7 +28,7 @@ export default function AdminVersesList() {
   const saveNotif = async () => {
     setNotifBusy(true); setNotifMsg("");
     try {
-      await api.adminUpdateVerseNotif({ enabled: notif.enabled, title: notif.title, message: notif.message });
+      await api.adminUpdateVerseNotif({ enabled: notif.enabled, title: notif.title, message: notif.message, send_time: notif.send_time, send_days: notif.send_days });
       setNotifMsg("Impostazioni salvate");
     } catch (e: any) { setNotifMsg(e.message || "Errore"); } finally { setNotifBusy(false); }
   };
@@ -67,6 +67,21 @@ export default function AdminVersesList() {
               <ASwitch testID="vn-enabled" label="Invio automatico giornaliero attivo" value={!!notif.enabled} onValueChange={(v: boolean) => setN("enabled", v)} />
               <AInput testID="vn-title" label="Titolo notifica" value={notif.title} onChangeText={(v: string) => setN("title", v)} />
               <AInput testID="vn-message" label="Messaggio (vuoto = casuale)" value={notif.message} onChangeText={(v: string) => setN("message", v)} multiline />
+              <AInput testID="vn-time" label="🕢 Ora di invio (HH:MM)" value={notif.send_time} onChangeText={(v: string) => setN("send_time", v)} placeholder="07:30" />
+              <Text style={styles.daysLabel}>📅 Giorni di invio</Text>
+              <View style={styles.daysRow}>
+                {(notif.all_days || []).map((d: string) => {
+                  const on = (notif.send_days || []).includes(d);
+                  return (
+                    <PressableScale key={d} testID={`vn-day-${d}`} style={[styles.dayChip, on && styles.dayChipOn]} onPress={() => {
+                      const cur = notif.send_days || [];
+                      setN("send_days", on ? cur.filter((x: string) => x !== d) : [...cur, d]);
+                    }}>
+                      <Text style={[styles.dayChipText, on && styles.dayChipTextOn]}>{d.slice(0, 3)}</Text>
+                    </PressableScale>
+                  );
+                })}
+              </View>
               {notifMsg ? <Text style={styles.notifResult}>{notifMsg}</Text> : null}
               <View style={styles.notifBtns}>
                 <PressableScale testID="vn-save" style={[styles.notifBtn, { backgroundColor: colors.brandPrimary }, notifBusy && { opacity: 0.6 }]} onPress={saveNotif} disabled={notifBusy}>
@@ -110,6 +125,12 @@ const styles = StyleSheet.create({
   notifTitle: { color: colors.white, fontSize: 16, fontWeight: "800" },
   notifHint: { color: ADMIN.muted, fontSize: 12, lineHeight: 17, marginTop: 6, marginBottom: spacing.sm },
   notifResult: { color: colors.brandSecondary, fontSize: 13, fontWeight: "700", marginTop: spacing.sm },
+  daysLabel: { color: colors.white, fontSize: 13, fontWeight: "700", marginTop: spacing.sm, marginBottom: 8 },
+  daysRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  dayChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.pill, backgroundColor: ADMIN.bg, borderWidth: 1, borderColor: ADMIN.border },
+  dayChipOn: { backgroundColor: colors.brandPrimary + "22", borderColor: colors.brandPrimary },
+  dayChipText: { color: ADMIN.muted, fontSize: 12, fontWeight: "700" },
+  dayChipTextOn: { color: colors.brandSecondary },
   notifBtns: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.md },
   notifBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: spacing.md, borderRadius: radius.pill },
   notifBtnText: { color: colors.white, fontSize: 14, fontWeight: "800" },

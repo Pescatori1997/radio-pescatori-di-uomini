@@ -1,0 +1,33 @@
+{
+  "summary": "v1.1 hardening backend suite: 15/15 pytest cases PASSED (100%). Verified (a) login rate limiter — 12 rapid wrong-cred POSTs to /api/auth/login yielded 401s + ≥1 429; unrelated endpoints (verse/today, podcasts) still 200 immediately after; (b) anti-ReDoS — GET /api/podcasts?search=(a+)+ and GET /api/meditations?search=[test.*+?^${}()|\\] both returned 200 quickly (<5s) because server uses re.escape on every $regex; (c) TTS meditation — /api/verse/{id}/meditation returns {meditation, reflection, audio:bool} in <60s, and /api/verse/{id}/meditation/audio becomes 200 audio/mpeg (~30KB+) within ~25s (background TTS via Emergent OpenAI tts-1 nova); (d) VerseNotifConfig — GET returns enabled/title/message/send_time/send_days/all_days; PUT with {send_time:'08:00', send_days:['Lunedì','Martedì','FooInvalid']} persists send_time and filters 'FooInvalid' out; restored to 07:30 + all 7 days; (e) audio invalidation — after creating a TEST verse, generating audio, then PATCHing meditation manually, /admin/verses shows meditation_locked=true and the audio endpoint switches back to 404 (b64 cleared); (f) regression — /api/verse/today 200, /api/verse/{id} 200/404, admin verses CRUD + PATCH-unknown 404, notify-today 200 with recipients count; (g) auth guard — /api/admin/verse-notification and /api/admin/verses without token → 401. DB state clean: 124 verses, 0 TEST_ leftovers.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_v11_hardening.py",
+    "/app/test_reports/pytest/iteration_29_v11.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now 4178 lines (was 3856 in iter 28) — well over the 700-line guideline. Consider splitting into routers (verses, meditations, notifications, rate_limiter, tts). Non-blocking.",
+    "Rate limiter is per-process in-memory (dict of deques). With multiple uvicorn workers behind the ingress, each worker has its own bucket → effective limit is limit × worker_count. Consider Redis-backed store for production accuracy (limit is currently enforced consistently enough in this preview because there is 1 worker).",
+    "DELETE /api/admin/verses/{vid} still returns {ok:true} even when the id doesn't exist (no 404 on delete_count==0). Cosmetic only; requirements only specify PATCH-unknown → 404. Same finding as iter 28.",
+    "verse_meditation_audio does not set Content-Length nor an ETag — considered fine for MVP; browsers still cache via Cache-Control:public,max-age=86400."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_v11_hardening.py (new — pytest suite for v1.1 hardening)"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "Two TEST_-prefixed verses created and fully deleted via test teardowns. verse_notif setting restored to send_time=07:30 and all 7 send_days. Final DB state: 124 verses, 0 inactive, 0 TEST_ leftovers.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Use ADMINTESTTOKEN123 (seeded by conftest.py) as Bearer for admin endpoints — bypasses the login rate limiter that would otherwise trip authenticated tests when the burst-login test consumes the /api/auth/login IP bucket (10/60s window). If you run the rate-limit test, wait ≥65s before re-executing to let the sliding window drain. TTS audio generation typically completes in 6-15s for a fresh verse; poll /api/verse/{id}/meditation/audio with a ~25s ceiling. verse_notif settings.last_sent_day should NOT be manually reset (would cause duplicate daily notifications).",
+  "rca_of_issue": "N/A — no bugs found. All hardening features working as specified."
+}

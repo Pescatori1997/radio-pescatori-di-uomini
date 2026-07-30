@@ -434,3 +434,4 @@ export const api = {
 
 // HTTPS pass-through URL for the live radio stream (works on web + native).
 export const liveStreamUrl = () => `${BASE}/api/live/stream`;
+export const verseMeditationAudioUrl = (id: string) => `${BASE}/api/verse/${id}/meditation/audio`;
