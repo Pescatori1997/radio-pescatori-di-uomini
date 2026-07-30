@@ -2,51 +2,45 @@ import React, { useRef, useState } from "react";
 import { View, Text, StyleSheet, Modal, Platform, useWindowDimensions, ActivityIndicator } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { captureRef } from "react-native-view-shot";
-import * as Sharing from "expo-sharing";
 import { FishingNet, SeaWaves, SunriseGlow, LightRays } from "@/src/components/marine";
 import Logo from "@/src/components/Logo";
 import PressableScale from "@/src/components/PressableScale";
+import { shareCard, saveCard, siteBaseUrl } from "@/src/utils/shareImage";
 import { colors, spacing, radius } from "@/src/theme";
 
 /** A shareable, marine-themed image of the verse of the day. Works on native
- * (expo-sharing) and web (Web Share API with fallback to download). */
+ * (expo-sharing + save to gallery) and web (Web Share API with fallback to download). */
 export default function ShareVerseSheet({ verse, visible, onClose }: { verse: any; visible: boolean; onClose: () => void }) {
   const { width } = useWindowDimensions();
   const cardRef = useRef<View>(null);
   const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const cardW = Math.min(width - 48, 360);
   const cardH = Math.round(cardW * 1.25);
 
+  const linkUrl = verse ? `${siteBaseUrl()}/bibbia?verseId=${verse.id}` : siteBaseUrl();
+  const message = verse ? `📖 ${verse.reference}\n«${verse.text}»\n\nRadio Pescatori di Uomini — Leggi di più:\n${linkUrl}` : "";
+
   const doShare = async () => {
     setBusy(true);
     try {
-      const uri = await captureRef(cardRef, { format: "png", quality: 1, width: 1080, height: 1350 });
-      const shareText = `${verse.reference} — Radio Pescatori di Uomini`;
-      if (Platform.OS === "web") {
-        const resp = await fetch(uri);
-        const blob = await resp.blob();
-        const file = new File([blob], "versetto.png", { type: "image/png" });
-        const nav: any = navigator;
-        if (nav.share && nav.canShare && nav.canShare({ files: [file] })) {
-          await nav.share({ files: [file], title: "Versetto del Giorno", text: shareText });
-        } else {
-          const a = document.createElement("a");
-          a.href = URL.createObjectURL(blob);
-          a.download = "versetto-del-giorno.png";
-          a.click();
-          URL.revokeObjectURL(a.href);
-        }
-      } else {
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(uri, { mimeType: "image/png", dialogTitle: shareText });
-        }
-      }
+      await shareCard(cardRef, { filename: "versetto-del-giorno.png", message, captureSize: { width: 1080, height: 1350 } });
     } catch (e) {
-      // silently ignore user-cancelled share
+      // user-cancelled share -> ignore
     } finally {
       setBusy(false);
+    }
+  };
+
+  const doSave = async () => {
+    setSaving(true);
+    try {
+      await saveCard(cardRef, { captureSize: { width: 1080, height: 1350 } });
+    } catch (e) {
+      // ignore
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -86,14 +80,24 @@ export default function ShareVerseSheet({ verse, visible, onClose }: { verse: an
           </View>
         </View>
 
-        <PressableScale testID="share-action" style={styles.shareBtn} onPress={doShare} disabled={busy}>
-          {busy ? <ActivityIndicator color={colors.navy} /> : (
-            <>
-              <Ionicons name="share-social" size={20} color={colors.navy} />
-              <Text style={styles.shareText}>{Platform.OS === "web" ? "Condividi / Scarica" : "Condividi"}</Text>
-            </>
-          )}
-        </PressableScale>
+        <View style={styles.actions}>
+          <PressableScale testID="share-action" style={styles.shareBtn} onPress={doShare} disabled={busy}>
+            {busy ? <ActivityIndicator color={colors.navy} /> : (
+              <>
+                <Ionicons name="share-social" size={20} color={colors.navy} />
+                <Text style={styles.shareText}>Condividi</Text>
+              </>
+            )}
+          </PressableScale>
+          <PressableScale testID="share-save" style={styles.saveBtn} onPress={doSave} disabled={saving}>
+            {saving ? <ActivityIndicator color={colors.white} /> : (
+              <>
+                <Ionicons name={Platform.OS === "web" ? "download-outline" : "image-outline"} size={20} color={colors.white} />
+                <Text style={styles.saveText}>{Platform.OS === "web" ? "Scarica" : "Salva"}</Text>
+              </>
+            )}
+          </PressableScale>
+        </View>
       </View>
     </Modal>
   );
@@ -113,6 +117,9 @@ const styles = StyleSheet.create({
   refLine: { width: 24, height: 2, borderRadius: 1, backgroundColor: colors.brandSecondary },
   reference: { color: colors.brandSecondary, fontSize: 15, fontWeight: "800" },
   footer: { color: "#CBD5E1", fontSize: 12, fontWeight: "600" },
-  shareBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, backgroundColor: colors.white, paddingVertical: spacing.md, paddingHorizontal: spacing.xl, borderRadius: radius.pill, marginTop: spacing.xl, minWidth: 200 },
+  actions: { flexDirection: "row", gap: spacing.md, marginTop: spacing.xl },
+  shareBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, backgroundColor: colors.white, paddingVertical: spacing.md, paddingHorizontal: spacing.lg, borderRadius: radius.pill, minWidth: 150 },
   shareText: { color: colors.navy, fontSize: 16, fontWeight: "800" },
+  saveBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, backgroundColor: "rgba(255,255,255,0.16)", borderWidth: 1, borderColor: "rgba(255,255,255,0.3)", paddingVertical: spacing.md, paddingHorizontal: spacing.lg, borderRadius: radius.pill, minWidth: 130 },
+  saveText: { color: colors.white, fontSize: 16, fontWeight: "800" },
 });

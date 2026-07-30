@@ -9,6 +9,7 @@ import { api } from "@/src/api";
 import { useAuth } from "@/src/context/AuthContext";
 import { FishingNet, SeaWaves, SunriseGlow } from "@/src/components/marine";
 import PressableScale from "@/src/components/PressableScale";
+import SharePlanSheet from "@/src/components/SharePlanSheet";
 import { confirmAsync, alertMessage } from "@/src/utils/confirm";
 import { colors, spacing, radius } from "@/src/theme";
 
@@ -21,6 +22,8 @@ export default function PlanDetail() {
   const [enrollment, setEnrollment] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [sharePlanOpen, setSharePlanOpen] = useState(false);
+  const [shareDay, setShareDay] = useState<any>(null);
   const [w, setW] = useState(0);
 
   const load = useCallback(() => {
@@ -88,9 +91,12 @@ export default function PlanDetail() {
         {w > 0 && (<><SunriseGlow width={w} height={220} /><FishingNet width={w} height={220} gap={28} opacity={0.06} /><SeaWaves width={w} height={60} /></>)}
         <View style={styles.topBar}>
           <PressableScale onPress={() => router.back()} style={styles.iconBtn}><Ionicons name="arrow-back" size={22} color={colors.white} /></PressableScale>
-          {enrolled && (
-            <PressableScale testID="plan-reset" onPress={reset} style={styles.iconBtn}><Ionicons name="refresh" size={18} color={colors.white} /></PressableScale>
-          )}
+          <View style={{ flexDirection: "row", gap: spacing.sm }}>
+            <PressableScale testID="plan-share" onPress={() => setSharePlanOpen(true)} style={styles.iconBtn}><Ionicons name="share-social" size={18} color={colors.white} /></PressableScale>
+            {enrolled && (
+              <PressableScale testID="plan-reset" onPress={reset} style={styles.iconBtn}><Ionicons name="refresh" size={18} color={colors.white} /></PressableScale>
+            )}
+          </View>
         </View>
         <Text style={styles.heroTitle}>{plan.title}</Text>
         {!!plan.subtitle && <Text style={styles.heroSub}>{plan.subtitle}</Text>}
@@ -128,6 +134,9 @@ export default function PlanDetail() {
                   <Text style={styles.dayLabel}>Giorno {d.day}</Text>
                   {!!d.title && <Text style={styles.dayTitle}>{d.title}</Text>}
                 </View>
+                <PressableScale testID={`plan-day-share-${d.day}`} onPress={() => setShareDay(d)} style={styles.dayShare}>
+                  <Ionicons name="share-social" size={18} color={colors.brandPrimary} />
+                </PressableScale>
                 <PressableScale testID={`plan-day-toggle-${d.day}`} onPress={() => toggleDay(d.day)} style={[styles.check, isDone && styles.checkOn]}>
                   <Ionicons name={isDone ? "checkmark" : "ellipse-outline"} size={20} color={isDone ? colors.white : colors.muted} />
                 </PressableScale>
@@ -146,6 +155,8 @@ export default function PlanDetail() {
           );
         })}
       </ScrollView>
+      <SharePlanSheet visible={sharePlanOpen} plan={plan} onClose={() => setSharePlanOpen(false)} />
+      <SharePlanSheet visible={!!shareDay} plan={plan} day={shareDay} onClose={() => setShareDay(null)} />
     </View>
   );
 }
@@ -176,6 +187,7 @@ const styles = StyleSheet.create({
   dayTitle: { color: colors.onSurface, fontSize: 15, fontWeight: "800", marginTop: 1 },
   check: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceTertiary },
   checkOn: { backgroundColor: "#22C55E" },
+  dayShare: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: colors.brandTertiary },
   meditation: { color: colors.onSurfaceSecondary, fontSize: 13.5, lineHeight: 20, marginTop: spacing.md, fontStyle: "italic" },
   readings: { marginTop: spacing.md, gap: spacing.sm },
   readingBtn: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.md, paddingVertical: spacing.md, paddingHorizontal: spacing.md, borderWidth: 1, borderColor: colors.border },

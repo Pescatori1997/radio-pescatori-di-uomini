@@ -9,6 +9,7 @@ import { api } from "@/src/api";
 import { useAuth } from "@/src/context/AuthContext";
 import { FishingNet, SeaWaves, SunriseGlow } from "@/src/components/marine";
 import PressableScale from "@/src/components/PressableScale";
+import SharePlanSheet from "@/src/components/SharePlanSheet";
 import { colors, spacing, radius } from "@/src/theme";
 
 export default function ReadingPlans() {
@@ -18,6 +19,7 @@ export default function ReadingPlans() {
   const [plans, setPlans] = useState<any[]>([]);
   const [mine, setMine] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sharePlan, setSharePlan] = useState<any>(null);
   const [w, setW] = useState(0);
 
   const load = useCallback(() => {
@@ -56,7 +58,10 @@ export default function ReadingPlans() {
                   <PressableScale testID={`my-plan-${p.id}`} style={styles.myCard} onPress={() => router.push(`/lettore/piano/${p.id}`)}>
                     <View style={styles.rowBetween}>
                       <Text style={styles.myTitle} numberOfLines={2}>{p.title}</Text>
-                      {p.progress?.status === "completed" && <Ionicons name="checkmark-circle" size={20} color="#22C55E" />}
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                        {p.progress?.status === "completed" && <Ionicons name="checkmark-circle" size={20} color="#22C55E" />}
+                        <PressableScale testID={`my-plan-share-${p.id}`} onPress={() => setSharePlan(p)} hitSlop={8} style={styles.shareIconDark}><Ionicons name="share-social" size={16} color={colors.white} /></PressableScale>
+                      </View>
                     </View>
                     <View style={styles.progressTrack}>
                       <View style={[styles.progressFill, { width: `${p.progress?.percent || 0}%` }]} />
@@ -84,12 +89,13 @@ export default function ReadingPlans() {
                     {!!p.category && <View style={styles.pill}><Text style={styles.pillText}>{p.category}</Text></View>}
                   </View>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+                <PressableScale testID={`plan-share-${p.id}`} onPress={() => setSharePlan(p)} hitSlop={8} style={styles.shareIcon}><Ionicons name="share-social" size={18} color={colors.brandPrimary} /></PressableScale>
               </PressableScale>
             </Animated.View>
           ))}
         </ScrollView>
       )}
+      <SharePlanSheet visible={!!sharePlan} plan={sharePlan} onClose={() => setSharePlan(null)} />
     </View>
   );
 }
@@ -106,6 +112,8 @@ const styles = StyleSheet.create({
   myCard: { backgroundColor: colors.navy, borderRadius: radius.md, padding: spacing.lg, marginBottom: spacing.md },
   rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
   myTitle: { flex: 1, color: colors.white, fontSize: 15, fontWeight: "800" },
+  shareIconDark: { width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.14)", alignItems: "center", justifyContent: "center" },
+  shareIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center" },
   progressTrack: { height: 8, borderRadius: 4, backgroundColor: "rgba(255,255,255,0.15)", marginTop: spacing.md, overflow: "hidden" },
   progressFill: { height: 8, borderRadius: 4, backgroundColor: colors.brandPrimary },
   progressText: { color: colors.brandSecondary, fontSize: 12, fontWeight: "700", marginTop: spacing.sm },

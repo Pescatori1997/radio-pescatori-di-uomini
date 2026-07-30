@@ -16,6 +16,7 @@
           "audio"
         ],
         "NSPhotoLibraryUsageDescription": "Carica la tua foto ritratto per candidarti all'Equipaggio",
+        "NSPhotoLibraryAddUsageDescription": "Salva le card da condividere nella tua galleria",
         "NSLocationWhenInUseUsageDescription": "Mostra il meteo della tua zona"
       }
     },
@@ -52,6 +53,14 @@
         }
       ],
       "expo-audio",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Salva le card da condividere nella tua galleria.",
+          "savePhotosPermission": "Salva le card da condividere nella tua galleria.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ],
       [
         "expo-notifications",
         {
