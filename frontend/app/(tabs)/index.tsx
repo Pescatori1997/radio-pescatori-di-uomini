@@ -16,6 +16,7 @@ import WeatherWidget from "@/src/components/WeatherWidget";
 import Collaborators from "@/src/components/Collaborators";
 import WhatsAppSection from "@/src/components/WhatsAppSection";
 import VerseOfDayCard from "@/src/components/VerseOfDayCard";
+import BibleCard from "@/src/components/BibleCard";
 import { PulsingDot, SoundRings } from "@/src/components/LiveHeroFx";
 import PressableScale from "@/src/components/PressableScale";
 import Logo from "@/src/components/Logo";
@@ -238,6 +239,8 @@ export default function Home() {
       <WhatsAppSection />
 
       <VerseOfDayCard />
+
+      <BibleCard />
 
       <Pressable testID="prayer-cta" style={styles.prayerCta} onPress={() => router.push("/prayer")}>
         <Ionicons name="heart" size={20} color={colors.brandPrimary} />

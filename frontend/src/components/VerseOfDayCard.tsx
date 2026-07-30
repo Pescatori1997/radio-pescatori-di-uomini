@@ -84,9 +84,6 @@ export default function VerseOfDayCard() {
               <Ionicons name="book-outline" size={18} color={colors.navy} />
               <Text style={styles.btnText}>Leggi il contesto</Text>
             </PressableScale>
-            <PressableScale testID="open-bible" style={styles.bibleBtn} onPress={() => router.push("/lettore")}>
-              <Ionicons name="library-outline" size={18} color={colors.white} />
-            </PressableScale>
           </View>
         </View>
       </View>
@@ -120,6 +117,5 @@ const styles = StyleSheet.create({
   reference: { color: colors.brandSecondary, fontSize: 14, fontWeight: "800" },
   btnRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.xl },
   btn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, backgroundColor: colors.white, paddingVertical: spacing.md, borderRadius: radius.pill },
-  bibleBtn: { width: 50, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.16)", borderWidth: 1, borderColor: "rgba(255,255,255,0.3)", borderRadius: radius.pill },
   btnText: { color: colors.navy, fontSize: 15, fontWeight: "800" },
 });
