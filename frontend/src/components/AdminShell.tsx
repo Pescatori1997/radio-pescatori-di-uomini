@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView, Dimensions } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useRouter, usePathname } from "expo-router";
+import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { SlideInLeft } from "react-native-reanimated";
 import { api } from "@/src/api";
@@ -67,13 +67,15 @@ export default function AdminShell({ title, activeKey, children }: { title: stri
   }, []);
 
   const isCollab = role === "collaborator";
-  const navItems = isCollab
-    ? NAV.filter((n) => {
-        if (!n.perm) return false;
-        if (n.perm === "agenda.view") return perms.some((p) => p.startsWith("agenda."));
-        return perms.includes(n.perm);
-      })
-    : NAV;
+  const navItems = useMemo(() => (
+    isCollab
+      ? NAV.filter((n) => {
+          if (!n.perm) return false;
+          if (n.perm === "agenda.view") return perms.some((p) => p.startsWith("agenda."));
+          return perms.includes(n.perm);
+        })
+      : NAV
+  ), [isCollab, perms]);
 
   // Collaborators that land on an admin-only section get redirected to their first allowed one.
   useEffect(() => {
