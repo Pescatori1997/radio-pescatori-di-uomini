@@ -17,7 +17,7 @@ import secrets
 import uuid
 import httpx
 from pathlib import Path
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, field_validator
 from typing import List, Optional, Dict
 from datetime import datetime, timezone, timedelta
 from verses_data import VERSES_SEED
@@ -5044,6 +5044,16 @@ class AgendaEventIn(BaseModel):
     invitees: List[str] = []
     priority: Optional[str] = "normal"
     tags: List[str] = []
+
+    @field_validator("date")
+    @classmethod
+    def _valid_date(cls, v):
+        from datetime import date as _d
+        try:
+            _d.fromisoformat(v)
+        except Exception:
+            raise ValueError("Data non valida: usa il formato AAAA-MM-GG")
+        return v
 
 
 @api_router.get("/agenda/categories")
