@@ -1,12 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  View, Text, Pressable, ScrollView, TextInput, Modal, ActivityIndicator,
+  View, Text, Pressable, ScrollView, TextInput, ActivityIndicator,
   KeyboardAvoidingView, Platform, StyleSheet,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter, useSegments } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated, { SlideInDown, SlideOutDown } from "react-native-reanimated";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api } from "@/src/api";
 import { useAuth } from "@/src/context/AuthContext";
 import { usePlayer } from "@/src/context/PlayerContext";
@@ -58,6 +60,8 @@ const QUICK: { icon: string; label: string; prompt: string }[] = [
 
 const HIDDEN_ROOTS = ["welcome", "auth", "login", "invite", "reset-password", "admin", "player"];
 
+const STORAGE_KEY = "timoteo_chat_v1";
+
 export default function Timoteo() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -69,14 +73,37 @@ export default function Timoteo() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [restored, setRestored] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   const root = (segments[0] as string) || "";
   const hidden = HIDDEN_ROOTS.includes(root);
 
-  // Personalized welcome the first time the panel opens.
+  // Restore the previous conversation once at mount so it survives closing the
+  // panel, navigating away, and even fully reopening the app.
   useEffect(() => {
-    if (!open || messages.length > 0) return;
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved) as Msg[];
+          if (Array.isArray(parsed) && parsed.length) setMessages(parsed);
+        }
+      } catch { /* ignore */ }
+      finally { setRestored(true); }
+    })();
+  }, []);
+
+  // Persist the conversation whenever it changes (keep it compact).
+  useEffect(() => {
+    if (!restored) return;
+    const toSave = messages.slice(-40);
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(toSave)).catch(() => {});
+  }, [messages, restored]);
+
+  // Personalized welcome the first time the panel opens with no prior chat.
+  useEffect(() => {
+    if (!open || !restored || messages.length > 0) return;
     (async () => {
       const { mode, title } = await getGreetingPrefs();
       const hi = buildGreeting(user?.name, mode, title);
@@ -86,7 +113,14 @@ export default function Timoteo() {
         content: `${hi} Sono Timoteo.\nSono qui per aiutarti a trovare rapidamente ciò che cerchi e guidarti nell'utilizzo della piattaforma.`,
       }]);
     })();
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, restored]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const resetChat = () => {
+    setMessages([]);
+    setInput("");
+    setLoading(false);
+    AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
+  };
 
   useEffect(() => {
     const t = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 60);
@@ -143,14 +177,19 @@ export default function Timoteo() {
         </LinearGradient>
       </Pressable>
 
-      <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
-        <View style={styles.backdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpen(false)} />
+      {open && (
+        <View style={styles.overlayRoot} pointerEvents="box-none">
+          <Pressable style={styles.backdrop} onPress={() => setOpen(false)} />
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : undefined}
             style={styles.sheetWrap}
+            pointerEvents="box-none"
           >
-            <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.sm }]}>
+            <Animated.View
+              entering={SlideInDown.duration(240)}
+              exiting={SlideOutDown.duration(180)}
+              style={[styles.sheet, { paddingBottom: insets.bottom + spacing.sm }]}
+            >
               {/* header */}
               <View style={styles.header}>
                 <View style={styles.headerLeft}>
@@ -164,9 +203,16 @@ export default function Timoteo() {
                     <Text style={styles.headerSub}>La tua guida nella piattaforma</Text>
                   </View>
                 </View>
-                <Pressable testID="timoteo-close" onPress={() => setOpen(false)} hitSlop={10}>
-                  <Ionicons name="close" size={26} color={colors.onSurface} />
-                </Pressable>
+                <View style={styles.headerActions}>
+                  {messages.length > 1 && (
+                    <Pressable testID="timoteo-reset" onPress={resetChat} hitSlop={10} style={styles.resetBtn}>
+                      <Ionicons name="create-outline" size={22} color={colors.muted} />
+                    </Pressable>
+                  )}
+                  <Pressable testID="timoteo-close" onPress={() => setOpen(false)} hitSlop={12} style={styles.resetBtn}>
+                    <Ionicons name="close" size={26} color={colors.onSurface} />
+                  </Pressable>
+                </View>
               </View>
 
               <ScrollView
@@ -235,10 +281,10 @@ export default function Timoteo() {
                   <Ionicons name="arrow-up" size={20} color={colors.white} />
                 </Pressable>
               </View>
-            </View>
+            </Animated.View>
           </KeyboardAvoidingView>
         </View>
-      </Modal>
+      )}
     </>
   );
 }
@@ -250,8 +296,9 @@ const styles = StyleSheet.create({
   },
   fabGrad: { flex: 1, borderRadius: 28, alignItems: "center", justifyContent: "center" },
 
-  backdrop: { flex: 1, backgroundColor: "rgba(10,17,40,0.45)", justifyContent: "flex-end" },
-  sheetWrap: { justifyContent: "flex-end" },
+  overlayRoot: { ...StyleSheet.absoluteFillObject, justifyContent: "flex-end", zIndex: 100, elevation: 100 },
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(10,17,40,0.45)" },
+  sheetWrap: { flex: 1, justifyContent: "flex-end" },
   sheet: {
     height: "88%", backgroundColor: colors.surface,
     borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: "hidden",
@@ -261,7 +308,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border,
   },
-  headerLeft: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: spacing.md, flex: 1 },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  resetBtn: { padding: 2 },
   headerLamp: { width: 40, height: 40, borderRadius: 20, overflow: "hidden" },
   headerLampGrad: { flex: 1, alignItems: "center", justifyContent: "center" },
   headerTitle: { fontSize: 17, fontWeight: "800", color: colors.onSurface },

@@ -376,17 +376,29 @@ async def _run_llm(user_payload: str) -> tuple[str, list]:
     key = os.environ.get("EMERGENT_LLM_KEY")
     if not key:
         return ("Al momento non riesco a rispondere. Riprova più tardi.", [])
-    try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
-        import uuid
-        chat = LlmChat(
-            api_key=key,
-            session_id=f"timoteo-{uuid.uuid4().hex[:8]}",
-            system_message=SYSTEM_PROMPT,
-        ).with_model(TIMOTEO_PROVIDER, TIMOTEO_MODEL)
-        raw = await chat.send_message(UserMessage(text=user_payload))
-    except Exception as e:
-        logger.warning("timoteo llm failed: %s", e)
+    # The LLM gateway occasionally drops the FIRST call (cold start / long
+    # generation timeout). Retry transparently so the user never sees a spurious
+    # "riprova più tardi" on the first message.
+    raw = None
+    last_err: Exception | None = None
+    for attempt in range(3):
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage
+            import uuid
+            chat = LlmChat(
+                api_key=key,
+                session_id=f"timoteo-{uuid.uuid4().hex[:8]}",
+                system_message=SYSTEM_PROMPT,
+            ).with_model(TIMOTEO_PROVIDER, TIMOTEO_MODEL)
+            raw = await chat.send_message(UserMessage(text=user_payload))
+            break
+        except Exception as e:  # transient gateway/model error -> retry
+            last_err = e
+            logger.warning("timoteo llm attempt %s failed: %s", attempt + 1, e)
+            import asyncio
+            await asyncio.sleep(0.8 * (attempt + 1))
+    if raw is None:
+        logger.warning("timoteo llm failed after retries: %s", last_err)
         return ("Mi dispiace, in questo momento ho difficoltà a rispondere. Riprova tra poco.", [])
     data = _extract_json(raw if isinstance(raw, str) else str(raw))
     reply = (data.get("reply") or "").strip() or "Sono qui per aiutarti. Cosa cerchi?"
