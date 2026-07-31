@@ -134,6 +134,23 @@ BOOK_SYNONYMS = {
 }
 
 
+async def _resolve_book(db, name: str) -> Optional[dict]:
+    """Resolve an (Italian) book name to its bible_books doc, tolerant to
+    singular/plural and colloquial variants."""
+    name = BOOK_SYNONYMS.get(name.strip().lower(), name.strip())
+    doc = await db.bible_books.find_one(
+        {"translation": DEFAULT_BIBLE, "name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}},
+        {"_id": 0},
+    )
+    if not doc:
+        stem = name[:-1] if len(name) > 4 else name
+        doc = await db.bible_books.find_one(
+            {"translation": DEFAULT_BIBLE, "name": {"$regex": f"^{re.escape(stem)}", "$options": "i"}},
+            {"_id": 0},
+        )
+    return doc
+
+
 async def resolve_reference(db, reference: str) -> Optional[dict]:
     """Resolve 'Giovanni 3:16' / 'Salmo 23' to a reader path. Returns None if the
     book is unknown in the self-hosted Bible."""
@@ -143,18 +160,7 @@ async def resolve_reference(db, reference: str) -> Optional[dict]:
     if not m:
         return None
     name, chapter, verse = m.group(1).strip(), int(m.group(2)), (int(m.group(3)) if m.group(3) else None)
-    name = BOOK_SYNONYMS.get(name.lower(), name)
-    doc = await db.bible_books.find_one(
-        {"translation": DEFAULT_BIBLE, "name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}},
-        {"_id": 0},
-    )
-    if not doc:
-        # try a prefix match (e.g. "Salm" -> "Salmi", "Genes" -> "Genesi")
-        stem = name[:-1] if len(name) > 4 else name
-        doc = await db.bible_books.find_one(
-            {"translation": DEFAULT_BIBLE, "name": {"$regex": f"^{re.escape(stem)}", "$options": "i"}},
-            {"_id": 0},
-        )
+    doc = await _resolve_book(db, name)
     if not doc:
         return None
     path = f"/lettore/read?book={doc['book_nr']}&chapter={chapter}"
@@ -164,17 +170,75 @@ async def resolve_reference(db, reference: str) -> Optional[dict]:
     return {"path": path, "label": label, "reference": f"{doc['name']} {chapter}" + (f":{verse}" if verse else "")}
 
 
-SYSTEM_PROMPT = """Sei "Timoteo", la guida intelligente dell'app cristiana evangelica "Pescatori di Uomini" (una radio evangelica). Il tuo nome richiama Timoteo, collaboratore fedele dell'apostolo Paolo: sei un servo premuroso, non un robot. Non definirti mai "bot", "AI", "chatbot" o "assistente virtuale".
+async def find_last_reference(db, messages: list[dict]) -> Optional[dict]:
+    """Scan the conversation (newest first) for the most recent Bible passage the
+    user/Timoteo referred to, so follow-ups like 'spiegami il contesto' still
+    know which passage we are studying. Returns resolved book/chapter/verse."""
+    for m in reversed(messages[-8:]):
+        content = (m.get("content") or "")
+        matches = list(REF_RE.finditer(content))
+        for mt in reversed(matches):  # last reference in the message wins
+            name = mt.group(1).strip()
+            # avoid picking up filler like "capitolo 5" / "versetto 3"
+            if name.lower() in ("capitolo", "versetto", "verso", "cap", "v"):
+                continue
+            doc = await _resolve_book(db, name)
+            if doc:
+                return {
+                    "book_nr": doc["book_nr"],
+                    "book_name": doc["name"],
+                    "chapter": int(mt.group(2)),
+                    "verse": int(mt.group(3)) if mt.group(3) else None,
+                }
+    return None
 
-RUOLO: aiuti l'utente a trovare contenuti, usare le funzioni dell'app e studiare la Bibbia. Rispondi SEMPRE in italiano, con tono gentile, calmo, rispettoso e accogliente. Risposte BREVI e semplici (max 2-3 frasi). Mai sarcastico, mai invadente.
 
-AGISCI, NON SPIEGARE SOLO: quando una funzione esiste, proponi un'azione che la apre direttamente invece di descrivere il percorso.
+async def fetch_passage(db, book_nr: int, chapter: int, verse: Optional[int] = None,
+                        limit: int = 45) -> tuple[Optional[str], list[dict]]:
+    """Return the actual verses of a chapter (or a window around `verse`) from the
+    self-hosted Bible, so Timoteo can teach on the real text."""
+    rows = await db.bible_verses.find(
+        {"translation": DEFAULT_BIBLE, "book_nr": book_nr, "chapter": chapter},
+        {"_id": 0, "verse": 1, "text": 1, "book_name": 1},
+    ).sort("verse", 1).to_list(400)
+    if not rows:
+        return None, []
+    book_name = rows[0].get("book_name")
+    if verse and len(rows) > limit:
+        lo, hi = max(1, verse - 8), verse + 8
+        rows = [r for r in rows if lo <= r["verse"] <= hi]
+    else:
+        rows = rows[:limit]
+    return book_name, rows
 
-BIBBIA (regola ferrea): per domande bibliche usa ESCLUSIVAMENTE i "VERSETTI DISPONIBILI" forniti nel contesto (provengono dalla Bibbia dell'app). Cita sempre i riferimenti dei versetti che usi. Distingui chiaramente il testo biblico (citazione) dalla tua spiegazione. Non inventare dottrine o interpretazioni non sostenute dal testo. Se esistono più interpretazioni, dillo con rispetto. Se i versetti forniti non rispondono chiaramente, dichiaralo apertamente e invita a leggere la Parola e a confrontarsi con la chiesa locale. Non sostituire mai la lettura personale della Bibbia.
+
+
+
+SYSTEM_PROMPT = """Sei "Timoteo", la guida spirituale dell'app cristiana evangelica "Pescatori di Uomini" (una radio evangelica). Il tuo nome richiama Timoteo, collaboratore fedele dell'apostolo Paolo. Ti comporti come un ANZIANO MATURO e premuroso che accompagna un credente nello studio della Parola: non ti limiti a dare informazioni, ma spieghi, incoraggi, fai collegamenti con altri passi e aiuti a comprendere il messaggio biblico con equilibrio, umiltà e fedeltà al testo. Non definirti mai "bot", "AI", "chatbot" o "assistente virtuale".
+
+RUOLO: il tuo scopo principale è INSEGNARE la Parola, non solo aprire schermate dell'app. Aiuti anche a trovare contenuti e usare le funzioni. Rispondi SEMPRE in italiano, con tono gentile, calmo, rispettoso e accogliente. Mai sarcastico, mai invadente.
+
+SPIEGAZIONI BIBLICHE — devi rispondere DIRETTAMENTE quando l'utente chiede di spiegare, commentare o capire un passo (es. "Spiegami Matteo 4:19", "Cosa significa questo versetto?", "Commentami Romani 8", "Cosa ne pensi di questo passo?", "Cosa ne pensi del contesto?"). Struttura la spiegazione così:
+1. Riporta il versetto/passo (quando disponibile), come citazione tra «virgolette».
+2. Spiega il contesto storico e letterario.
+3. Spiega il significato del passo.
+4. Collega altri versetti pertinenti, citandone i riferimenti.
+5. Distingui SEMPRE con chiarezza il testo biblico (citazione) dal tuo commento.
+6. Se esistono interpretazioni diverse, presentale con umiltà, senza spacciarle per verità assolute.
+
+FONTI: usa come fonte primaria il "TESTO DEL PASSO" e i "VERSETTI DISPONIBILI" forniti nel contesto (provengono dalla Bibbia dell'app). Sei però AUTORIZZATO a usare anche la tua solida conoscenza biblica per spiegare il significato dei passi, citando SEMPRE i riferimenti. 
+
+NON RIFIUTARE: NON usare come comportamento predefinito frasi come "non ho il testo", "non posso commentare", "leggilo nella Bibbia". Queste sono ammesse SOLO come ultima risorsa, se il riferimento è davvero ambiguo o inesistente: in quel caso chiedi gentilmente un chiarimento. Se conosci il passo, spiegalo comunque, con equilibrio.
+
+Ricorda con delicatezza (non ad ogni messaggio) che lo studio con Timoteo non sostituisce la lettura personale della Bibbia né il confronto con gli anziani della chiesa locale.
+
+AGISCI: quando l'utente vuole aprire/raggiungere una funzione, proponi anche un'azione che la apre direttamente.
+
+LUNGHEZZA: sii conciso nelle richieste pratiche (navigazione, ricerca). Quando spieghi la Parola, sii chiaro, ordinato e ricco quanto serve, senza dilungarti in modo eccessivo.
 
 FORMATO DELLA RISPOSTA: restituisci SOLO un oggetto JSON valido, senza testo prima o dopo, con questa forma:
 {
-  "reply": "testo breve per l'utente",
+  "reply": "la tua risposta all'utente (può contenere a capo)",
   "actions": [ ...massimo 4 azioni... ]
 }
 Ogni azione è uno di questi oggetti ESATTI:
@@ -241,10 +305,19 @@ async def answer(db, messages: list[dict], ctx: dict) -> dict:
             last_user = (m.get("content") or "").strip()
             break
 
-    # Grounding: real content + real verses for the current message.
+    # Grounding. Two paths:
+    #  (a) an explicit/remembered passage -> load its real text so Timoteo can teach.
+    #  (b) otherwise a thematic verse search for topical questions.
     content_hits = await global_search(db, last_user)
-    verses = await bible_verse_search(db, last_user)
     candidates = {f"C{i+1}": c for i, c in enumerate(content_hits)}
+
+    passage_ref = await find_last_reference(db, messages)
+    passage_text: list[dict] = []
+    passage_name = None
+    if passage_ref:
+        passage_name, passage_text = await fetch_passage(
+            db, passage_ref["book_nr"], passage_ref["chapter"], passage_ref.get("verse"))
+    verses = [] if passage_ref else await bible_verse_search(db, last_user)
 
     ctx_lines = []
     ctx_lines.append("SCHERMATE (chiavi per azioni 'screen'):")
@@ -255,12 +328,19 @@ async def answer(db, messages: list[dict], ctx: dict) -> dict:
             ctx_lines.append(f"[{cid}] ({c['kind']}) {c['title']}")
     else:
         ctx_lines.append("\nRISULTATI: nessun contenuto trovato per questa richiesta.")
-    if verses:
-        ctx_lines.append("\nVERSETTI DISPONIBILI (unica fonte per risposte bibliche):")
+    if passage_text:
+        loc = f"{passage_name} {passage_ref['chapter']}"
+        ctx_lines.append(f"\nTESTO DEL PASSO ({loc}, dalla Bibbia dell'app — usalo per spiegare):")
+        for v in passage_text:
+            ctx_lines.append(f"{v['verse']} {v['text']}")
+        if passage_ref.get("verse"):
+            ctx_lines.append(f"(L'utente sta studiando in particolare {loc}:{passage_ref['verse']}.)")
+    elif verses:
+        ctx_lines.append("\nVERSETTI DISPONIBILI (dalla Bibbia dell'app):")
         for v in verses:
             ctx_lines.append(f"- {v['reference']}: {v['text']}")
     else:
-        ctx_lines.append("\nVERSETTI DISPONIBILI: nessuno per questa richiesta.")
+        ctx_lines.append("\nNessun passo specifico rilevato: se l'utente cita un riferimento che conosci, spiegalo con la tua conoscenza biblica citando i versetti.")
 
     # Recent conversation memory (kept compact).
     history = messages[-8:]
