@@ -444,6 +444,62 @@ export const api = {
   timoteoChat: (messages: { role: string; content: string }[]) =>
     request("/timoteo/chat", { method: "POST", body: JSON.stringify({ messages }) }, true),
 
+  /**
+   * Streaming chat via SSE over XMLHttpRequest (works on both web and native —
+   * React Native's fetch has no ReadableStream reader, XHR.onprogress does).
+   * Calls onDelta(text) as reply chunks arrive and onDone({reply,actions}) at the
+   * end. Returns an abort() function.
+   */
+  timoteoStream: (
+    messages: { role: string; content: string }[],
+    handlers: {
+      onDelta: (text: string) => void;
+      onDone: (data: { reply: string; actions: any[] }) => void;
+      onError: () => void;
+    },
+  ) => {
+    let aborted = false;
+    const xhr = new XMLHttpRequest();
+    let offset = 0; // bytes of responseText already parsed
+    let done = false;
+
+    const process = () => {
+      const buf = xhr.responseText || "";
+      // SSE frames are separated by a blank line.
+      let sep: number;
+      while ((sep = buf.indexOf("\n\n", offset)) !== -1) {
+        const frame = buf.slice(offset, sep);
+        offset = sep + 2;
+        const line = frame.split("\n").find((l) => l.startsWith("data:"));
+        if (!line) continue;
+        const jsonStr = line.slice(5).trim();
+        if (!jsonStr) continue;
+        try {
+          const ev = JSON.parse(jsonStr);
+          if (ev.type === "delta" && typeof ev.text === "string") handlers.onDelta(ev.text);
+          else if (ev.type === "done") { done = true; handlers.onDone({ reply: ev.reply || "", actions: ev.actions || [] }); }
+        } catch { /* ignore partial/invalid frame */ }
+      }
+    };
+
+    (async () => {
+      const authH = await authHeaders();
+      if (aborted) return;
+      xhr.open("POST", `${BASE}/api/timoteo/stream`);
+      xhr.setRequestHeader("Content-Type", "application/json");
+      xhr.setRequestHeader("Accept", "text/event-stream");
+      Object.entries(authH).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+      xhr.onprogress = process;
+      xhr.onload = () => { process(); if (!done) handlers.onError(); };
+      xhr.onerror = () => { if (!aborted) handlers.onError(); };
+      xhr.ontimeout = () => { if (!aborted) handlers.onError(); };
+      xhr.timeout = 120000;
+      xhr.send(JSON.stringify({ messages }));
+    })();
+
+    return () => { aborted = true; try { xhr.abort(); } catch { /* noop */ } };
+  },
+
   // bible reader
   bibleTranslations: () => request("/bible/translations"),
   bibleBooks: (translation?: string) => request(`/bible/books${translation ? `?translation=${translation}` : ""}`),

@@ -17,7 +17,7 @@ import { buildGreeting, getGreetingPrefs } from "./greeting";
 import { colors, spacing, radius } from "@/src/theme";
 
 type Action = { type: "radio_live" | "open" | "screen"; label: string; path?: string; screen?: string };
-type Msg = { role: "user" | "assistant"; content: string; actions?: Action[]; welcome?: boolean };
+type Msg = { role: "user" | "assistant"; content: string; actions?: Action[]; welcome?: boolean; streaming?: boolean };
 
 // Frontend twin of the backend SCREENS registry. Add a feature = add one line.
 const SCREEN_PATHS: Record<string, string> = {
@@ -75,6 +75,7 @@ export default function Timoteo() {
   const [loading, setLoading] = useState(false);
   const [restored, setRestored] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+  const abortRef = useRef<null | (() => void)>(null);
 
   const root = (segments[0] as string) || "";
   const hidden = HIDDEN_ROOTS.includes(root);
@@ -94,10 +95,15 @@ export default function Timoteo() {
     })();
   }, []);
 
-  // Persist the conversation whenever it changes (keep it compact).
+  // Persist the conversation whenever it changes (keep it compact). Strip the
+  // transient `streaming` flag / empty placeholder so a killed stream never
+  // restores a half-written bubble.
   useEffect(() => {
     if (!restored) return;
-    const toSave = messages.slice(-40);
+    const toSave = messages
+      .filter((m) => !(m.streaming && !m.content))
+      .map(({ streaming, ...m }) => m) // eslint-disable-line @typescript-eslint/no-unused-vars
+      .slice(-40);
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(toSave)).catch(() => {});
   }, [messages, restored]);
 
@@ -116,6 +122,8 @@ export default function Timoteo() {
   }, [open, restored]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const resetChat = () => {
+    try { abortRef.current?.(); } catch { /* noop */ }
+    abortRef.current = null;
     setMessages([]);
     setInput("");
     setLoading(false);
@@ -134,28 +142,59 @@ export default function Timoteo() {
     if (a.type === "screen") { router.push((SCREEN_PATHS[a.screen || ""] || "/(tabs)") as any); return; }
   };
 
-  const send = async (text: string) => {
+  const send = (text: string) => {
     const t = text.trim();
     if (!t || loading) return;
     const next = [...messages, { role: "user", content: t } as Msg];
     setMessages(next);
     setInput("");
     setLoading(true);
-    try {
-      const payload = next
-        .filter((m) => !m.welcome)
-        .map((m) => ({ role: m.role, content: m.content }));
-      const res = await api.timoteoChat(payload);
-      setMessages((m) => [...m, { role: "assistant", content: res.reply, actions: res.actions || [] }]);
-    } catch {
-      setMessages((m) => [...m, {
-        role: "assistant",
-        content: "Mi dispiace, in questo momento ho difficoltà a rispondere. Riprova tra poco.",
-        actions: [],
-      }]);
-    } finally {
+    const payload = next
+      .filter((m) => !m.welcome)
+      .map((m) => ({ role: m.role, content: m.content }));
+
+    let started = false;
+    const onDelta = (chunk: string) => {
+      if (!started) {
+        started = true;
+        setMessages((m) => [...m, { role: "assistant", content: chunk, streaming: true }]);
+      } else {
+        setMessages((m) => {
+          const copy = m.slice();
+          const last = copy[copy.length - 1];
+          if (last && last.role === "assistant" && last.streaming) {
+            copy[copy.length - 1] = { ...last, content: last.content + chunk };
+          }
+          return copy;
+        });
+      }
+    };
+    const onDone = ({ reply, actions }: { reply: string; actions: any[] }) => {
       setLoading(false);
-    }
+      abortRef.current = null;
+      setMessages((m) => {
+        const copy = m.slice();
+        const last = copy[copy.length - 1];
+        if (last && last.role === "assistant" && last.streaming) {
+          copy[copy.length - 1] = { role: "assistant", content: reply || last.content, actions: actions || [] };
+        } else {
+          copy.push({ role: "assistant", content: reply || "", actions: actions || [] });
+        }
+        return copy;
+      });
+    };
+    const onError = () => {
+      setLoading(false);
+      abortRef.current = null;
+      setMessages((m) => {
+        const copy = m.slice();
+        const last = copy[copy.length - 1];
+        if (last && last.role === "assistant" && last.streaming && !last.content) copy.pop();
+        copy.push({ role: "assistant", content: "Mi dispiace, in questo momento ho difficoltà a rispondere. Riprova tra poco.", actions: [] });
+        return copy;
+      });
+    };
+    abortRef.current = api.timoteoStream(payload, { onDelta, onDone, onError });
   };
 
   if (hidden) return null;
@@ -163,6 +202,8 @@ export default function Timoteo() {
   const isTab = root === "(tabs)";
   const fabBottom = isTab ? insets.bottom + 58 + (track ? 70 : 0) + 12 : insets.bottom + 16;
   const showSuggestions = messages.length <= 1;
+  const lastMsg = messages[messages.length - 1];
+  const streamingNow = !!(lastMsg && lastMsg.role === "assistant" && lastMsg.streaming);
 
   return (
     <>
@@ -249,7 +290,7 @@ export default function Timoteo() {
                   </View>
                 )}
 
-                {loading && (
+                {loading && !streamingNow && (
                   <View style={[styles.bubbleRow, styles.rowLeft]}>
                     <View style={[styles.bubble, styles.botBubble, styles.typing]}>
                       <ActivityIndicator size="small" color={colors.brandPrimary} />

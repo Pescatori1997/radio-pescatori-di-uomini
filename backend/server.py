@@ -4316,6 +4316,38 @@ async def timoteo_chat(body: TimoteoIn, authorization: Optional[str] = Header(No
         return {"reply": "Mi dispiace, in questo momento ho difficoltà a rispondere. Riprova tra poco.", "actions": []}
 
 
+@api_router.post("/timoteo/stream")
+async def timoteo_stream(body: TimoteoIn, authorization: Optional[str] = Header(None)):
+    """Streaming variant (SSE). Emits `data: {"type":"delta","text":...}` events as
+    the reply is generated, then a final `data: {"type":"done","reply":...,"actions":[...]}`.
+    Auth optional; never raises to the client."""
+    user = None
+    if authorization:
+        try:
+            user = await get_current_user(authorization)
+        except Exception:
+            user = None
+    ctx = {"name": (user or {}).get("name"), "is_authed": bool(user)}
+    msgs = [m.model_dump() for m in body.messages]
+
+    async def gen():
+        try:
+            async for ev in timoteo.answer_stream(db, msgs, ctx):
+                yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            logger.warning("timoteo_stream failed: %s", e)
+            fallback = {"type": "done",
+                        "reply": "Mi dispiace, in questo momento ho difficoltà a rispondere. Riprova tra poco.",
+                        "actions": []}
+            yield f"data: {json.dumps(fallback, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
+    )
+
+
 class BibleState(BaseModel):
     translation: str = DEFAULT_BIBLE
     book_nr: int

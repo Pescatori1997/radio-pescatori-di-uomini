@@ -246,36 +246,56 @@ LUNGHEZZA: sii conciso nelle richieste pratiche (navigazione, ricerca). Quando s
 
 INVITO A PROSEGUIRE: quando spieghi un passo o rispondi a una domanda biblica, concludi SEMPRE con UNA breve domanda calorosa che invita a continuare lo studio insieme (varia ogni volta, senza ripeterti), ad esempio: "Vuoi che analizziamo anche il contesto dei versetti precedenti?", "Desideri vedere altri passi che parlano dello stesso argomento?", "Vuoi approfondire il significato pratico di questo passo per la vita del credente?". Così sarai un vero compagno di studio, non un semplice assistente.
 
-FORMATO DELLA RISPOSTA: restituisci SOLO un oggetto JSON valido, senza testo prima o dopo, con questa forma:
-{
-  "reply": "la tua risposta all'utente (può contenere a capo)",
-  "actions": [ ...massimo 4 azioni... ]
-}
+FORMATO DELLA RISPOSTA: scrivi PRIMA il testo della risposta per l'utente (in italiano, con a capo dove serve, SENZA markdown come ** o #). Poi, SOLO se servono azioni, aggiungi su una NUOVA riga la sentinella ESATTA:
+[[AZIONI]]
+seguita da una nuova riga con un array JSON di azioni. Se non servono azioni, ometti del tutto la sentinella (oppure scrivi [[AZIONI]] seguito da []).
+Esempio:
+Certo, avvio la radio in diretta per te.
+[[AZIONI]]
+[{"type":"radio_live","label":"📻 Ascolta la radio"}]
+
 Ogni azione è uno di questi oggetti ESATTI:
 - {"type":"radio_live","label":"📻 Ascolta la radio"}
 - {"type":"screen","screen":"<CHIAVE>","label":"..."}  (CHIAVE tra quelle elencate in SCHERMATE)
 - {"type":"bible","reference":"Giovanni 3:16","label":"📖 Apri Giovanni 3:16"}  (per aprire un capitolo/versetto)
 - {"type":"content","id":"<ID>","label":"..."}  (SOLO usando un id dai RISULTATI forniti)
 
-Regole azioni: usa "content" solo con id presenti nei RISULTATI. Usa "bible" con riferimenti reali (dai VERSETTI DISPONIBILI o citati dall'utente). Se non serve nessuna azione, usa "actions": []. Non inventare id o percorsi."""
+Regole azioni: usa "content" solo con id presenti nei RISULTATI. Usa "bible" con riferimenti reali (dai VERSETTI DISPONIBILI o citati dall'utente). Non inventare id o percorsi. NON scrivere nient'altro dopo l'array JSON."""
 
 
-def _extract_json(text: str) -> dict:
-    text = (text or "").strip()
-    if text.startswith("```"):
-        text = re.sub(r"^```(?:json)?", "", text).strip()
-        if text.endswith("```"):
-            text = text[:-3].strip()
-    try:
-        return json.loads(text)
-    except Exception:
-        m = re.search(r"\{.*\}", text, re.DOTALL)
-        if m:
-            try:
-                return json.loads(m.group(0))
-            except Exception:
-                pass
-    return {"reply": text or "Sono qui per aiutarti. Come posso guidarti?", "actions": []}
+SENTINEL = "[[AZIONI]]"
+
+
+def _clean_reply(text: str) -> str:
+    """Strip markdown the chat bubble can't render."""
+    text = re.sub(r"\*\*(.*?)\*\*", r"\1", text or "")
+    text = re.sub(r"(?m)^\s{0,3}#{1,6}\s*", "", text)
+    return text.replace("__", "")
+
+
+def _split_reply_actions(full: str) -> tuple[str, list]:
+    """Split the model output into (reply_text, raw_actions) on the [[AZIONI]]
+    sentinel. Tolerates code fences and missing/invalid action blocks."""
+    full = (full or "").strip()
+    if full.startswith("```"):
+        full = re.sub(r"^```(?:json)?", "", full).strip()
+        if full.endswith("```"):
+            full = full[:-3].strip()
+    idx = full.find(SENTINEL)
+    if idx < 0:
+        return (_clean_reply(full).strip() or "Sono qui per aiutarti. Cosa cerchi?", [])
+    reply = _clean_reply(full[:idx]).strip()
+    tail = full[idx + len(SENTINEL):].strip()
+    actions: list = []
+    m = re.search(r"\[.*\]", tail, re.DOTALL)
+    if m:
+        try:
+            parsed = json.loads(m.group(0))
+            if isinstance(parsed, list):
+                actions = parsed
+        except Exception:
+            actions = []
+    return (reply or "Sono qui per aiutarti. Cosa cerchi?", actions)
 
 
 async def _validate_actions(db, raw_actions: list, candidates: dict) -> list[dict]:
@@ -306,8 +326,9 @@ async def _validate_actions(db, raw_actions: list, candidates: dict) -> list[dic
     return out
 
 
-async def answer(db, messages: list[dict], ctx: dict) -> dict:
-    """Main entry: orchestrate grounding search + LLM + safe action resolution."""
+async def _prepare_payload(db, messages: list[dict], ctx: dict) -> tuple[str, dict]:
+    """Build the grounded user payload (platform context + Bible grounding +
+    conversation memory) and the content candidates map used to validate actions."""
     messages = messages or []
     last_user = ""
     for m in reversed(messages):
@@ -315,9 +336,6 @@ async def answer(db, messages: list[dict], ctx: dict) -> dict:
             last_user = (m.get("content") or "").strip()
             break
 
-    # Grounding. Two paths:
-    #  (a) an explicit/remembered passage -> load its real text so Timoteo can teach.
-    #  (b) otherwise a thematic verse search for topical questions.
     content_hits = await global_search(db, last_user)
     candidates = {f"C{i+1}": c for i, c in enumerate(content_hits)}
 
@@ -352,7 +370,6 @@ async def answer(db, messages: list[dict], ctx: dict) -> dict:
     else:
         ctx_lines.append("\nNessun passo specifico rilevato: se l'utente cita un riferimento che conosci, spiegalo con la tua conoscenza biblica citando i versetti.")
 
-    # Recent conversation memory (kept compact).
     history = messages[-8:]
     convo = "\n".join(
         f"{'Utente' if m.get('role') == 'user' else 'Timoteo'}: {(m.get('content') or '').strip()}"
@@ -364,46 +381,126 @@ async def answer(db, messages: list[dict], ctx: dict) -> dict:
     user_payload = (
         f"{who}\n\nCONTESTO PIATTAFORMA:\n" + "\n".join(ctx_lines) +
         f"\n\nCONVERSAZIONE FINORA:\n{convo}\n\n"
-        "Rispondi all'ultimo messaggio dell'utente rispettando TUTTE le regole e restituendo solo il JSON."
+        "Rispondi all'ultimo messaggio dell'utente rispettando TUTTE le regole e il FORMATO indicato."
     )
+    return user_payload, candidates
 
-    reply_text, raw_actions = await _run_llm(user_payload)
+
+async def answer(db, messages: list[dict], ctx: dict) -> dict:
+    """Non-streaming entry (kept as a fallback): grounding + LLM + safe actions."""
+    user_payload, candidates = await _prepare_payload(db, messages, ctx)
+    full = await _run_llm_full(user_payload)
+    reply_text, raw_actions = _split_reply_actions(full)
     actions = await _validate_actions(db, raw_actions, candidates)
     return {"reply": reply_text, "actions": actions}
 
 
-async def _run_llm(user_payload: str) -> tuple[str, list]:
+async def answer_stream(db, messages: list[dict], ctx: dict):
+    """Streaming entry. Yields dict events:
+      {"type":"delta","text": <reply chunk>}   (0..N times)
+      {"type":"done","reply": <full reply>, "actions": [...]}   (once)
+    Only the text BEFORE the [[AZIONI]] sentinel is streamed to the user; the
+    actions block is buffered and validated at the end."""
+    user_payload, candidates = await _prepare_payload(db, messages, ctx)
+
+    buffer = ""          # full raw text seen so far
+    emitted = 0          # length of reply text already streamed
+    reply_done = False   # sentinel reached -> stop streaming reply text
+    hold = len(SENTINEL) - 1
+
+    try:
+        async for chunk in _run_llm_stream(user_payload):
+            buffer += chunk
+            if reply_done:
+                continue
+            idx = buffer.find(SENTINEL)
+            if idx >= 0:
+                # Flush the remainder of the reply, then stop streaming text.
+                safe = _clean_reply(buffer[:idx])
+                if len(safe) > emitted:
+                    yield {"type": "delta", "text": safe[emitted:]}
+                    emitted = len(safe)
+                reply_done = True
+                continue
+            # No sentinel yet: emit everything except a tail that might be a
+            # partial sentinel, so we never leak "[[AZIO..." to the user.
+            safe_upto = max(0, len(buffer) - hold)
+            safe = _clean_reply(buffer[:safe_upto])
+            if len(safe) > emitted:
+                yield {"type": "delta", "text": safe[emitted:]}
+                emitted = len(safe)
+    except Exception as e:  # stream failed mid-way -> graceful fallback
+        logger.warning("timoteo stream failed: %s", e)
+        if not buffer.strip():
+            yield {"type": "done",
+                   "reply": "Mi dispiace, in questo momento ho difficoltà a rispondere. Riprova tra poco.",
+                   "actions": []}
+            return
+
+    reply_text, raw_actions = _split_reply_actions(buffer)
+    actions = await _validate_actions(db, raw_actions, candidates)
+    yield {"type": "done", "reply": reply_text, "actions": actions}
+
+
+def _make_chat(key: str):
+    from emergentintegrations.llm.chat import LlmChat
+    import uuid
+    return LlmChat(
+        api_key=key,
+        session_id=f"timoteo-{uuid.uuid4().hex[:8]}",
+        system_message=SYSTEM_PROMPT,
+    ).with_model(TIMOTEO_PROVIDER, TIMOTEO_MODEL)
+
+
+async def _run_llm_full(user_payload: str) -> str:
+    """Non-streaming call with transparent retry (the gateway occasionally drops
+    the first call). Returns the raw model text (reply + optional actions block)."""
     key = os.environ.get("EMERGENT_LLM_KEY")
     if not key:
-        return ("Al momento non riesco a rispondere. Riprova più tardi.", [])
-    # The LLM gateway occasionally drops the FIRST call (cold start / long
-    # generation timeout). Retry transparently so the user never sees a spurious
-    # "riprova più tardi" on the first message.
-    raw = None
+        return "Al momento non riesco a rispondere. Riprova più tardi."
+    import asyncio
+    from emergentintegrations.llm.chat import UserMessage
     last_err: Exception | None = None
     for attempt in range(3):
         try:
-            from emergentintegrations.llm.chat import LlmChat, UserMessage
-            import uuid
-            chat = LlmChat(
-                api_key=key,
-                session_id=f"timoteo-{uuid.uuid4().hex[:8]}",
-                system_message=SYSTEM_PROMPT,
-            ).with_model(TIMOTEO_PROVIDER, TIMOTEO_MODEL)
+            chat = _make_chat(key)
             raw = await chat.send_message(UserMessage(text=user_payload))
-            break
-        except Exception as e:  # transient gateway/model error -> retry
+            return raw if isinstance(raw, str) else str(raw)
+        except Exception as e:
             last_err = e
             logger.warning("timoteo llm attempt %s failed: %s", attempt + 1, e)
-            import asyncio
             await asyncio.sleep(0.8 * (attempt + 1))
-    if raw is None:
-        logger.warning("timoteo llm failed after retries: %s", last_err)
-        return ("Mi dispiace, in questo momento ho difficoltà a rispondere. Riprova tra poco.", [])
-    data = _extract_json(raw if isinstance(raw, str) else str(raw))
-    reply = (data.get("reply") or "").strip() or "Sono qui per aiutarti. Cosa cerchi?"
-    # The chat bubble renders plain text — strip any markdown the model may add.
-    reply = re.sub(r"\*\*(.*?)\*\*", r"\1", reply)
-    reply = re.sub(r"(?m)^\s{0,3}#{1,6}\s*", "", reply)
-    reply = reply.replace("__", "")
-    return (reply, data.get("actions") or [])
+    logger.warning("timoteo llm failed after retries: %s", last_err)
+    return "Mi dispiace, in questo momento ho difficoltà a rispondere. Riprova tra poco."
+
+
+async def _run_llm_stream(user_payload: str):
+    """Async generator yielding text deltas. Retries only if the FIRST attempt
+    fails before producing any token (so we never duplicate partial output)."""
+    key = os.environ.get("EMERGENT_LLM_KEY")
+    if not key:
+        yield "Al momento non riesco a rispondere. Riprova più tardi."
+        return
+    import asyncio
+    from emergentintegrations.llm.chat import UserMessage, TextDelta, StreamDone
+    last_err: Exception | None = None
+    for attempt in range(3):
+        produced = False
+        try:
+            chat = _make_chat(key)
+            async for event in chat.stream_message(UserMessage(text=user_payload)):
+                if isinstance(event, TextDelta):
+                    if event.content:
+                        produced = True
+                        yield event.content
+                elif isinstance(event, StreamDone):
+                    break
+            return
+        except Exception as e:
+            last_err = e
+            logger.warning("timoteo stream attempt %s failed: %s", attempt + 1, e)
+            if produced:
+                raise  # already streamed something -> don't retry/duplicate
+            await asyncio.sleep(0.8 * (attempt + 1))
+    logger.warning("timoteo stream failed after retries: %s", last_err)
+    raise RuntimeError(last_err or "stream failed")
