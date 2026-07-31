@@ -542,3 +542,31 @@ test_plan:
 agent_communication:
     -agent: "main"
     -message: "TEST prayer board (feature extends existing prayer system). Admin: pescatoridiuomini@outlook.it / AdminTestPwd1!. Backend flow: (1) POST /api/prayer-requests {text, visibility:'board', show_name:true, name:'Luigi'} -> 200; must NOT appear in GET /api/prayer-board yet. (2) Register a normal user, POST /api/prayer-requests WITH Authorization header {visibility:'private'} -> author captured; appears under admin filter=private not on board. (3) Admin GET /api/admin/prayers?filter=pending shows the board one with author info; PATCH published:true -> appears in /api/prayer-board with display_name 'Luigi'. Anonymous board (show_name:false) -> display_name 'Anonimo'. (4) POST /api/prayer-board/{id}/pray {client_id:'x'} -> count 1; repeat -> already:true count still 1; different client_id -> count 2. Pray with a logged user (Authorization) counts once separately. (5) Non-admin user hitting /api/admin/prayers -> 403; no token -> 401. (6) DELETE admin prayer removes it and its pray marks. Clean up any test rows you create. Frontend: verify prayer.tsx visibility radios + conditional name; /prayer-board list + Sto pregando disables after tap + counter increments; Home 'Bacheca' card navigates; admin filters switch lists and detail Approva/Archivia/Elimina work."
+
+## --- Trasparenza Economica (Finance) ---
+backend:
+  - task: "Finance: entries/decisions CRUD, dashboard summary, ledger running balance, immutable audit log, RBAC (super/admin/collab), auto-registration from Stripe"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "New section. Collections finance_entries, finance_decisions, finance_audit_log (insert-only). Perms: require_finance_read (admin OR collaborator with 'finance' perm), require_finance_write (admins only), require_finance_super (allowlist email only) for audit. admin/me now returns is_super. Endpoints /api/admin/finance: GET categories, GET summary (balance, month_income/expense, total_offerings, monthly[12]), GET/POST/PUT/DELETE entries (+audit each), GET entries/{id}/attachment, GET ledger (running balance over full set, filtered display), GET/POST/PUT/DELETE decisions (+audit), GET audit (super only). Auto-registration: _finalize_donation (newly_paid) creates income (Donazione or Abbonamento Premium if frequency monthly), _finalize_order creates income (Merchandising); idempotent by ref=session_id. Curl verified: create entry -> audit logged with IP; summary; audit super-only."
+frontend:
+  - task: "Finance admin UI: tabs (Dashboard/Entrate/Uscite/Registro/Decisioni/Audit), summary cards, monthly chart, filters, entry & decision modals, attachment, CSV+PDF export"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/admin/finance/index.tsx, src/components/finance/*, src/utils/euro.ts, src/utils/financeExport.ts, src/api.ts, src/components/AdminShell.tsx"
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Sidebar 'Trasparenza Economica' (perm finance). Screenshot-verified dashboard renders (4 cards + chart + tabs). EntryModal (income/expense, category dropdown, amount, method/source or paid_by, image attachment via expo-image-picker base64, notes). DecisionModal. Audit tab only for super admin. Export PDF (expo-print, logo+period+summary) and CSV (expo-file-system/legacy + sharing / web download); export & write actions hidden for read-only collaborators."
+
+agent_communication:
+    -agent: "main"
+    -message: "TEST Finance backend thoroughly. Admin(super): pescatoridiuomini@outlook.it/AdminTestPwd1!. (1) POST /api/admin/finance/entries income & expense -> 201; GET summary reflects balance=income-expense, month totals, total_offerings (categories Offerta dal sito/Donazione/Abbonamento Premium). (2) PUT edit -> audit 'update' has before/after; DELETE -> audit 'delete'; GET /api/admin/finance/audit returns entries with at,user_name,operation,section,record_id,before,after,ip. Audit is insert-only (no update/delete endpoints exist). (3) GET ledger returns rows with progressive 'balance'. (4) Filters on entries: type,category,year,month,q,min_amount,max_amount. (5) RBAC: register a normal listener -> GET /api/admin/finance/summary => 403; a collaborator with 'finance' perm can GET (read) but POST/PUT/DELETE => 403; only allowlist super can GET /api/admin/finance/audit (a plain administrator (non-allowlist) => 403, but note current admin is allowlist). (6) Auto-registration: it's driven by Stripe payment finalization (record_auto_income idempotent by session_id) - verify function presence/idempotency logically; do NOT attempt real Stripe payments. Clean up all finance test rows you create (DELETE). Frontend: main agent already screenshot-verified dashboard; optionally verify tab switching + add entry modal saves."

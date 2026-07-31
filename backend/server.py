@@ -781,7 +781,7 @@ async def get_history(authorization: Optional[str] = Header(None)):
 ADMIN_EMAILS = [e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()]
 ROLE_ADMIN, ROLE_COLLAB, ROLE_LISTENER = "administrator", "collaborator", "listener"
 # Sections that can be delegated to a collaborator (each maps to an existing admin area).
-PERM_SECTIONS = ["podcasts", "meditations", "news", "merch", "schedule", "prayers", "messages", "team", "radio", "verses"]
+PERM_SECTIONS = ["podcasts", "meditations", "news", "merch", "schedule", "prayers", "messages", "team", "radio", "verses", "finance"]
 
 # ---------------- Email (Emergent-managed Resend) ----------------
 EMAIL_BASE_URL = "https://integrations.emergentagent.com"
@@ -825,6 +825,105 @@ async def log_activity(actor: dict, action: str, target: str = "", meta: Optiona
 
 def role_for_email(email: str) -> str:
     return ROLE_ADMIN if (email or "").lower() in ADMIN_EMAILS else ROLE_LISTENER
+
+
+# ==================== Trasparenza Economica (Finance) ====================
+INCOME_CATEGORIES = ["Offerta dal sito", "Abbonamento Premium", "Donazione", "Merchandising", "Bonifico", "Contanti", "Altro"]
+EXPENSE_CATEGORIES = ["Hosting", "Dominio", "Server Radio", "Software", "Attrezzatura", "Materiale Evangelistico", "Pubblicità", "Spese Bancarie", "Altro"]
+OFFERING_CATS = {"Offerta dal sito", "Donazione", "Abbonamento Premium"}
+
+
+def _is_super_admin(user: dict) -> bool:
+    return (user.get("email") or "").lower() in ADMIN_EMAILS
+
+
+def _is_admin_user(user: dict) -> bool:
+    return user.get("role") == ROLE_ADMIN or _is_super_admin(user)
+
+
+def _client_ip(request: Optional["Request"]) -> Optional[str]:
+    if not request:
+        return None
+    fwd = request.headers.get("x-forwarded-for")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else None
+
+
+def _fin_clean(d: Optional[dict]) -> Optional[dict]:
+    """Strip heavy/internal fields before storing a snapshot in the audit log."""
+    if not d:
+        return None
+    return {k: v for k, v in d.items() if k not in ("_id", "attachment")}
+
+
+async def finance_audit(user: dict, operation: str, section: str, record_id: str,
+                        before: Optional[dict] = None, after: Optional[dict] = None,
+                        request: Optional["Request"] = None):
+    """Append an IMMUTABLE audit entry. Insert-only; never updated or deleted."""
+    await db.finance_audit_log.insert_one({
+        "id": new_id("audit"),
+        "at": now_utc(),
+        "user_id": user.get("user_id"),
+        "user_name": user.get("name") or user.get("email"),
+        "operation": operation,           # create | update | delete
+        "section": section,               # entry | decision
+        "record_id": record_id,
+        "before": _fin_clean(before),
+        "after": _fin_clean(after),
+        "ip": _client_ip(request),
+    })
+
+
+async def record_auto_income(*, ref: str, amount: Optional[float], category: str, description: str,
+                             payment_method: str = "Carta (Stripe)", source: str = "Sito web",
+                             date: Optional[str] = None):
+    """Idempotently create an income entry for a completed site payment.
+    Extensible: any new paid channel can call this with its own category/source.
+    Keyed by `ref` (Stripe session id) so it is registered exactly once."""
+    try:
+        if amount is None or float(amount) <= 0:
+            return
+        if await db.finance_entries.find_one({"ref": ref, "auto": True}):
+            return
+        now = now_utc()
+        await db.finance_entries.insert_one({
+            "id": new_id("fin"), "type": "income",
+            "date": date or now.date().isoformat(),
+            "description": description, "category": category,
+            "amount": round(float(amount), 2),
+            "payment_method": payment_method, "source": source,
+            "paid_by": None, "attachment": None, "attachment_name": None,
+            "notes": "Registrazione automatica dal sito",
+            "created_by": None, "created_by_name": "Sistema (automatico)",
+            "auto": True, "ref": ref,
+            "created_at": now, "updated_at": now,
+        })
+    except Exception as e:
+        logger.warning("record_auto_income failed (%s): %s", ref, e)
+
+
+async def require_finance_read(authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    if _is_admin_user(user):
+        return user
+    if user.get("role") == ROLE_COLLAB and "finance" in (user.get("permissions") or []):
+        return user
+    raise HTTPException(status_code=403, detail="Non hai i permessi per la Trasparenza Economica")
+
+
+async def require_finance_write(authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    if _is_admin_user(user):
+        return user
+    raise HTTPException(status_code=403, detail="Solo gli amministratori possono modificare la Trasparenza Economica")
+
+
+async def require_finance_super(authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    if _is_super_admin(user):
+        return user
+    raise HTTPException(status_code=403, detail="Solo l'Amministratore Principale può consultare l'Audit Log")
 
 
 async def require_admin(authorization: Optional[str] = Header(None)):
@@ -926,10 +1025,10 @@ async def admin_me(authorization: Optional[str] = Header(None)):
     email = (user.get("email") or "").lower()
     role = user.get("role")
     if role == ROLE_ADMIN or email in ADMIN_EMAILS:
-        return {"is_admin": True, "role": ROLE_ADMIN, "permissions": PERM_SECTIONS,
+        return {"is_admin": True, "is_super": email in ADMIN_EMAILS, "role": ROLE_ADMIN, "permissions": PERM_SECTIONS,
                 "user": {"email": user.get("email"), "name": user.get("name"), "picture": user.get("picture")}}
     if role == ROLE_COLLAB and (user.get("permissions") or []):
-        return {"is_admin": False, "role": ROLE_COLLAB, "permissions": user.get("permissions") or [],
+        return {"is_admin": False, "is_super": False, "role": ROLE_COLLAB, "permissions": user.get("permissions") or [],
                 "user": {"email": user.get("email"), "name": user.get("name"), "picture": user.get("picture")}}
     raise HTTPException(status_code=403, detail="Accesso negato: non hai i permessi per il pannello")
 
@@ -2201,6 +2300,16 @@ async def _finalize_donation(session_id: str, payment_status: str, status: str,
         if currency:
             update["currency"] = currency
     await db.donation_transactions.update_one({"session_id": session_id}, {"$set": update})
+    if newly_paid:
+        is_sub = tx.get("frequency") == "monthly"
+        donor = tx.get("donor_name") or "Anonimo"
+        await record_auto_income(
+            ref=session_id,
+            amount=update.get("amount", tx.get("amount")),
+            category="Abbonamento Premium" if is_sub else "Donazione",
+            description=(f"Abbonamento mensile €{tx.get('plan','')}" if is_sub else f"Donazione da {donor}"),
+            source="Abbonamento dal sito" if is_sub else "Donazione dal sito",
+        )
     return {**tx, **update}
 
 
@@ -2432,6 +2541,13 @@ async def _finalize_order(session_id: str):
     if payment_status == "paid" and not order.get("processed"):
         update.update({"processed": True, "status": "paid", "paid_at": now_utc()})
     await db.orders.update_one({"session_id": session_id}, {"$set": update})
+    if update.get("processed"):
+        await record_auto_income(
+            ref=session_id, amount=order.get("total"),
+            category="Merchandising",
+            description=f"Ordine {order.get('order_number', '')}".strip(),
+            source="Shop del sito",
+        )
     return {**order, **update}
 
 
@@ -4428,6 +4544,271 @@ async def admin_delete_plan(pid: str, admin=Depends(require_perm("verses"))):
     return {"ok": True}
 
 
+# ==================== Finance (Trasparenza Economica) endpoints ====================
+class FinanceEntryIn(BaseModel):
+    type: str                       # income | expense
+    date: str                       # YYYY-MM-DD
+    description: str
+    category: str
+    amount: float
+    payment_method: Optional[str] = None   # income
+    source: Optional[str] = None            # income (provenienza)
+    paid_by: Optional[str] = None           # expense (pagato da)
+    attachment: Optional[str] = None        # base64 receipt/invoice
+    attachment_name: Optional[str] = None
+    remove_attachment: bool = False
+    notes: Optional[str] = None
+
+
+class FinanceDecisionIn(BaseModel):
+    date: str
+    title: str
+    description: Optional[str] = None
+
+
+def _fin_public(e: dict) -> dict:
+    e = {k: v for k, v in e.items() if k != "_id"}
+    e["has_attachment"] = bool(e.get("attachment"))
+    e.pop("attachment", None)
+    return e
+
+
+def _date_regex(year: Optional[str], month: Optional[str]) -> Optional[dict]:
+    if year and month:
+        return {"$regex": f"^{int(year):04d}-{int(month):02d}"}
+    if year:
+        return {"$regex": f"^{int(year):04d}"}
+    if month:
+        return {"$regex": f"-{int(month):02d}-"}
+    return None
+
+
+def _entry_query(type, category, year, month, min_amount, max_amount, created_by, q) -> dict:
+    conds = []
+    if type in ("income", "expense"):
+        conds.append({"type": type})
+    if category:
+        conds.append({"category": category})
+    if created_by:
+        conds.append({"created_by_name": {"$regex": re.escape(created_by), "$options": "i"}})
+    dr = _date_regex(year, month)
+    if dr:
+        conds.append({"date": dr})
+    amt = {}
+    if min_amount is not None:
+        amt["$gte"] = float(min_amount)
+    if max_amount is not None:
+        amt["$lte"] = float(max_amount)
+    if amt:
+        conds.append({"amount": amt})
+    if q:
+        rx = {"$regex": re.escape(q), "$options": "i"}
+        conds.append({"$or": [{"description": rx}, {"notes": rx}, {"category": rx}, {"source": rx}, {"paid_by": rx}, {"payment_method": rx}]})
+    return {"$and": conds} if conds else {}
+
+
+@api_router.get("/admin/finance/categories")
+async def finance_categories(user=Depends(require_finance_read)):
+    return {"income": INCOME_CATEGORIES, "expense": EXPENSE_CATEGORIES,
+            "payment_methods": ["Carta (Stripe)", "Bonifico", "Contanti", "PayPal", "Altro"]}
+
+
+@api_router.get("/admin/finance/summary")
+async def finance_summary(user=Depends(require_finance_read)):
+    entries = await db.finance_entries.find({}, {"_id": 0, "attachment": 0}).to_list(20000)
+    income = sum(e["amount"] for e in entries if e.get("type") == "income")
+    expense = sum(e["amount"] for e in entries if e.get("type") == "expense")
+    now = now_utc(); ym = now.strftime("%Y-%m")
+    m_income = sum(e["amount"] for e in entries if e.get("type") == "income" and (e.get("date") or "").startswith(ym))
+    m_expense = sum(e["amount"] for e in entries if e.get("type") == "expense" and (e.get("date") or "").startswith(ym))
+    offerings = sum(e["amount"] for e in entries if e.get("type") == "income" and e.get("category") in OFFERING_CATS)
+    y, m = now.year, now.month
+    labels = []
+    for _ in range(12):
+        labels.append(f"{y:04d}-{m:02d}")
+        m -= 1
+        if m == 0:
+            m = 12; y -= 1
+    labels.reverse()
+    monthly = []
+    for lab in labels:
+        inc = sum(e["amount"] for e in entries if e.get("type") == "income" and (e.get("date") or "").startswith(lab))
+        exp = sum(e["amount"] for e in entries if e.get("type") == "expense" and (e.get("date") or "").startswith(lab))
+        monthly.append({"month": lab, "income": round(inc, 2), "expense": round(exp, 2)})
+    return {"balance": round(income - expense, 2), "month_income": round(m_income, 2),
+            "month_expense": round(m_expense, 2), "total_offerings": round(offerings, 2),
+            "total_income": round(income, 2), "total_expense": round(expense, 2), "monthly": monthly}
+
+
+@api_router.get("/admin/finance/entries")
+async def finance_list_entries(type: Optional[str] = None, category: Optional[str] = None,
+                               year: Optional[str] = None, month: Optional[str] = None,
+                               min_amount: Optional[float] = None, max_amount: Optional[float] = None,
+                               created_by: Optional[str] = None, q: Optional[str] = None,
+                               user=Depends(require_finance_read)):
+    query = _entry_query(type, category, year, month, min_amount, max_amount, created_by, q)
+    docs = await db.finance_entries.find(query, {"attachment": 0}).sort([("date", -1), ("created_at", -1)]).to_list(5000)
+    return [_fin_public(d) for d in docs]
+
+
+@api_router.get("/admin/finance/entries/{eid}/attachment")
+async def finance_entry_attachment(eid: str, user=Depends(require_finance_read)):
+    e = await db.finance_entries.find_one({"id": eid}, {"_id": 0, "attachment": 1, "attachment_name": 1})
+    if not e or not e.get("attachment"):
+        raise HTTPException(status_code=404, detail="Allegato non trovato")
+    return {"attachment": e["attachment"], "attachment_name": e.get("attachment_name")}
+
+
+@api_router.post("/admin/finance/entries", status_code=201)
+async def finance_create_entry(body: FinanceEntryIn, request: Request, user=Depends(require_finance_write)):
+    if body.type not in ("income", "expense"):
+        raise HTTPException(status_code=400, detail="Tipo non valido")
+    valid = INCOME_CATEGORIES if body.type == "income" else EXPENSE_CATEGORIES
+    if body.category not in valid:
+        raise HTTPException(status_code=400, detail="Categoria non valida")
+    if body.amount is None or body.amount <= 0:
+        raise HTTPException(status_code=400, detail="Importo non valido")
+    now = now_utc()
+    doc = {"id": new_id("fin"), "type": body.type, "date": body.date, "description": body.description.strip(),
+           "category": body.category, "amount": round(float(body.amount), 2),
+           "payment_method": body.payment_method, "source": body.source, "paid_by": body.paid_by,
+           "attachment": body.attachment, "attachment_name": body.attachment_name,
+           "notes": body.notes, "created_by": user.get("user_id"),
+           "created_by_name": user.get("name") or user.get("email"),
+           "auto": False, "ref": None, "created_at": now, "updated_at": now}
+    await db.finance_entries.insert_one(dict(doc))
+    await finance_audit(user, "create", "entry", doc["id"], before=None, after=doc, request=request)
+    return {"ok": True, "id": doc["id"]}
+
+
+@api_router.put("/admin/finance/entries/{eid}")
+async def finance_update_entry(eid: str, body: FinanceEntryIn, request: Request, user=Depends(require_finance_write)):
+    existing = await db.finance_entries.find_one({"id": eid})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Movimento non trovato")
+    valid = INCOME_CATEGORIES if body.type == "income" else EXPENSE_CATEGORIES
+    if body.category not in valid:
+        raise HTTPException(status_code=400, detail="Categoria non valida")
+    updates = {"type": body.type, "date": body.date, "description": body.description.strip(),
+               "category": body.category, "amount": round(float(body.amount), 2),
+               "payment_method": body.payment_method, "source": body.source, "paid_by": body.paid_by,
+               "notes": body.notes, "updated_at": now_utc()}
+    if body.attachment:
+        updates["attachment"] = body.attachment
+        updates["attachment_name"] = body.attachment_name
+    elif body.remove_attachment:
+        updates["attachment"] = None
+        updates["attachment_name"] = None
+    await db.finance_entries.update_one({"id": eid}, {"$set": updates})
+    after = {**existing, **updates}
+    await finance_audit(user, "update", "entry", eid, before=existing, after=after, request=request)
+    return {"ok": True}
+
+
+@api_router.delete("/admin/finance/entries/{eid}")
+async def finance_delete_entry(eid: str, request: Request, user=Depends(require_finance_write)):
+    existing = await db.finance_entries.find_one({"id": eid})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Movimento non trovato")
+    await db.finance_entries.delete_one({"id": eid})
+    await finance_audit(user, "delete", "entry", eid, before=existing, after=None, request=request)
+    return {"ok": True}
+
+
+@api_router.get("/admin/finance/ledger")
+async def finance_ledger(type: Optional[str] = None, category: Optional[str] = None,
+                         year: Optional[str] = None, month: Optional[str] = None,
+                         min_amount: Optional[float] = None, max_amount: Optional[float] = None,
+                         created_by: Optional[str] = None, q: Optional[str] = None,
+                         user=Depends(require_finance_read)):
+    alle = await db.finance_entries.find({}, {"_id": 0, "attachment": 0}).to_list(20000)
+    alle.sort(key=lambda e: ((e.get("date") or ""), (e.get("created_at") or now_utc()).isoformat() if hasattr(e.get("created_at") or now_utc(), "isoformat") else str(e.get("created_at"))))
+    running = 0.0
+    rows = []
+    for e in alle:
+        delta = e["amount"] if e.get("type") == "income" else -e["amount"]
+        running += delta
+        rows.append({"id": e["id"], "date": e.get("date"), "type": e.get("type"),
+                     "description": e.get("description"), "category": e.get("category"),
+                     "amount": e["amount"], "balance": round(running, 2),
+                     "created_by_name": e.get("created_by_name")})
+    # Apply display filters (running balance stays cumulative over the full set)
+    def keep(r):
+        if type in ("income", "expense") and r["type"] != type:
+            return False
+        if category and r["category"] != category:
+            return False
+        if year and not (r.get("date") or "").startswith(f"{int(year):04d}"):
+            return False
+        if month and f"-{int(month):02d}-" not in (r.get("date") or "")[4:] and not (r.get("date") or "")[5:7] == f"{int(month):02d}":
+            return False
+        if min_amount is not None and r["amount"] < float(min_amount):
+            return False
+        if max_amount is not None and r["amount"] > float(max_amount):
+            return False
+        if created_by and created_by.lower() not in (r.get("created_by_name") or "").lower():
+            return False
+        if q:
+            ql = q.lower()
+            if ql not in (r.get("description") or "").lower() and ql not in (r.get("category") or "").lower():
+                return False
+        return True
+    rows = [r for r in rows if keep(r)]
+    rows.reverse()
+    return rows
+
+
+# ----- Decisioni Amministrative -----
+@api_router.get("/admin/finance/decisions")
+async def finance_list_decisions(user=Depends(require_finance_read)):
+    docs = await db.finance_decisions.find({}, {"_id": 0}).sort([("date", -1), ("created_at", -1)]).to_list(2000)
+    return docs
+
+
+@api_router.post("/admin/finance/decisions", status_code=201)
+async def finance_create_decision(body: FinanceDecisionIn, request: Request, user=Depends(require_finance_write)):
+    if not body.title.strip():
+        raise HTTPException(status_code=400, detail="Il titolo è obbligatorio")
+    now = now_utc()
+    doc = {"id": new_id("dec"), "date": body.date, "title": body.title.strip(),
+           "description": (body.description or "").strip(),
+           "author_id": user.get("user_id"), "author_name": user.get("name") or user.get("email"),
+           "created_at": now, "updated_at": now}
+    await db.finance_decisions.insert_one(dict(doc))
+    await finance_audit(user, "create", "decision", doc["id"], before=None, after=doc, request=request)
+    return {"ok": True, "id": doc["id"]}
+
+
+@api_router.put("/admin/finance/decisions/{did}")
+async def finance_update_decision(did: str, body: FinanceDecisionIn, request: Request, user=Depends(require_finance_write)):
+    existing = await db.finance_decisions.find_one({"id": did})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Decisione non trovata")
+    updates = {"date": body.date, "title": body.title.strip(),
+               "description": (body.description or "").strip(), "updated_at": now_utc()}
+    await db.finance_decisions.update_one({"id": did}, {"$set": updates})
+    await finance_audit(user, "update", "decision", did, before=existing, after={**existing, **updates}, request=request)
+    return {"ok": True}
+
+
+@api_router.delete("/admin/finance/decisions/{did}")
+async def finance_delete_decision(did: str, request: Request, user=Depends(require_finance_write)):
+    existing = await db.finance_decisions.find_one({"id": did})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Decisione non trovata")
+    await db.finance_decisions.delete_one({"id": did})
+    await finance_audit(user, "delete", "decision", did, before=existing, after=None, request=request)
+    return {"ok": True}
+
+
+# ----- Audit Log (immutable, super-admin read only) -----
+@api_router.get("/admin/finance/audit")
+async def finance_audit_log(user=Depends(require_finance_super)):
+    docs = await db.finance_audit_log.find({}, {"_id": 0}).sort("at", -1).to_list(3000)
+    return docs
+
+
+
 app.include_router(api_router)
 
 # ---------------- Lightweight rate limiting (per IP, sliding window) ----------------
@@ -4503,6 +4884,10 @@ async def startup():
         await db.prayer_requests.create_index("created_at")
         await db.prayer_requests.create_index([("visibility", 1), ("published", 1)])
         await db.prayer_prayers.create_index([("prayer_id", 1), ("key", 1)], unique=True)
+        await db.finance_entries.create_index([("date", -1)])
+        await db.finance_entries.create_index([("type", 1), ("category", 1)])
+        await db.finance_entries.create_index("ref")
+        await db.finance_audit_log.create_index([("at", -1)])
         await db.messages.create_index("created_at")
     except Exception as e:
         logger.warning("index creation: %s", e)

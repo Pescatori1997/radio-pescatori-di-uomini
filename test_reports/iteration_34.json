@@ -1,0 +1,36 @@
+{
+  "summary": "Backend-only testing of the new Trasparenza Economica (Finance) admin module. 31/31 pytest tests passed. Verified: entries CRUD with validation (invalid category/amount<=0 -> 400), summary math (balance == total_income - total_expense, month totals, total_offerings restricted to Offerta dal sito/Donazione/Abbonamento Premium, 12-item monthly array), ledger progressive running balance, entry filters (type/category/year/month/q/min_amount/max_amount), decisions CRUD, immutable audit log (create/update/delete records with at,user_name,operation,section,record_id,before,after,ip and NO write endpoints), RBAC (listener 403, collaborator without finance perm 403, collaborator with finance perm read-only, only allowlist super admin can read audit), and record_auto_income idempotency by ref (second call is a no-op; amount<=0 skipped). No bugs found.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /admin/finance/audit", "issue": "Non-super-admin collaborators (even with 'finance' permission) correctly receive 403 for the audit log — this matches the spec (audit is super-admin-only) but the error message 'Solo l'Amministratore Principale...' is Italian-only. Non-blocking; noted only for completeness."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_finance.py",
+    "/app/test_reports/pytest/finance_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is 5117 lines — well over the 700 line threshold. Consider splitting finance endpoints (~lines 830-903 + 4548-4808) into /app/backend/routers/finance.py for maintainability.",
+    "In finance_ledger (server.py:4743) the month-filter expression is convoluted: `f'-{int(month):02d}-' not in (r.get('date') or '')[4:] and not (r.get('date') or '')[5:7] == f'{int(month):02d}'`. The double-negation and slicing hides intent. Simplify to `(r.get('date') or '')[5:7] != f'{int(month):02d}'` for clarity. Tests still pass because the second clause dominates, but the code is fragile.",
+    "record_auto_income (server.py:878) catches ALL exceptions and only logs a warning. Good for user-facing flows, but means finance auto-registration failures are silent — consider emitting an admin notification or metric.",
+    "GET /admin/finance/entries loads up to 5000 docs and GET /admin/finance/summary loads up to 20000 with no pagination. Fine short-term but will not scale; add aggregation pipelines when volume grows.",
+    "FinanceEntryIn does not validate date format (YYYY-MM-DD) via Pydantic — an invalid date string is stored as-is and only breaks downstream filtering. Consider a regex/date validator."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_finance.py (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "n/a (not requested)"},
+  "seed_data_creation": "Test users (TEST_listener_*, TEST_collabfin_*, TEST_collabnone_*) and their finance entries/decisions are all created with TEST_ prefix and DELETED at the end of the run (TestCleanup). No residual data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Finance backend is fully green. Test file /app/backend/tests/test_finance.py is idempotent (all TEST_ prefixed data cleaned up). Must be run with `pytest ... -n 0` (serial) because pytest.ini forces `-n 2 --dist loadscope` and the /auth/register 5-per-minute rate limit makes parallel workers hit 429 when creating 3 users. In serial mode all 31 pass in ~9s.",
+  "rca_of_issue": "N/A — no bugs found."
+}

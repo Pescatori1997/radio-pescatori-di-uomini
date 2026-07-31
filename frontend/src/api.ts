@@ -469,6 +469,29 @@ export const api = {
   adminCreatePlan: (body: any) => request("/admin/reading-plans", { method: "POST", body: JSON.stringify(body) }, true),
   adminUpdatePlan: (id: string, body: any) => request(`/admin/reading-plans/${id}`, { method: "PUT", body: JSON.stringify(body) }, true),
   adminDeletePlan: (id: string) => request(`/admin/reading-plans/${id}`, { method: "DELETE" }, true),
+
+  // Finance — Trasparenza Economica
+  financeCategories: () => request("/admin/finance/categories", {}, true),
+  financeSummary: () => request("/admin/finance/summary", {}, true),
+  financeEntries: (params?: Record<string, any>) => {
+    const q = new URLSearchParams();
+    Object.entries(params || {}).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== "") q.set(k, String(v)); });
+    return request(`/admin/finance/entries?${q.toString()}`, {}, true);
+  },
+  financeEntryAttachment: (id: string) => request(`/admin/finance/entries/${id}/attachment`, {}, true),
+  financeCreateEntry: (body: any) => request("/admin/finance/entries", { method: "POST", body: JSON.stringify(body) }, true),
+  financeUpdateEntry: (id: string, body: any) => request(`/admin/finance/entries/${id}`, { method: "PUT", body: JSON.stringify(body) }, true),
+  financeDeleteEntry: (id: string) => request(`/admin/finance/entries/${id}`, { method: "DELETE" }, true),
+  financeLedger: (params?: Record<string, any>) => {
+    const q = new URLSearchParams();
+    Object.entries(params || {}).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== "") q.set(k, String(v)); });
+    return request(`/admin/finance/ledger?${q.toString()}`, {}, true);
+  },
+  financeDecisions: () => request("/admin/finance/decisions", {}, true),
+  financeCreateDecision: (body: any) => request("/admin/finance/decisions", { method: "POST", body: JSON.stringify(body) }, true),
+  financeUpdateDecision: (id: string, body: any) => request(`/admin/finance/decisions/${id}`, { method: "PUT", body: JSON.stringify(body) }, true),
+  financeDeleteDecision: (id: string) => request(`/admin/finance/decisions/${id}`, { method: "DELETE" }, true),
+  financeAudit: () => request("/admin/finance/audit", {}, true),
 };
 
 // HTTPS pass-through URL for the live radio stream (works on web + native).
