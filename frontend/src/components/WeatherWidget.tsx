@@ -5,7 +5,7 @@ import { useRouter } from "expo-router";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useWeather } from "@/src/weather/WeatherContext";
 import { weatherVisual, weatherCategory } from "@/src/weather/weatherCodes";
-import { cityLocalTime } from "@/src/weather/weatherApi";
+import { cityLocalTime, isDaytime } from "@/src/weather/weatherApi";
 import CitySearchModal from "@/src/components/CitySearchModal";
 import WeatherAnimation from "@/src/components/WeatherAnimation";
 import PressableScale from "@/src/components/PressableScale";
@@ -53,8 +53,9 @@ export default function WeatherWidget() {
   }
 
   if (!weather) return null;
-  const vis = weatherVisual(weather.code, weather.isDay);
-  const cat = weatherCategory(weather.code, weather.isDay);
+  const dayNow = isDaytime(weather);
+  const vis = weatherVisual(weather.code, dayNow);
+  const cat = weatherCategory(weather.code, dayNow);
   const cityName = city?.name || "—";
   const time = cityLocalTime(weather.utcOffsetSeconds);
 

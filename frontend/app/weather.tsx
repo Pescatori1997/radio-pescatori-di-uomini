@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useWeather } from "@/src/weather/WeatherContext";
 import { weatherVisual } from "@/src/weather/weatherCodes";
-import { cityLocalTime } from "@/src/weather/weatherApi";
+import { cityLocalTime, isDaytime } from "@/src/weather/weatherApi";
 import { colors, spacing, radius } from "@/src/theme";
 
 const hhmm = (iso?: string) => (iso && iso.length >= 16 ? iso.slice(11, 16) : "—");
@@ -42,7 +42,7 @@ export default function WeatherScreen() {
     );
   }
 
-  const vis = weatherVisual(weather.code, weather.isDay);
+  const vis = weatherVisual(weather.code, isDaytime(weather));
   const details = [
     { icon: "thermometer", label: "Percepita", value: `${weather.feelsLike}°` },
     { icon: "water-percent", label: "Umidità", value: `${weather.humidity}%` },

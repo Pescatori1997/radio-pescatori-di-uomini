@@ -126,3 +126,26 @@ export function cityLocalTime(utcOffsetSeconds: number): string {
   const mm = String(d.getUTCMinutes()).padStart(2, "0");
   return `${hh}:${mm}`;
 }
+
+/** Robust day/night decision: compute from the city's current local time vs
+ * today's sunrise/sunset instead of trusting the possibly-stale `is_day` flag
+ * (which is cached and only refreshed periodically → could show the moon in the
+ * morning). Falls back to the API flag when sunrise/sunset are unavailable. */
+export function isDaytime(w: { sunrise?: string; sunset?: string; utcOffsetSeconds: number; isDay: boolean }): boolean {
+  try {
+    if (w.sunrise && w.sunset) {
+      const cityMs = Date.now() + (w.utcOffsetSeconds || 0) * 1000;
+      const d = new Date(cityMs);
+      const nowMin = d.getUTCHours() * 60 + d.getUTCMinutes();
+      const toMin = (iso: string) => {
+        const t = iso.slice(11, 16); // "HH:MM"
+        const [h, m] = t.split(":").map((n) => parseInt(n, 10));
+        return h * 60 + m;
+      };
+      const sr = toMin(w.sunrise);
+      const ss = toMin(w.sunset);
+      if (!isNaN(sr) && !isNaN(ss)) return nowMin >= sr && nowMin < ss;
+    }
+  } catch {}
+  return w.isDay;
+}

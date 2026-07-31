@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, useWindowDimensions, Platform } from "react-native";
+import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, useWindowDimensions, Platform, Modal } from "react-native";
 import { Image } from "expo-image";
 import { useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -57,6 +57,7 @@ export default function Palinsesto() {
   const [day, setDay] = useState(DAYS[romeNow().idx]);
   const scrollRef = useRef<ScrollView>(null);
   const didScroll = useRef(false);
+  const [selected, setSelected] = useState<any>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -140,7 +141,7 @@ export default function Palinsesto() {
 
               return (
                 <View key={s.id} testID={`slot-${s.id}`} style={[styles.slot, { top, height: h }]}>
-                  <View style={[styles.card, live && [styles.cardLive, { borderColor: colors.error }, liveShadow], !live && { borderColor: accent + "44" }]}>
+                  <Pressable style={[styles.card, live && [styles.cardLive, { borderColor: colors.error }, liveShadow], !live && { borderColor: accent + "44" }]} onPress={() => setSelected({ p, start: s.start, end: s.end, live })}>
                     <Avatars presenters={p.presenters} images={p.images} color={p.color} />
                     <View style={{ flex: 1, minWidth: 0 }}>
                       {live && (
@@ -154,8 +155,11 @@ export default function Palinsesto() {
                       {!compact && !!p.description && (
                         <Text style={styles.desc} numberOfLines={h > 150 ? 3 : 2}>{p.description}</Text>
                       )}
+                      {!compact && !!p.description && (
+                        <Text style={styles.readMore}>Tocca per leggere di più</Text>
+                      )}
                     </View>
-                  </View>
+                  </Pressable>
                 </View>
               );
             })}
@@ -175,6 +179,43 @@ export default function Palinsesto() {
           </View>
         </ScrollView>
       )}
+
+      {/* Program detail modal — full title, presenters, time and complete description */}
+      <Modal visible={!!selected} transparent animationType="slide" onRequestClose={() => setSelected(null)}>
+        <Pressable style={styles.backdrop} onPress={() => setSelected(null)}>
+          <Pressable style={styles.sheet} onPress={() => {}}>
+            <View style={styles.sheetHandle} />
+            {selected && (
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + spacing.lg }}>
+                {selected.live && (
+                  <View style={[styles.liveBadge, { backgroundColor: colors.error, marginBottom: spacing.sm }]}><Text style={styles.liveText}>🔴 ORA IN ONDA</Text></View>
+                )}
+                <View style={styles.sheetHeader}>
+                  <Avatars presenters={selected.p.presenters} images={selected.p.images} color={selected.p.color} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.sheetTitle}>{selected.p.title}</Text>
+                    <Text style={styles.sheetRange}>{selected.start} – {selected.end}</Text>
+                  </View>
+                </View>
+                {!!selected.p.host && (
+                  <View style={styles.sheetHostRow}>
+                    <Ionicons name="mic" size={16} color={selected.p.color || colors.brandPrimary} />
+                    <Text style={styles.sheetHost}>{selected.p.host}</Text>
+                  </View>
+                )}
+                {!!selected.p.description ? (
+                  <Text style={styles.sheetDesc}>{selected.p.description}</Text>
+                ) : (
+                  <Text style={styles.sheetNoDesc}>Nessuna descrizione disponibile per questo programma.</Text>
+                )}
+                <Pressable testID="program-close" style={styles.closeBtn} onPress={() => setSelected(null)}>
+                  <Text style={styles.closeBtnText}>Chiudi</Text>
+                </Pressable>
+              </ScrollView>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -212,6 +253,20 @@ const styles = StyleSheet.create({
   host: { color: colors.onSurfaceTertiary, fontSize: 13, fontWeight: "600", flex: 1 },
   range: { color: colors.muted, fontSize: 12, marginTop: 2, fontWeight: "600" },
   desc: { color: colors.onSurfaceSecondary, fontSize: 12, marginTop: 4, lineHeight: 16 },
+  readMore: { color: colors.brandPrimary, fontSize: 11, fontWeight: "700", marginTop: 3 },
+
+  backdrop: { flex: 1, backgroundColor: "rgba(6,10,26,0.6)", justifyContent: "flex-end" },
+  sheet: { backgroundColor: colors.surface, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: spacing.lg, maxHeight: "80%" },
+  sheetHandle: { width: 44, height: 5, borderRadius: 3, backgroundColor: colors.border, alignSelf: "center", marginBottom: spacing.lg },
+  sheetHeader: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  sheetTitle: { color: colors.onSurface, fontSize: 20, fontWeight: "800" },
+  sheetRange: { color: colors.muted, fontSize: 14, fontWeight: "600", marginTop: 2 },
+  sheetHostRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: spacing.md },
+  sheetHost: { color: colors.onSurfaceSecondary, fontSize: 15, fontWeight: "700" },
+  sheetDesc: { color: colors.onSurfaceSecondary, fontSize: 15, lineHeight: 23, marginTop: spacing.lg },
+  sheetNoDesc: { color: colors.muted, fontSize: 14, fontStyle: "italic", marginTop: spacing.lg },
+  closeBtn: { backgroundColor: colors.navy, paddingVertical: spacing.md, borderRadius: radius.pill, alignItems: "center", marginTop: spacing.xl },
+  closeBtnText: { color: colors.white, fontSize: 16, fontWeight: "800" },
 
   // Real-time cursor
   cursor: { position: "absolute", left: 0, right: 0, height: 18, marginTop: -9, flexDirection: "row", alignItems: "center", zIndex: 50 },
