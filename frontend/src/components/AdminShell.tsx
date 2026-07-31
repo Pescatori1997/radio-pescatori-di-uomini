@@ -88,7 +88,8 @@ export default function AdminShell({ title, activeKey, children }: { title: stri
     if (!allowed && navItems.length > 0) {
       router.replace(navItems[0].route as any);
     }
-  }, [isCollab, activeKey, perms, navItems, router]);
+    // `router` is stable in expo-router and intentionally excluded from deps.
+  }, [isCollab, activeKey, perms, navItems]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const Sidebar = ({ onNav }: { onNav?: () => void }) => (
     <View style={[styles.sidebar, { paddingTop: wide ? insets.top + spacing.lg : spacing.lg }]}>
@@ -117,7 +118,7 @@ export default function AdminShell({ title, activeKey, children }: { title: stri
       </ScrollView>
       <Pressable testID="admin-exit" style={styles.exit} onPress={() => { onNav?.(); router.replace("/(tabs)"); }}>
         <Ionicons name="exit-outline" size={18} color={ADMIN.muted} />
-        <Text style={styles.exitText}>Torna all'app</Text>
+        <Text style={styles.exitText}>Torna all&apos;app</Text>
       </Pressable>
     </View>
   );

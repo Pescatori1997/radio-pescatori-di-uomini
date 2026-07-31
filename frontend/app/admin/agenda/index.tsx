@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, RefreshControl } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -47,12 +47,6 @@ export default function AgendaScreen() {
 
   const canCreate = isAdmin || perms.includes("agenda.create");
 
-  const monthRange = useMemo(() => {
-    const start = ymd(ref.y, ref.m, 1);
-    const end = ymd(ref.y, ref.m, new Date(ref.y, ref.m + 1, 0).getDate());
-    return { start, end };
-  }, [ref]);
-
   const loadMeta = useCallback(async () => {
     try {
       const me = await api.adminMe();
@@ -63,19 +57,25 @@ export default function AgendaScreen() {
     try { setCollabs(await api.agendaCollaborators()); } catch { /* ignore */ }
   }, []);
 
+  // Data loader keyed on the visible month via PRIMITIVE deps (no object identity
+  // churn) to avoid any re-render loops.
   const loadData = useCallback(async () => {
+    const start = ymd(ref.y, ref.m, 1);
+    const end = ymd(ref.y, ref.m, new Date(ref.y, ref.m + 1, 0).getDate());
     try {
       const [ev, db] = await Promise.all([
-        api.agendaEvents({ start: monthRange.start, end: monthRange.end }),
+        api.agendaEvents({ start, end }),
         api.agendaDashboard(),
       ]);
       setEvents(ev || []);
       setDash(db);
     } catch { /* ignore */ }
     finally { setLoading(false); setRefreshing(false); }
-  }, [monthRange]);
+  }, [ref.y, ref.m]);
 
-  useFocusEffect(useCallback(() => { loadMeta(); loadData(); }, [loadMeta, loadData]));
+  // Meta loads once; data reloads on focus and when the month changes.
+  useEffect(() => { loadMeta(); }, [loadMeta]);
+  useFocusEffect(useCallback(() => { loadData(); }, [loadData]));
 
   const eventsByDate = useMemo(() => {
     const map: Record<string, any[]> = {};
