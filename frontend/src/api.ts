@@ -214,6 +214,34 @@ export const api = {
   addHistory: (id: string) => request(`/me/history/${id}`, { method: "POST" }, true),
   // admin
   adminMe: () => request("/admin/me", {}, true),
+
+  // notification center (inbox)
+  inboxList: (limit = 30, skip = 0) => request(`/inbox?limit=${limit}&skip=${skip}`, {}, true),
+  inboxUnread: () => request("/inbox/unread-count", {}, true),
+  inboxRead: (id: string) => request(`/inbox/${id}/read`, { method: "POST" }, true),
+  inboxReadAll: () => request("/inbox/read-all", { method: "POST" }, true),
+
+  // agenda (centro operativo)
+  agendaCategories: () => request("/agenda/categories", {}, true),
+  agendaCollaborators: () => request("/agenda/collaborators", {}, true),
+  agendaDashboard: () => request("/agenda/dashboard", {}, true),
+  agendaEvents: (params: Record<string, string> = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/agenda/events${qs ? `?${qs}` : ""}`, {}, true);
+  },
+  agendaEvent: (id: string) => request(`/agenda/events/${id}`, {}, true),
+  agendaCreate: (body: any) => request("/agenda/events", { method: "POST", body: JSON.stringify(body) }, true),
+  agendaUpdate: (id: string, body: any) => request(`/agenda/events/${id}`, { method: "PUT", body: JSON.stringify(body) }, true),
+  agendaDelete: (id: string) => request(`/agenda/events/${id}`, { method: "DELETE" }, true),
+  agendaRsvp: (id: string, status: string) => request(`/agenda/events/${id}/rsvp`, { method: "POST", body: JSON.stringify({ status }) }, true),
+  agendaTaskCreate: (eid: string, body: any) => request(`/agenda/events/${eid}/tasks`, { method: "POST", body: JSON.stringify(body) }, true),
+  agendaTaskUpdate: (tid: string, body: any) => request(`/agenda/tasks/${tid}`, { method: "PUT", body: JSON.stringify(body) }, true),
+  agendaTaskDelete: (tid: string) => request(`/agenda/tasks/${tid}`, { method: "DELETE" }, true),
+  agendaCommentCreate: (eid: string, body: any) => request(`/agenda/events/${eid}/comments`, { method: "POST", body: JSON.stringify(body) }, true),
+  agendaCommentDelete: (cid: string) => request(`/agenda/comments/${cid}`, { method: "DELETE" }, true),
+  agendaAttachCreate: (eid: string, body: any) => request(`/agenda/events/${eid}/attachments`, { method: "POST", body: JSON.stringify(body) }, true),
+  agendaAttachDelete: (aid: string) => request(`/agenda/attachments/${aid}`, { method: "DELETE" }, true),
+  agendaAudit: (eid: string) => request(`/agenda/events/${eid}/audit`, {}, true),
   adminStats: () => request("/admin/stats", {}, true),
   adminApplications: (status?: string, sort?: string, search?: string) => {
     const q = new URLSearchParams();

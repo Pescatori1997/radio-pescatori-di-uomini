@@ -21,6 +21,22 @@ const SECTIONS: { key: string; label: string }[] = [
   { key: "radio", label: "Radio" },
 ];
 
+const AGENDA_PERMS: { key: string; label: string }[] = [
+  { key: "agenda.view", label: "Agenda · Visualizzare" },
+  { key: "agenda.create", label: "Agenda · Creare eventi" },
+  { key: "agenda.edit", label: "Agenda · Modificare eventi" },
+  { key: "agenda.delete", label: "Agenda · Eliminare eventi" },
+  { key: "agenda.invite", label: "Agenda · Invitare collaboratori" },
+  { key: "agenda.rsvp", label: "Agenda · Confermare presenza" },
+  { key: "agenda.participants", label: "Agenda · Gestire partecipanti" },
+  { key: "agenda.tasks", label: "Agenda · Gestire attività" },
+  { key: "agenda.minutes", label: "Agenda · Gestire verbali" },
+  { key: "agenda.attach", label: "Agenda · Caricare allegati" },
+  { key: "agenda.comment", label: "Agenda · Commentare" },
+  { key: "agenda.categories", label: "Agenda · Gestire categorie" },
+  { key: "agenda.export", label: "Agenda · Esportare calendario" },
+];
+
 const ROLE_FILTERS = [
   { key: "", label: "Tutti" },
   { key: "administrator", label: "Admin" },
@@ -320,6 +336,16 @@ export default function AdminUsers() {
                   </View>
                 );
               })}
+              <Text style={[styles.modalHint, { marginTop: spacing.md, color: colors.brandSecondary, fontWeight: "700" }]}>📅 Permessi Agenda</Text>
+              {AGENDA_PERMS.map((s) => {
+                const on = selPerms.includes(s.key);
+                return (
+                  <View key={s.key} style={styles.permRow}>
+                    <Text style={styles.permRowLabel}>{s.label}</Text>
+                    <Switch testID={`perm-${s.key}`} value={on} onValueChange={() => togglePerm(s.key)} trackColor={{ true: colors.brandPrimary, false: ADMIN.border }} thumbColor={colors.white} />
+                  </View>
+                );
+              })}
             </ScrollView>
             <View style={styles.modalFooter}>
               <PressableScale testID="perms-save" onPress={saveRole} disabled={saving} style={[styles.saveBtn, saving && { opacity: 0.6 }]}>
@@ -351,6 +377,13 @@ export default function AdminUsers() {
                 <>
                   <Text style={[styles.modalHint, { marginTop: spacing.md }]}>Permessi assegnati all'accettazione</Text>
                   {SECTIONS.map((s) => (
+                    <View key={s.key} style={styles.permRow}>
+                      <Text style={styles.permRowLabel}>{s.label}</Text>
+                      <Switch testID={`inv-perm-${s.key}`} value={invPerms.includes(s.key)} onValueChange={() => toggleInvPerm(s.key)} trackColor={{ true: colors.brandPrimary, false: ADMIN.border }} thumbColor={colors.white} />
+                    </View>
+                  ))}
+                  <Text style={[styles.modalHint, { marginTop: spacing.md, color: colors.brandSecondary, fontWeight: "700" }]}>📅 Permessi Agenda</Text>
+                  {AGENDA_PERMS.map((s) => (
                     <View key={s.key} style={styles.permRow}>
                       <Text style={styles.permRowLabel}>{s.label}</Text>
                       <Switch testID={`inv-perm-${s.key}`} value={invPerms.includes(s.key)} onValueChange={() => toggleInvPerm(s.key)} trackColor={{ true: colors.brandPrimary, false: ADMIN.border }} thumbColor={colors.white} />

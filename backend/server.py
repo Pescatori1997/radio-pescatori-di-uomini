@@ -851,7 +851,15 @@ async def get_history(authorization: Optional[str] = Header(None)):
 ADMIN_EMAILS = [e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()]
 ROLE_ADMIN, ROLE_COLLAB, ROLE_LISTENER = "administrator", "collaborator", "listener"
 # Sections that can be delegated to a collaborator (each maps to an existing admin area).
-PERM_SECTIONS = ["podcasts", "meditations", "news", "merch", "schedule", "prayers", "messages", "team", "radio", "verses", "finance"]
+PERM_SECTIONS = ["podcasts", "meditations", "news", "merch", "schedule", "prayers", "messages", "team", "radio", "verses", "finance", "agenda"]
+
+# Granular Agenda permissions (configurable per collaborator by the Super Admin).
+AGENDA_PERMS = [
+    "agenda.view", "agenda.create", "agenda.edit", "agenda.delete", "agenda.invite",
+    "agenda.rsvp", "agenda.participants", "agenda.tasks", "agenda.minutes",
+    "agenda.attach", "agenda.comment", "agenda.categories", "agenda.export",
+]
+ASSIGNABLE_PERMS = PERM_SECTIONS + AGENDA_PERMS
 
 # ---------------- Email (Emergent-managed Resend) ----------------
 EMAIL_BASE_URL = "https://integrations.emergentagent.com"
@@ -1095,11 +1103,11 @@ async def admin_me(authorization: Optional[str] = Header(None)):
     email = (user.get("email") or "").lower()
     role = user.get("role")
     if role == ROLE_ADMIN or email in ADMIN_EMAILS:
-        return {"is_admin": True, "is_super": email in ADMIN_EMAILS, "role": ROLE_ADMIN, "permissions": PERM_SECTIONS,
-                "user": {"email": user.get("email"), "name": user.get("name"), "picture": user.get("picture")}}
+        return {"is_admin": True, "is_super": email in ADMIN_EMAILS, "role": ROLE_ADMIN, "permissions": ASSIGNABLE_PERMS,
+                "user": {"id": user.get("user_id"), "email": user.get("email"), "name": user.get("name"), "picture": user.get("picture")}}
     if role == ROLE_COLLAB and (user.get("permissions") or []):
         return {"is_admin": False, "is_super": False, "role": ROLE_COLLAB, "permissions": user.get("permissions") or [],
-                "user": {"email": user.get("email"), "name": user.get("name"), "picture": user.get("picture")}}
+                "user": {"id": user.get("user_id"), "email": user.get("email"), "name": user.get("name"), "picture": user.get("picture")}}
     raise HTTPException(status_code=403, detail="Accesso negato: non hai i permessi per il pannello")
 
 
@@ -1609,9 +1617,9 @@ async def admin_set_user_role(uid: str, body: UserRoleIn, admin=Depends(require_
     # Administrators implicitly have every permission; collaborators get the selected subset.
     perms: List[str] = []
     if body.role == ROLE_COLLAB:
-        perms = [p for p in (body.permissions or []) if p in PERM_SECTIONS]
+        perms = [p for p in (body.permissions or []) if p in ASSIGNABLE_PERMS]
     elif body.role == ROLE_ADMIN:
-        perms = list(PERM_SECTIONS)
+        perms = list(ASSIGNABLE_PERMS)
     await db.users.update_one({"user_id": uid}, {"$set": {"role": body.role, "permissions": perms}})
     label = {ROLE_ADMIN: "Amministratore", ROLE_COLLAB: "Collaboratore"}.get(body.role, "Ascoltatore")
     await log_activity(admin, f"ha impostato {u.get('name') or u.get('email')} come {label}", "utenti",
@@ -1675,7 +1683,7 @@ async def admin_create_invitation(body: InvitationIn, admin=Depends(require_admi
     if existing_user:
         raise HTTPException(status_code=400, detail="Esiste già un utente con questa email")
     role = body.role if body.role in (ROLE_COLLAB, ROLE_LISTENER) else ROLE_COLLAB
-    perms = [p for p in (body.permissions or []) if p in PERM_SECTIONS] if role == ROLE_COLLAB else []
+    perms = [p for p in (body.permissions or []) if p in ASSIGNABLE_PERMS] if role == ROLE_COLLAB else []
     token = uuid.uuid4().hex + uuid.uuid4().hex
     inv = {
         "id": new_id("inv"),
@@ -4906,6 +4914,391 @@ async def finance_audit_log(user=Depends(require_finance_super)):
     docs = await db.finance_audit_log.find({}, {"_id": 0}).sort("at", -1).to_list(3000)
     return docs
 
+
+
+# ==================== NOTIFICATION CENTER (inbox) ====================
+async def push_inbox(user_ids, ntype: str, title: str, body: str = "",
+                     route: str = "", target_id: str = "", actor: Optional[dict] = None):
+    """Insert an in-app notification for each recipient (dedup self-actor).
+    Reusable across modules (agenda now; prayers/content/etc. later)."""
+    actor_id = (actor or {}).get("user_id")
+    docs = []
+    for uid in set([u for u in user_ids if u]):
+        if uid == actor_id:
+            continue
+        docs.append({
+            "id": new_id("ntf"), "user_id": uid, "type": ntype, "title": title,
+            "body": body, "route": route, "target_id": target_id, "read": False,
+            "actor_id": actor_id, "actor_name": (actor or {}).get("name") or (actor or {}).get("email"),
+            "created_at": now_utc().isoformat(),
+        })
+    if docs:
+        await db.notifications_center.insert_many(docs)
+
+
+@api_router.get("/inbox")
+async def inbox_list(limit: int = 30, skip: int = 0, authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    limit = max(1, min(limit, 100))
+    docs = await db.notifications_center.find(
+        {"user_id": user["user_id"]}, {"_id": 0}
+    ).sort("created_at", -1).skip(max(0, skip)).limit(limit).to_list(limit)
+    return docs
+
+
+@api_router.get("/inbox/unread-count")
+async def inbox_unread(authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    n = await db.notifications_center.count_documents({"user_id": user["user_id"], "read": False})
+    return {"count": n}
+
+
+@api_router.post("/inbox/{nid}/read")
+async def inbox_read(nid: str, authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    await db.notifications_center.update_one({"id": nid, "user_id": user["user_id"]}, {"$set": {"read": True}})
+    return {"ok": True}
+
+
+@api_router.post("/inbox/read-all")
+async def inbox_read_all(authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    await db.notifications_center.update_many({"user_id": user["user_id"], "read": False}, {"$set": {"read": True}})
+    return {"ok": True}
+
+
+# ==================== AGENDA (centro operativo del team) ====================
+AGENDA_DEFAULT_CATEGORIES = [
+    {"key": "staff", "label": "Riunione Staff", "color": "#3B82F6", "emoji": "🔵"},
+    {"key": "podcast", "label": "Registrazione Podcast", "color": "#22C55E", "emoji": "🟢"},
+    {"key": "radio", "label": "Diretta Radio", "color": "#F97316", "emoji": "🟠"},
+    {"key": "studio", "label": "Studio Biblico", "color": "#A855F7", "emoji": "🟣"},
+    {"key": "social", "label": "Social Media", "color": "#EAB308", "emoji": "🟡"},
+    {"key": "scadenza", "label": "Scadenza", "color": "#EF4444", "emoji": "🔴"},
+    {"key": "altro", "label": "Altro", "color": "#94A3B8", "emoji": "⚪"},
+]
+
+
+def require_agenda(perm: str):
+    """Granular Agenda access: admins have all; collaborators need the specific
+    'agenda.<perm>' permission (agenda.view is implied by any agenda permission)."""
+    async def dep(authorization: Optional[str] = Header(None)):
+        user = await get_current_user(authorization)
+        email = (user.get("email") or "").lower()
+        if user.get("role") == ROLE_ADMIN or email in ADMIN_EMAILS:
+            return user
+        perms = user.get("permissions") or []
+        key = f"agenda.{perm}"
+        if user.get("role") == ROLE_COLLAB and (key in perms or (perm == "view" and any(p.startswith("agenda.") for p in perms))):
+            return user
+        raise HTTPException(status_code=403, detail="Non hai i permessi per questa azione dell'Agenda")
+    return dep
+
+
+async def _agenda_log(event_id: str, user: dict, action: str, detail: str = ""):
+    await db.agenda_audit.insert_one({
+        "id": new_id("aud"), "event_id": event_id, "at": now_utc().isoformat(),
+        "user_id": user.get("user_id"), "user_name": user.get("name") or user.get("email"),
+        "action": action, "detail": detail,
+    })
+
+
+async def _agenda_user_names(ids):
+    if not ids:
+        return {}
+    docs = await db.users.find({"user_id": {"$in": list(set(ids))}}, {"_id": 0, "user_id": 1, "name": 1, "email": 1}).to_list(500)
+    return {d["user_id"]: (d.get("name") or d.get("email")) for d in docs}
+
+
+async def _decorate_event(ev: dict, with_children: bool = False):
+    ev.pop("_id", None)
+    rsvps = await db.agenda_rsvp.find({"event_id": ev["id"]}, {"_id": 0}).to_list(500)
+    names = await _agenda_user_names([r["user_id"] for r in rsvps] + (ev.get("invitees") or []) + [ev.get("organizer_id")])
+    ev["rsvp"] = [{"user_id": r["user_id"], "name": names.get(r["user_id"], "Utente"), "status": r["status"]} for r in rsvps]
+    ev["rsvp_summary"] = {
+        "yes": sum(1 for r in rsvps if r["status"] == "yes"),
+        "maybe": sum(1 for r in rsvps if r["status"] == "maybe"),
+        "no": sum(1 for r in rsvps if r["status"] == "no"),
+    }
+    ev["invitees_named"] = [{"user_id": i, "name": names.get(i, "Utente")} for i in (ev.get("invitees") or [])]
+    ev["organizer_name"] = ev.get("organizer_name") or names.get(ev.get("organizer_id"), "")
+    if with_children:
+        ev["tasks"] = await db.agenda_tasks.find({"event_id": ev["id"]}, {"_id": 0}).sort("created_at", 1).to_list(300)
+        ev["comments"] = await db.agenda_comments.find({"event_id": ev["id"]}, {"_id": 0}).sort("created_at", 1).to_list(500)
+        ev["attachments"] = await db.agenda_attachments.find({"event_id": ev["id"]}, {"_id": 0}).sort("created_at", 1).to_list(200)
+        done = sum(1 for t in ev["tasks"] if t.get("status") == "done")
+        ev["task_progress"] = {"done": done, "total": len(ev["tasks"])}
+    return ev
+
+
+class AgendaEventIn(BaseModel):
+    title: str
+    description: Optional[str] = ""
+    category: Optional[str] = "altro"
+    color: Optional[str] = ""
+    date: str
+    start_time: Optional[str] = ""
+    end_time: Optional[str] = ""
+    location: Optional[str] = ""
+    link: Optional[str] = ""
+    invitees: List[str] = []
+    priority: Optional[str] = "normal"
+    tags: List[str] = []
+
+
+@api_router.get("/agenda/categories")
+async def agenda_categories(user=Depends(require_agenda("view"))):
+    docs = await db.agenda_categories.find({}, {"_id": 0}).sort("order", 1).to_list(100)
+    if not docs:
+        for i, c in enumerate(AGENDA_DEFAULT_CATEGORIES):
+            await db.agenda_categories.insert_one({"id": new_id("cat"), "order": i, **c})
+        docs = await db.agenda_categories.find({}, {"_id": 0}).sort("order", 1).to_list(100)
+    return docs
+
+
+@api_router.get("/agenda/events")
+async def agenda_events(start: Optional[str] = None, end: Optional[str] = None,
+                        category: Optional[str] = None, organizer: Optional[str] = None,
+                        priority: Optional[str] = None, q: Optional[str] = None,
+                        user=Depends(require_agenda("view"))):
+    query: dict = {}
+    if start and end:
+        query["date"] = {"$gte": start, "$lte": end}
+    elif start:
+        query["date"] = {"$gte": start}
+    if category:
+        query["category"] = category
+    if organizer:
+        query["organizer_id"] = organizer
+    if priority:
+        query["priority"] = priority
+    if q:
+        rx = {"$regex": re.escape(q), "$options": "i"}
+        query["$or"] = [{"title": rx}, {"description": rx}, {"location": rx}, {"tags": rx}]
+    docs = await db.agenda_events.find(query, {"_id": 0}).sort([("date", 1), ("start_time", 1)]).to_list(2000)
+    return [await _decorate_event(d) for d in docs]
+
+
+@api_router.get("/agenda/dashboard")
+async def agenda_dashboard(user=Depends(require_agenda("view"))):
+    from datetime import date as _date
+    today = datetime.now(_ROME_TZ).date() if _ROME_TZ else _date.today()
+    today_s = today.isoformat()
+    week_end = (today + timedelta(days=7)).isoformat()
+    month_start = today.replace(day=1).isoformat()
+    today_ev = await db.agenda_events.find({"date": today_s}, {"_id": 0}).sort("start_time", 1).to_list(100)
+    upcoming = await db.agenda_events.find({"date": {"$gt": today_s, "$lte": week_end}}, {"_id": 0}).sort([("date", 1), ("start_time", 1)]).to_list(100)
+    due_tasks = await db.agenda_tasks.find({"status": {"$ne": "done"}, "due_date": {"$ne": ""}}, {"_id": 0}).sort("due_date", 1).to_list(50)
+    stats = {
+        "events_month": await db.agenda_events.count_documents({"date": {"$gte": month_start}}),
+        "tasks_done": await db.agenda_tasks.count_documents({"status": "done"}),
+        "tasks_open": await db.agenda_tasks.count_documents({"status": {"$ne": "done"}}),
+        "events_today": len(today_ev),
+    }
+    return {
+        "today": [await _decorate_event(e) for e in today_ev],
+        "upcoming": [await _decorate_event(e) for e in upcoming],
+        "due_tasks": due_tasks,
+        "stats": stats,
+    }
+
+
+@api_router.get("/agenda/events/{eid}")
+async def agenda_event_get(eid: str, user=Depends(require_agenda("view"))):
+    ev = await db.agenda_events.find_one({"id": eid}, {"_id": 0})
+    if not ev:
+        raise HTTPException(status_code=404, detail="Evento non trovato")
+    return await _decorate_event(ev, with_children=True)
+
+
+@api_router.post("/agenda/events", status_code=201)
+async def agenda_event_create(body: AgendaEventIn, user=Depends(require_agenda("create"))):
+    cat = await db.agenda_categories.find_one({"key": body.category}, {"_id": 0})
+    color = body.color or (cat or {}).get("color") or "#94A3B8"
+    doc = {
+        "id": new_id("evt"), **body.model_dump(), "color": color,
+        "organizer_id": user["user_id"], "organizer_name": user.get("name") or user.get("email"),
+        "created_by": user["user_id"], "created_at": now_utc().isoformat(), "updated_at": now_utc().isoformat(),
+    }
+    await db.agenda_events.insert_one(doc)
+    await _agenda_log(doc["id"], user, "create", doc["title"])
+    if body.invitees:
+        await push_inbox(body.invitees, "agenda_invite", "Nuovo invito",
+                         f"Sei stato invitato a: {body.title}", f"/admin/agenda/{doc['id']}", doc["id"], user)
+    return await _decorate_event(doc, with_children=True)
+
+
+@api_router.put("/agenda/events/{eid}")
+async def agenda_event_update(eid: str, body: AgendaEventIn, user=Depends(require_agenda("edit"))):
+    ev = await db.agenda_events.find_one({"id": eid})
+    if not ev:
+        raise HTTPException(status_code=404, detail="Evento non trovato")
+    cat = await db.agenda_categories.find_one({"key": body.category}, {"_id": 0})
+    color = body.color or (cat or {}).get("color") or ev.get("color") or "#94A3B8"
+    updates = {**body.model_dump(), "color": color, "updated_at": now_utc().isoformat()}
+    await db.agenda_events.update_one({"id": eid}, {"$set": updates})
+    await _agenda_log(eid, user, "update", body.title)
+    recipients = list(set((body.invitees or []) + (ev.get("invitees") or []) + [ev.get("organizer_id")]))
+    await push_inbox(recipients, "agenda_update", "Evento aggiornato",
+                     f"È stato modificato: {body.title}", f"/admin/agenda/{eid}", eid, user)
+    doc = await db.agenda_events.find_one({"id": eid}, {"_id": 0})
+    return await _decorate_event(doc, with_children=True)
+
+
+@api_router.delete("/agenda/events/{eid}")
+async def agenda_event_delete(eid: str, user=Depends(require_agenda("delete"))):
+    ev = await db.agenda_events.find_one({"id": eid})
+    if not ev:
+        raise HTTPException(status_code=404, detail="Evento non trovato")
+    await db.agenda_events.delete_one({"id": eid})
+    for coll in ("agenda_rsvp", "agenda_comments", "agenda_tasks", "agenda_attachments"):
+        await db[coll].delete_many({"event_id": eid})
+    await _agenda_log(eid, user, "delete", ev.get("title", ""))
+    recipients = list(set((ev.get("invitees") or []) + [ev.get("organizer_id")]))
+    await push_inbox(recipients, "agenda_delete", "Evento eliminato",
+                     f"È stato eliminato: {ev.get('title','')}", "/admin/agenda", eid, user)
+    return {"ok": True}
+
+
+class RsvpIn(BaseModel):
+    status: str  # yes | maybe | no
+
+
+@api_router.post("/agenda/events/{eid}/rsvp")
+async def agenda_rsvp(eid: str, body: RsvpIn, user=Depends(require_agenda("rsvp"))):
+    if body.status not in ("yes", "maybe", "no"):
+        raise HTTPException(status_code=400, detail="Stato non valido")
+    ev = await db.agenda_events.find_one({"id": eid}, {"_id": 0})
+    if not ev:
+        raise HTTPException(status_code=404, detail="Evento non trovato")
+    await db.agenda_rsvp.update_one(
+        {"event_id": eid, "user_id": user["user_id"]},
+        {"$set": {"status": body.status, "updated_at": now_utc().isoformat(),
+                  "name": user.get("name") or user.get("email")}}, upsert=True)
+    await push_inbox([ev.get("organizer_id")], "agenda_rsvp",
+                     "Risposta presenza",
+                     f"{user.get('name') or 'Un collaboratore'} ha risposto a: {ev.get('title','')}",
+                     f"/admin/agenda/{eid}", eid, user)
+    return await _decorate_event(ev)
+
+
+class TaskIn(BaseModel):
+    title: str
+    assignee_id: Optional[str] = None
+    priority: Optional[str] = "normal"
+    due_date: Optional[str] = ""
+    status: Optional[str] = "open"
+
+
+@api_router.post("/agenda/events/{eid}/tasks", status_code=201)
+async def agenda_task_create(eid: str, body: TaskIn, user=Depends(require_agenda("tasks"))):
+    names = await _agenda_user_names([body.assignee_id]) if body.assignee_id else {}
+    doc = {"id": new_id("tsk"), "event_id": eid, **body.model_dump(),
+           "assignee_name": names.get(body.assignee_id, ""),
+           "created_at": now_utc().isoformat()}
+    await db.agenda_tasks.insert_one(doc)
+    await _agenda_log(eid, user, "task_create", body.title)
+    if body.assignee_id:
+        ev = await db.agenda_events.find_one({"id": eid}, {"_id": 0})
+        await push_inbox([body.assignee_id], "agenda_task", "Nuova attività assegnata",
+                         f"{body.title} — evento: {ev.get('title','') if ev else ''}", f"/admin/agenda/{eid}", eid, user)
+    doc.pop("_id", None)
+    return doc
+
+
+@api_router.put("/agenda/tasks/{tid}")
+async def agenda_task_update(tid: str, body: TaskIn, user=Depends(require_agenda("tasks"))):
+    names = await _agenda_user_names([body.assignee_id]) if body.assignee_id else {}
+    updates = {**body.model_dump(), "assignee_name": names.get(body.assignee_id, "")}
+    r = await db.agenda_tasks.find_one_and_update({"id": tid}, {"$set": updates})
+    if not r:
+        raise HTTPException(status_code=404, detail="Attività non trovata")
+    await _agenda_log(r.get("event_id", ""), user, "task_update", body.title)
+    doc = await db.agenda_tasks.find_one({"id": tid}, {"_id": 0})
+    return doc
+
+
+@api_router.delete("/agenda/tasks/{tid}")
+async def agenda_task_delete(tid: str, user=Depends(require_agenda("tasks"))):
+    r = await db.agenda_tasks.find_one_and_delete({"id": tid})
+    if r:
+        await _agenda_log(r.get("event_id", ""), user, "task_delete", r.get("title", ""))
+    return {"ok": True}
+
+
+class CommentIn(BaseModel):
+    text: str
+    mentions: List[str] = []
+
+
+@api_router.post("/agenda/events/{eid}/comments", status_code=201)
+async def agenda_comment_create(eid: str, body: CommentIn, user=Depends(require_agenda("comment"))):
+    ev = await db.agenda_events.find_one({"id": eid}, {"_id": 0})
+    if not ev:
+        raise HTTPException(status_code=404, detail="Evento non trovato")
+    doc = {"id": new_id("cmt"), "event_id": eid, "user_id": user["user_id"],
+           "user_name": user.get("name") or user.get("email"), "text": body.text,
+           "mentions": body.mentions, "created_at": now_utc().isoformat()}
+    await db.agenda_comments.insert_one(doc)
+    recipients = list(set((body.mentions or []) + [ev.get("organizer_id")]))
+    await push_inbox(recipients, "agenda_comment", "Nuovo commento",
+                     f"{user.get('name') or 'Qualcuno'} ha commentato: {ev.get('title','')}", f"/admin/agenda/{eid}", eid, user)
+    doc.pop("_id", None)
+    return doc
+
+
+@api_router.delete("/agenda/comments/{cid}")
+async def agenda_comment_delete(cid: str, authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    c = await db.agenda_comments.find_one({"id": cid}, {"_id": 0})
+    if not c:
+        return {"ok": True}
+    is_admin = user.get("role") == ROLE_ADMIN or (user.get("email") or "").lower() in ADMIN_EMAILS
+    if c["user_id"] != user["user_id"] and not is_admin:
+        raise HTTPException(status_code=403, detail="Non puoi eliminare questo commento")
+    await db.agenda_comments.delete_one({"id": cid})
+    return {"ok": True}
+
+
+class AttachmentIn(BaseModel):
+    name: str
+    kind: str = "link"        # link | image | pdf | file
+    url: Optional[str] = ""    # for links / external
+    media_id: Optional[str] = None  # for uploaded GridFS files
+    size: Optional[int] = 0
+
+
+@api_router.post("/agenda/events/{eid}/attachments", status_code=201)
+async def agenda_attach_create(eid: str, body: AttachmentIn, user=Depends(require_agenda("attach"))):
+    doc = {"id": new_id("att"), "event_id": eid, **body.model_dump(),
+           "uploaded_by": user["user_id"], "uploaded_by_name": user.get("name") or user.get("email"),
+           "created_at": now_utc().isoformat()}
+    await db.agenda_attachments.insert_one(doc)
+    await _agenda_log(eid, user, "attach", body.name)
+    doc.pop("_id", None)
+    return doc
+
+
+@api_router.delete("/agenda/attachments/{aid}")
+async def agenda_attach_delete(aid: str, user=Depends(require_agenda("attach"))):
+    await db.agenda_attachments.delete_one({"id": aid})
+    return {"ok": True}
+
+
+@api_router.get("/agenda/events/{eid}/audit")
+async def agenda_event_audit(eid: str, user=Depends(require_agenda("view"))):
+    return await db.agenda_audit.find({"event_id": eid}, {"_id": 0}).sort("at", -1).to_list(500)
+
+
+@api_router.get("/agenda/collaborators")
+async def agenda_collaborators(user=Depends(require_agenda("view"))):
+    """People that can be invited/assigned: admins + collaborators with any agenda perm."""
+    docs = await db.users.find(
+        {"role": {"$in": [ROLE_ADMIN, ROLE_COLLAB]}},
+        {"_id": 0, "user_id": 1, "name": 1, "email": 1, "role": 1, "picture": 1}
+    ).to_list(500)
+    return [{"user_id": d["user_id"], "name": d.get("name") or d.get("email"),
+             "email": d.get("email"), "role": d.get("role"), "picture": d.get("picture")} for d in docs]
 
 
 app.include_router(api_router)

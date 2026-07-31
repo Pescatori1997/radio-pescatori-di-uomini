@@ -17,6 +17,7 @@ const CMS_NAV = CMS_SECTIONS.map((s) => ({
 
 const NAV = [
   { key: "dash", label: "Dashboard", icon: "view-dashboard", route: "/admin", perm: null },
+  { key: "agenda", label: "Agenda", icon: "calendar-check", route: "/admin/agenda", perm: "agenda.view" },
   { key: "team", label: "Team", icon: "anchor", route: "/admin/team", perm: null },
   { key: "podcast", label: "Podcast", icon: "microphone", route: "/admin/podcasts", perm: "podcasts" },
   { key: "meditations", label: "Meditazioni", icon: "book-open-variant", route: "/admin/meditations", perm: "meditations" },
@@ -51,6 +52,7 @@ export default function AdminShell({ title, activeKey, children }: { title: stri
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState<string | null>(null);
   const [perms, setPerms] = useState<string[]>([]);
+  const [unread, setUnread] = useState(0);
   const wide = Dimensions.get("window").width >= 900;
 
   useEffect(() => {
@@ -58,17 +60,29 @@ export default function AdminShell({ title, activeKey, children }: { title: stri
     api.adminMe()
       .then((r: any) => { if (!cancelled) { setRole(r.role); setPerms(r.permissions || []); } })
       .catch(() => {});
-    return () => { cancelled = true; };
+    const loadUnread = () => api.inboxUnread().then((r: any) => { if (!cancelled) setUnread(r.count || 0); }).catch(() => {});
+    loadUnread();
+    const iv = setInterval(loadUnread, 30000);
+    return () => { cancelled = true; clearInterval(iv); };
   }, []);
 
   const isCollab = role === "collaborator";
-  const navItems = isCollab ? NAV.filter((n) => n.perm && perms.includes(n.perm)) : NAV;
+  const navItems = isCollab
+    ? NAV.filter((n) => {
+        if (!n.perm) return false;
+        if (n.perm === "agenda.view") return perms.some((p) => p.startsWith("agenda."));
+        return perms.includes(n.perm);
+      })
+    : NAV;
 
   // Collaborators that land on an admin-only section get redirected to their first allowed one.
   useEffect(() => {
     if (!isCollab) return;
     const current = NAV.find((n) => n.key === activeKey);
-    const allowed = current && current.perm && perms.includes(current.perm);
+    if (!current) return; // screens not in the sidebar (inbox, detail views) are allowed
+    const allowed = current.perm
+      ? (current.perm === "agenda.view" ? perms.some((p) => p.startsWith("agenda.")) : perms.includes(current.perm))
+      : false;
     if (!allowed && navItems.length > 0) {
       router.replace(navItems[0].route as any);
     }
@@ -117,7 +131,14 @@ export default function AdminShell({ title, activeKey, children }: { title: stri
             </Pressable>
           )}
           <Text style={styles.headerTitle}>{title}</Text>
-          <View style={{ width: 24 }} />
+          <Pressable testID="admin-bell" onPress={() => router.push("/admin/inbox" as any)} hitSlop={10} style={styles.bell}>
+            <Ionicons name="notifications-outline" size={24} color={colors.white} />
+            {unread > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{unread > 99 ? "99+" : unread}</Text>
+              </View>
+            )}
+          </Pressable>
         </View>
         <View style={{ flex: 1 }}>{children}</View>
       </View>
@@ -150,6 +171,9 @@ const styles = StyleSheet.create({
   exitText: { color: ADMIN.muted, fontSize: 14, fontWeight: "600" },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingBottom: spacing.md, backgroundColor: ADMIN.bg, borderBottomWidth: 1, borderBottomColor: ADMIN.border },
   menuBtn: { width: 24 },
+  bell: { width: 30, alignItems: "flex-end" },
+  badge: { position: "absolute", top: -6, right: -4, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: "#EF4444", alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
+  badgeText: { color: "#fff", fontSize: 10, fontWeight: "800" },
   headerTitle: { color: colors.white, fontSize: 20, fontWeight: "800" },
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.5)", flexDirection: "row" },
   drawer: { width: 280, height: "100%" },

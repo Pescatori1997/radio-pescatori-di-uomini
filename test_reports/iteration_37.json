@@ -1,0 +1,39 @@
+{
+  "summary": "Tested Agenda + Inbox (BE + FE). Backend: 21/22 tests passed. Frontend: login → /admin/agenda dashboard, view tabs (dash/month/week/day), event detail (RSVP, task add+toggle, comment, attachment link), Nuovo Evento editor, admin-bell → /admin/inbox, inbox-read-all all working end-to-end. One backend validation bug found: invalid date format (e.g. '15-06-2026') is accepted with 201 instead of returning 4xx. Frontend editor DOES validate client-side, so real users are protected, but API accepts malformed dates.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/agenda/events", "issue": "AgendaEventIn.date is validated only as `str` — malformed date '15-06-2026' is accepted and stored (201). Per request it should return 4xx. Add a Pydantic validator (regex ^\\d{4}-\\d{2}-\\d{2}$ + datetime.date.fromisoformat)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/admin/agenda/[id] Allegati", "issues": ["Attachment name/url inputs ('Nome link' / 'https://…') lack testID (only attach-link button has one). Add testIDs attach-link-name and attach-link-url for E2E robustness."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_agenda.py",
+    "/app/test_reports/pytest/iteration_37_agenda.xml"
+  ],
+  "action_items": [
+    "Backend: add strict date validation to AgendaEventIn.date (Pydantic field validator returning 4xx on malformed 'DD-MM-YYYY' style input) — currently returns 201. Same validation should apply to PUT.",
+    "Optional FE: add testID to the two attachment link inputs (Nome link, https://…) in /admin/agenda/[id].tsx for future automation."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 5608 lines — should be split into routers by domain (agenda, inbox, radio, meditations, etc.) for maintainability.",
+    "AgendaEventIn.date lacks validation; PUT re-uses the same model so update accepts malformed dates too.",
+    "agenda_comment_delete uses direct authorization header instead of a Depends(require_agenda('comment')) — inconsistent with other endpoints but functionally OK because it checks admin/owner."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_agenda.py (new — pytest suite for AGENDA + INBOX)"
+  ],
+  "success_rate": {"backend": "95%", "frontend": "100%"},
+  "seed_data_creation": "Created and deleted transient test events (TEST_Evento_Oggi, TEST_invite_evt, TEST_pw_editor_ev) + test task/comment/attachment on evt_136a2c63364f (all cleaned up). Created one throwaway collaborator user 'agenda_collab_*' (not cleaned; used to prove 403 on agenda endpoints).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend admin login: pescatoridiuomini@outlook.it / AdminTestPwd1!. Server-date is Rome tz (currently 2026-07-31). Existing today event: evt_136a2c63364f 'Diretta Radio Serale'. Existing task 'Preparare grafica' due 2026-06-14. Inbox is empty for admin because push_inbox skips self-actor.",
+  "rca_of_issue": "Date validation bug: /app/backend/server.py L5039 → `date: str` (no validator). Reproduce: POST /api/agenda/events {\"title\":\"x\",\"date\":\"15-06-2026\"} with admin bearer → returns 201 with the malformed date stored. Fix: add `@field_validator('date') def _v(cls,v): from datetime import date; date.fromisoformat(v); return v` and let Pydantic 422 propagate."
+}
