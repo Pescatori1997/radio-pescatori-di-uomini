@@ -113,9 +113,9 @@ const styles = StyleSheet.create({
   },
   tint: { ...StyleSheet.absoluteFillObject, backgroundColor: Platform.OS === "android" ? colors.white : "rgba(255,255,255,0.72)" },
   row: { flexDirection: "row", alignItems: "flex-start", paddingTop: 8, paddingHorizontal: 4, minHeight: 58 },
-  item: { flex: 1, alignItems: "center", justifyContent: "flex-start", paddingHorizontal: 2 },
+  item: { flex: 1, alignItems: "center", justifyContent: "flex-start", paddingHorizontal: 0 },
   dot: { position: "absolute", top: 0, width: 18, height: 3, borderRadius: 2, backgroundColor: colors.brandPrimary },
   iconWrap: { width: 48, height: 30, alignItems: "center", justifyContent: "center", marginBottom: 2 },
   pill: { position: "absolute", width: 46, height: 28, borderRadius: 14, backgroundColor: colors.brandPrimary + "1F" },
-  label: { fontSize: 10.5, letterSpacing: 0.1, textAlign: "center", width: "100%" },
+  label: { fontSize: Platform.OS === "web" ? 9.5 : 10.5, letterSpacing: 0, textAlign: "center", width: "100%", paddingHorizontal: 1 },
 });
