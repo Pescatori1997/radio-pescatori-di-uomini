@@ -109,7 +109,7 @@ export default function EntryModal({ visible, onClose, onSaved, entry, type, cat
         <View style={styles.sheet}>
           <View style={styles.handle} />
           <View style={styles.headerRow}>
-            <Text style={styles.title}>{readOnly ? "Dettaglio" : isEdit ? "Modifica" : "Nuovo"} {type === "income" ? "Entrata" : "Uscita"}</Text>
+            <Text style={styles.title}>{readOnly ? "Dettaglio" : isEdit ? "Modifica" : "Nuova"} {type === "income" ? "Entrata" : "Uscita"}</Text>
             <PressableScale onPress={onClose}><Ionicons name="close" size={24} color={colors.white} /></PressableScale>
           </View>
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
