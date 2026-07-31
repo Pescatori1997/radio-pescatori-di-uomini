@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict
 from datetime import datetime, timezone, timedelta
 from verses_data import VERSES_SEED
+import timoteo
 try:
     from zoneinfo import ZoneInfo
     ROME_TZ = ZoneInfo("Europe/Rome")
@@ -4276,6 +4277,35 @@ async def bible_search(q: str, translation: str = DEFAULT_BIBLE, book: Optional[
             rq["book_nr"] = book
         results = await db.bible_verses.find(rq, {"_id": 0, "book_nr": 1, "book_name": 1, "chapter": 1, "verse": 1, "text": 1}).limit(min(limit, 100)).to_list(100)
     return {"results": results, "count": len(results)}
+
+
+# ---------------- Timoteo (guida intelligente) ----------------
+class TimoteoMessage(BaseModel):
+    role: str
+    content: str
+
+
+class TimoteoIn(BaseModel):
+    messages: List[TimoteoMessage] = []
+
+
+@api_router.post("/timoteo/chat")
+async def timoteo_chat(body: TimoteoIn, authorization: Optional[str] = Header(None)):
+    """Conversational guide endpoint. Auth is optional (guests welcome). Returns
+    {reply, actions[]}; never raises so the assistant always answers gracefully."""
+    user = None
+    if authorization:
+        try:
+            user = await get_current_user(authorization)
+        except Exception:
+            user = None
+    ctx = {"name": (user or {}).get("name"), "is_authed": bool(user)}
+    msgs = [m.model_dump() for m in body.messages]
+    try:
+        return await timoteo.answer(db, msgs, ctx)
+    except Exception as e:
+        logger.warning("timoteo_chat failed: %s", e)
+        return {"reply": "Mi dispiace, in questo momento ho difficoltà a rispondere. Riprova tra poco.", "actions": []}
 
 
 class BibleState(BaseModel):

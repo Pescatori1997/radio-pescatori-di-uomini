@@ -412,6 +412,10 @@ export const api = {
     request("/admin/verse-notification", { method: "PUT", body: JSON.stringify(body) }, true),
   adminNotifyVerseToday: () => request("/admin/verses/notify-today", { method: "POST" }, true),
 
+  // timoteo — guida intelligente
+  timoteoChat: (messages: { role: string; content: string }[]) =>
+    request("/timoteo/chat", { method: "POST", body: JSON.stringify({ messages }) }, true),
+
   // bible reader
   bibleTranslations: () => request("/bible/translations"),
   bibleBooks: (translation?: string) => request(`/bible/books${translation ? `?translation=${translation}` : ""}`),

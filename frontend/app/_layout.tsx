@@ -16,6 +16,7 @@ import { AuthProvider, useAuth } from "@/src/context/AuthContext";
 import { PlayerProvider } from "@/src/context/PlayerContext";
 import { WeatherProvider } from "@/src/weather/WeatherContext";
 import InstallPrompt from "@/src/components/InstallPrompt";
+import Timoteo from "@/src/components/timoteo/Timoteo";
 
 LogBox.ignoreAllLogs(true);
 SplashScreen.preventAutoHideAsync();
@@ -162,6 +163,7 @@ export default function RootLayout() {
               <Stack.Screen name="podcast/[id]" />
               <Stack.Screen name="admin" />
             </Stack>
+            <Timoteo />
             </WeatherProvider>
           </PlayerProvider>
         </AuthProvider>

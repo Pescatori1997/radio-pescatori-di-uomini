@@ -612,3 +612,32 @@ agent_communication:
     -agent: "main"
     -message: "TEST TWO features. Admin: pescatoridiuomini@outlook.it / AdminTestPwd1! (not needed for these). Guest mode is fine (Welcome -> 'Continua come Ospite'). (A) Radio Player backend: GET /api/live/status must return keys playing_next (null ok), song_history (array, [] ok), current_program, next_program (object w/ id,title,host,start_time,end_time,weekdays,starts_at OR null). next_program logic: earliest active program after now within 7 days. Do NOT expect real playing_next/song_history data (AzuraCast TEST URL unreachable in dev) - assert the keys exist and types are correct; empty is acceptable. Frontend: open live player (Home -> 'Ascolta la Diretta' pulse button, force click; then tap mini-player testID 'mini-player' to open /player via in-app nav - do NOT page.goto('/player') as full reload clears the player state). Verify 'IN ONDA DOPO' card renders (shows next_program when playing_next empty) and 'ULTIMI BRANI TRASMESSI' shows list or elegant empty 'Nessun dato disponibile'. (B) Bottom Navigation (GlassTabBar): validate the 5 points in the task comment across all tabs at phone width 390 and a narrow 360 width. Report any label truncation or tab bar disappearing."
 
+
+## --- Timoteo: assistente/guida intelligente (v1.3) ---
+backend:
+  - task: "POST /api/timoteo/chat — guida conversazionale (GPT-5.5) con azioni, ricerca globale, Q&A biblico grounded"
+    implemented: true
+    working: "NA"
+    file: "backend/timoteo.py, backend/server.py"
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Nuovo modulo modulare timoteo.py (motore LLM disaccoppiato: env TIMOTEO_PROVIDER=openai, TIMOTEO_MODEL=gpt-5.5, sostituibile). Endpoint POST /api/timoteo/chat {messages:[{role,content}]}, auth OPZIONALE (ospiti ok), non lancia mai eccezioni. Ritorna {reply, actions[]}. Azioni validate server-side: radio_live; screen (chiave in SCREENS registry); open (path Bibbia via resolve_reference); content (solo id da risultati reali della ricerca globale -> anti-hallucination). Ricerca globale su podcasts/meditations/news/contents. Q&A biblico GROUNDED: passa versetti reali da db.bible_verses (text search) come UNICA fonte, cita i riferimenti. resolve_reference gestisce 'Giovanni 3:16', 'Salmo 23'(->Salmi), '1 Corinzi 13', 'Cantico', 'Atti' con path numerico /lettore/read?book=<nr>&chapter=<c>&highlight=<v>. Verificato via curl: reference->path corretti; navigazione, ricerca, supporto tecnico, versetti tematici tutti funzionanti."
+frontend:
+  - task: "Timoteo overlay globale: FAB lampada su ogni schermata, chat con benvenuto personalizzato, suggerimenti rapidi, bolle+azioni, memoria sessione; impostazione modalità saluto"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/timoteo/Timoteo.tsx, TimoteoLamp.tsx, greeting.ts, frontend/app/_layout.tsx, frontend/app/settings.tsx, frontend/src/api.ts"
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "FAB lampada (SVG stilizzato, gradiente brand) montato globalmente in _layout, nascosto su welcome/auth/login/invite/reset-password/admin/player; offset bottom calcolato per tab bar + mini player. Modal chat (88% altezza) con header lampada+'Timoteo', messaggio di benvenuto personalizzato (buildGreeting: Nome / Fratello-Sorella+Nome / Automatico via AsyncStorage), 9 chip suggerimenti rapidi, bolle utente(dx)/Timoteo(sx), pulsanti azione sotto le risposte, indicatore 'sta scrivendo', input multiline + invio. runAction: radio_live->playLive+/player; open->router.push(path); screen->SCREEN_PATHS. Memoria conversazione in stato di sessione (welcome escluso dal payload). Impostazioni: sezione 'Timoteo' con selettore modalità saluto (+ Fratello/Sorella). Screenshot-verificati: FAB, apertura chat+suggerimenti, invio 'Versetti sulla speranza' -> risposta con versetti citati + 4 pulsanti apri-versetto, tap 'Apri Salmo 23' -> apre correttamente Salmi 23 nel lettore (bug ref->path risolto usando book/chapter numerici)."
+
+agent_communication:
+    -agent: "main"
+    -message: "TEST Timoteo (feature nuova). Ospite va bene (Welcome -> 'Continua come Ospite'). BACKEND POST /api/timoteo/chat: (1) {messages:[{role:user,content:'Apri Giovanni 3:16'}]} -> reply + actions con almeno un'azione type 'open' path '/lettore/read?book=43&chapter=3&highlight=16'. (2) 'Apri la radio' -> azione type 'radio_live'. (3) 'Vai alle richieste di preghiera' -> azione type 'screen' screen 'prayer_board' o 'prayer'. (4) 'Versetti sulla speranza' -> reply che CITA riferimenti (es. Romani 15:13) e azioni 'open' verso versetti; deve basarsi sui VERSETTI forniti (self-hosted). (5) 'Cerca un podcast sulla fede' -> se esistono podcast, azioni 'content' con path /podcast/<id> REALI (nessun id inventato). (6) 'Come cambio la password?' -> risposta di supporto + eventuale azione screen 'profilo'/'settings'. (7) Robustezza: chiamata senza auth NON deve dare 401 (auth opzionale); payload vuoto -> risposta gentile, no 500. (8) Memoria: [user:'Aprimi Giovanni', assistant:..., user:'vai al capitolo 5'] -> capisce Giovanni 5 (azione open book=43 chapter=5). FRONTEND: da Home tap FAB testID 'timoteo-fab' -> modal con benvenuto + chip suggerimenti (testID 'timoteo-quick-<label>'); scrivi in 'timoteo-input' e 'timoteo-send'; le risposte mostrano pulsanti 'timoteo-action-<i>-<j>'; tap su azione Bibbia apre /lettore/read con il capitolo giusto (NON 'Capitolo non disponibile'); tap azione radio apre il player; FAB presente su schermate come /lettore, /podcast ecc. e ASSENTE su welcome/login/admin/player. Impostazioni (/settings): sezione Timoteo, testID 'greet-mode-name|sibling|auto' e 'greet-title-fratello|sorella'; selezione persiste (AsyncStorage) e cambia il saluto alla riapertura della chat. NON testare di nuovo le feature già passate (radio player, GlassTabBar)."
+
