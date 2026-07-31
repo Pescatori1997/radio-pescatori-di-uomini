@@ -123,46 +123,55 @@ async def bible_verse_search(db, q: str, limit: int = 8) -> list[dict]:
              "text": r.get("text", "")} for r in rows]
 
 
-REF_RE = re.compile(r"([1-3]?\s?[A-Za-zÀ-ÿ.]+(?:\s[A-Za-zÀ-ÿ.]+)?)\s+(\d+)(?::(\d+))?")
-
 # Common Italian singular/colloquial book names -> canonical name.
 BOOK_SYNONYMS = {
     "salmo": "Salmi",
     "proverbio": "Proverbi",
     "cantico": "Cantico dei Cantici",
-    "cantico dei cantici": "Cantico dei Cantici",
 }
 
+# Cache of {translation: {"rx": compiled, "map": {lower_name: doc}}} so we match
+# references against the REAL book names (never swallow the verb before them).
+_BOOK_CACHE: dict = {}
 
-async def _resolve_book(db, name: str) -> Optional[dict]:
-    """Resolve an (Italian) book name to its bible_books doc, tolerant to
-    singular/plural and colloquial variants."""
-    name = BOOK_SYNONYMS.get(name.strip().lower(), name.strip())
-    doc = await db.bible_books.find_one(
-        {"translation": DEFAULT_BIBLE, "name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}},
-        {"_id": 0},
-    )
-    if not doc:
-        stem = name[:-1] if len(name) > 4 else name
-        doc = await db.bible_books.find_one(
-            {"translation": DEFAULT_BIBLE, "name": {"$regex": f"^{re.escape(stem)}", "$options": "i"}},
-            {"_id": 0},
-        )
-    return doc
+
+async def _get_book_index(db) -> dict:
+    cache = _BOOK_CACHE.get(DEFAULT_BIBLE)
+    if cache:
+        return cache
+    docs = await db.bible_books.find({"translation": DEFAULT_BIBLE}, {"_id": 0}).to_list(100)
+    name_map: dict = {}
+    names: list[str] = []
+    for d in docs:
+        name_map[d["name"].lower()] = d
+        names.append(d["name"])
+    for syn, canon in BOOK_SYNONYMS.items():
+        cd = next((d for d in docs if d["name"].lower() == canon.lower()), None)
+        if cd:
+            name_map[syn] = cd
+            names.append(syn)
+    # longest first so "1 Giovanni" / "Cantico dei Cantici" win over prefixes.
+    names_sorted = sorted(set(names), key=len, reverse=True)
+    pattern = r"\b(" + "|".join(re.escape(n) for n in names_sorted) + r")\s+(\d+)(?::(\d+))?"
+    cache = {"rx": re.compile(pattern, re.IGNORECASE), "map": name_map}
+    _BOOK_CACHE[DEFAULT_BIBLE] = cache
+    return cache
 
 
 async def resolve_reference(db, reference: str) -> Optional[dict]:
-    """Resolve 'Giovanni 3:16' / 'Salmo 23' to a reader path. Returns None if the
-    book is unknown in the self-hosted Bible."""
+    """Resolve 'Giovanni 3:16' / 'Salmo 23' to a reader path against the real book
+    names. Returns None if no known book reference is present."""
     if not reference:
         return None
-    m = REF_RE.search(reference.strip())
+    idx = await _get_book_index(db)
+    m = idx["rx"].search(reference)
     if not m:
         return None
-    name, chapter, verse = m.group(1).strip(), int(m.group(2)), (int(m.group(3)) if m.group(3) else None)
-    doc = await _resolve_book(db, name)
+    doc = idx["map"].get(m.group(1).lower())
     if not doc:
         return None
+    chapter = int(m.group(2))
+    verse = int(m.group(3)) if m.group(3) else None
     path = f"/lettore/read?book={doc['book_nr']}&chapter={chapter}"
     if verse:
         path += f"&highlight={verse}"
@@ -172,24 +181,23 @@ async def resolve_reference(db, reference: str) -> Optional[dict]:
 
 async def find_last_reference(db, messages: list[dict]) -> Optional[dict]:
     """Scan the conversation (newest first) for the most recent Bible passage the
-    user/Timoteo referred to, so follow-ups like 'spiegami il contesto' still
-    know which passage we are studying. Returns resolved book/chapter/verse."""
+    user/Timoteo referred to, so follow-ups like 'qual è il contesto?' still know
+    which passage we are studying. Matches only REAL book names."""
+    idx = await _get_book_index(db)
     for m in reversed(messages[-8:]):
-        content = (m.get("content") or "")
-        matches = list(REF_RE.finditer(content))
-        for mt in reversed(matches):  # last reference in the message wins
-            name = mt.group(1).strip()
-            # avoid picking up filler like "capitolo 5" / "versetto 3"
-            if name.lower() in ("capitolo", "versetto", "verso", "cap", "v"):
-                continue
-            doc = await _resolve_book(db, name)
-            if doc:
-                return {
-                    "book_nr": doc["book_nr"],
-                    "book_name": doc["name"],
-                    "chapter": int(mt.group(2)),
-                    "verse": int(mt.group(3)) if mt.group(3) else None,
-                }
+        content = m.get("content") or ""
+        matches = list(idx["rx"].finditer(content))
+        if not matches:
+            continue
+        mt = matches[-1]  # last reference in the most recent message wins
+        doc = idx["map"].get(mt.group(1).lower())
+        if doc:
+            return {
+                "book_nr": doc["book_nr"],
+                "book_name": doc["name"],
+                "chapter": int(mt.group(2)),
+                "verse": int(mt.group(3)) if mt.group(3) else None,
+            }
     return None
 
 
@@ -235,6 +243,8 @@ Ricorda con delicatezza (non ad ogni messaggio) che lo studio con Timoteo non so
 AGISCI: quando l'utente vuole aprire/raggiungere una funzione, proponi anche un'azione che la apre direttamente.
 
 LUNGHEZZA: sii conciso nelle richieste pratiche (navigazione, ricerca). Quando spieghi la Parola, sii chiaro, ordinato e ricco quanto serve, senza dilungarti in modo eccessivo.
+
+INVITO A PROSEGUIRE: quando spieghi un passo o rispondi a una domanda biblica, concludi SEMPRE con UNA breve domanda calorosa che invita a continuare lo studio insieme (varia ogni volta, senza ripeterti), ad esempio: "Vuoi che analizziamo anche il contesto dei versetti precedenti?", "Desideri vedere altri passi che parlano dello stesso argomento?", "Vuoi approfondire il significato pratico di questo passo per la vita del credente?". Così sarai un vero compagno di studio, non un semplice assistente.
 
 FORMATO DELLA RISPOSTA: restituisci SOLO un oggetto JSON valido, senza testo prima o dopo, con questa forma:
 {
@@ -380,4 +390,8 @@ async def _run_llm(user_payload: str) -> tuple[str, list]:
         return ("Mi dispiace, in questo momento ho difficoltà a rispondere. Riprova tra poco.", [])
     data = _extract_json(raw if isinstance(raw, str) else str(raw))
     reply = (data.get("reply") or "").strip() or "Sono qui per aiutarti. Cosa cerchi?"
+    # The chat bubble renders plain text — strip any markdown the model may add.
+    reply = re.sub(r"\*\*(.*?)\*\*", r"\1", reply)
+    reply = re.sub(r"(?m)^\s{0,3}#{1,6}\s*", "", reply)
+    reply = reply.replace("__", "")
     return (reply, data.get("actions") or [])
