@@ -16,6 +16,17 @@ function fmt(s: number) {
   return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
+/** Format a unix (seconds) timestamp to a local HH:MM string. */
+function playedTime(ts?: number) {
+  if (!ts) return "";
+  try {
+    const d = new Date(ts * 1000);
+    return d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+}
+
 function TouchBar({ value, onSeek, filled }: { value: number; onSeek: (v: number) => void; filled: string }) {
   const [width, setWidth] = useState(1);
   return (
@@ -113,6 +124,80 @@ export default function PlayerScreen() {
           </View>
           <Ionicons name="volume-high" size={20} color={colors.white} />
         </View>
+
+        {track.isLive && (
+          <View style={styles.liveExtra}>
+            {/* In onda adesso */}
+            {!!liveInfo?.current_program && (
+              <View style={styles.infoCard}>
+                <View style={styles.infoHead}>
+                  <Ionicons name="radio" size={15} color={colors.brandSecondary} />
+                  <Text style={styles.infoLabel}>IN ONDA ADESSO</Text>
+                </View>
+                <Text style={styles.infoTitle} numberOfLines={1}>{liveInfo.current_program.title}</Text>
+                {!!liveInfo.current_program.host && (
+                  <Text style={styles.infoSub} numberOfLines={1}>{liveInfo.current_program.host}</Text>
+                )}
+                {!!liveInfo.current_program.start_time && (
+                  <Text style={styles.infoTime}>{liveInfo.current_program.start_time} – {liveInfo.current_program.end_time}</Text>
+                )}
+              </View>
+            )}
+
+            {/* In onda dopo — prefer the queued track, else the next scheduled program */}
+            <View style={styles.infoCard}>
+              <View style={styles.infoHead}>
+                <Ionicons name="play-forward" size={15} color={colors.brandSecondary} />
+                <Text style={styles.infoLabel}>IN ONDA DOPO</Text>
+              </View>
+              {liveInfo?.playing_next?.title || liveInfo?.playing_next?.artist ? (
+                <>
+                  <Text style={styles.infoTitle} numberOfLines={1}>{liveInfo.playing_next.title || "Brano"}</Text>
+                  {!!liveInfo.playing_next.artist && <Text style={styles.infoSub} numberOfLines={1}>{liveInfo.playing_next.artist}</Text>}
+                </>
+              ) : liveInfo?.next_program ? (
+                <>
+                  <Text style={styles.infoTitle} numberOfLines={1}>{liveInfo.next_program.title}</Text>
+                  {!!liveInfo.next_program.host && <Text style={styles.infoSub} numberOfLines={1}>{liveInfo.next_program.host}</Text>}
+                  {!!liveInfo.next_program.start_time && (
+                    <Text style={styles.infoTime}>
+                      {(liveInfo.next_program.weekdays?.[0] ? liveInfo.next_program.weekdays[0] + " · " : "")}{liveInfo.next_program.start_time}
+                    </Text>
+                  )}
+                </>
+              ) : (
+                <Text style={styles.infoEmpty}>Nessun dato disponibile</Text>
+              )}
+            </View>
+
+            {/* Cronologia brani recenti */}
+            <View style={styles.historyWrap}>
+              <View style={styles.infoHead}>
+                <Ionicons name="time-outline" size={16} color={colors.brandSecondary} />
+                <Text style={styles.infoLabel}>ULTIMI BRANI TRASMESSI</Text>
+              </View>
+              {liveInfo?.song_history && liveInfo.song_history.length > 0 ? (
+                liveInfo.song_history.map((h, i) => (
+                  <View key={i} style={styles.histRow}>
+                    <View style={styles.histIcon}>
+                      <Ionicons name="musical-note" size={16} color={colors.brandSecondary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.histTitle} numberOfLines={1}>{h.title || "Brano"}</Text>
+                      {!!h.artist && <Text style={styles.histArtist} numberOfLines={1}>{h.artist}</Text>}
+                    </View>
+                    {!!playedTime(h.played_at) && <Text style={styles.histTime}>{playedTime(h.played_at)}</Text>}
+                  </View>
+                ))
+              ) : (
+                <View style={styles.emptyBox}>
+                  <Ionicons name="musical-notes-outline" size={22} color={colors.muted} />
+                  <Text style={styles.infoEmpty}>Nessun dato disponibile</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -150,4 +235,19 @@ const styles = StyleSheet.create({
   controls: { alignItems: "center", marginTop: spacing["2xl"] },
   mainBtn: { width: 76, height: 76, borderRadius: 38, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" },
   volumeRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginTop: spacing["2xl"] },
+  liveExtra: { marginTop: spacing["2xl"], gap: spacing.md },
+  infoCard: { backgroundColor: "rgba(255,255,255,0.06)", borderRadius: radius.lg, padding: spacing.md, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(255,255,255,0.12)" },
+  infoHead: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 },
+  infoLabel: { color: colors.brandSecondary, fontSize: 11, fontWeight: "800", letterSpacing: 1 },
+  infoTitle: { color: colors.white, fontSize: 16, fontWeight: "700" },
+  infoSub: { color: colors.muted, fontSize: 13, marginTop: 2 },
+  infoTime: { color: colors.brandSecondary, fontSize: 12, fontWeight: "600", marginTop: 4 },
+  infoEmpty: { color: colors.muted, fontSize: 13, fontStyle: "italic" },
+  historyWrap: { backgroundColor: "rgba(255,255,255,0.06)", borderRadius: radius.lg, padding: spacing.md, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(255,255,255,0.12)" },
+  histRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "rgba(255,255,255,0.08)" },
+  histIcon: { width: 34, height: 34, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center" },
+  histTitle: { color: colors.white, fontSize: 14, fontWeight: "600" },
+  histArtist: { color: colors.muted, fontSize: 12, marginTop: 1 },
+  histTime: { color: colors.muted, fontSize: 12, fontWeight: "600" },
+  emptyBox: { alignItems: "center", justifyContent: "center", paddingVertical: spacing.lg, gap: 6 },
 });

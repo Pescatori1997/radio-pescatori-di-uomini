@@ -148,6 +148,46 @@ def _is_on_air(p: dict, now=None) -> bool:
     return (today in weekdays and cur >= start) or (prev_day in weekdays and cur < end)
 
 
+def _next_program(programs: list, now=None):
+    """Return the next scheduled (normalized) program starting after `now`
+    within the coming 7 days, or None. Handles the weekly recurrence and skips
+    the program currently on air."""
+    now = now or datetime.now(_ROME_TZ)
+    best = None
+    best_dt = None
+    for p in programs:
+        if not p.get("active", True):
+            continue
+        start = p.get("start_time")
+        weekdays = p.get("weekdays") or []
+        if not start or not weekdays:
+            continue
+        try:
+            sh, sm = int(start[:2]), int(start[3:5])
+        except Exception:
+            continue
+        if _is_on_air(p, now):
+            continue
+        for offset in range(0, 8):
+            cand = now + timedelta(days=offset)
+            if DAYS_IT[cand.weekday()] not in weekdays:
+                continue
+            cand_dt = cand.replace(hour=sh, minute=sm, second=0, microsecond=0)
+            if cand_dt <= now:
+                continue
+            if best_dt is None or cand_dt < best_dt:
+                best_dt, best = cand_dt, p
+            break
+    if not best:
+        return None
+    return {
+        "id": best["id"], "title": best["title"], "host": best["host"],
+        "start_time": best["start_time"], "end_time": best["end_time"],
+        "weekdays": best["weekdays"], "images": best.get("images") or [],
+        "starts_at": best_dt.isoformat() if best_dt else "",
+    }
+
+
 def new_id(prefix="id"):
     return f"{prefix}_{uuid.uuid4().hex[:12]}"
 
@@ -367,6 +407,8 @@ async def live_status():
         "live_mode": bool(doc.get("live_mode")),
         "live_watch_url": doc.get("live_watch_url") or "",
         "live_links": doc.get("live_links") or {},
+        "playing_next": None,
+        "song_history": [],
     }
     try:
         async with httpx.AsyncClient(timeout=8) as hc:
@@ -390,6 +432,31 @@ async def live_status():
             "artwork": song.get("art") or result["artwork"],
             "listeners": listeners,
         })
+        # Next track queued by AzuraCast (autoDJ) — shown as "In onda dopo".
+        pn = data.get("playing_next") or {}
+        pn_song = pn.get("song") or {}
+        if pn_song.get("title") or pn_song.get("artist"):
+            result["playing_next"] = {
+                "title": (pn_song.get("title") or "").strip(),
+                "artist": (pn_song.get("artist") or "").strip(),
+                "artwork": pn_song.get("art") or "",
+            }
+        # Recently played tracks history (title/artist/time).
+        hist = data.get("song_history") or []
+        out_hist = []
+        for h in hist[:8]:
+            hs = (h.get("song") or {})
+            t = (hs.get("title") or "").strip()
+            a = (hs.get("artist") or "").strip()
+            if not (t or a):
+                continue
+            out_hist.append({
+                "title": t,
+                "artist": a,
+                "artwork": hs.get("art") or "",
+                "played_at": h.get("played_at") or 0,
+            })
+        result["song_history"] = out_hist
     except Exception as e:
         logger.warning("Now Playing fetch failed: %s", e)
     # When a scheduled program is on air, let the palinsesto drive the player
@@ -397,8 +464,8 @@ async def live_status():
     # /programs/current for the presenter photo).
     try:
         pdocs = await db.programs.find({}, {"_id": 0}).to_list(500)
-        for d in pdocs:
-            pr = _normalize_program(d)
+        progs = [_normalize_program(d) for d in pdocs]
+        for pr in progs:
             if _is_on_air(pr):
                 result["current_program"] = {
                     "id": pr["id"], "title": pr["title"], "host": pr["host"],
@@ -409,6 +476,8 @@ async def live_status():
                 if pr["host"]:
                     result["artist"] = pr["host"]
                 break
+        # Next scheduled program from the palinsesto ("In onda dopo").
+        result["next_program"] = _next_program(progs)
     except Exception as e:
         logger.warning("current program lookup failed: %s", e)
     return result

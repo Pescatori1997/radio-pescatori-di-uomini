@@ -1,0 +1,43 @@
+{
+  "summary": "Session 35 — Backend + Frontend testing of the new Radio Player payload (playing_next / song_history / current_program / next_program) and the GlassTabBar bottom navigation. Backend: 8/8 pytest cases pass on GET /api/live/status — response is 200 with correct types for all new keys, next_program is computed correctly from db.programs (returns 'Note di Grazia', DJ Grace, Mercoledì 22:00, starts_at ISO string), playing_next is null and song_history is [] because the AzuraCast metadata URL is a TEST fallback (is_online:false) — endpoint never 500s. Frontend: Welcome → Ospite → Home → 'Ascolta la Diretta' → mini-player (testID mini-player) → in-app navigation to /player works. The player screen correctly shows 'IN ONDA DOPO' card with 'Note di Grazia · DJ Grace · Mercoledì · 22:00' and 'ULTIMI BRANI TRASMESSI' with the elegant 'Nessun dato disponibile' empty state. 'IN ONDA ADESSO' correctly hidden (nothing on air at test time). GlassTabBar is persistent across all 6 sections (Home, Podcast, Meditazioni, Notizie, Palinsesto, Profilo) and does not disappear when tapping through tabs. HOWEVER a minor label-truncation bug is confirmed at 360px width: 'Meditazioni' is truncated to 'Meditazi…' (scrollWidth 58 > parentWidth 55). At 390px all 6 labels fit cleanly (scrollWidth == parentWidth). Root cause: `adjustsFontSizeToFit` prop is a NO-OP on React Native Web, so numberOfLines={1} just applies text-overflow: ellipsis at narrow widths.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "GlassTabBar", "issue": "At 360px viewport 'Meditazioni' label is truncated to 'Meditazi…' — parentWidth=55 vs scrollWidth=58, textOverflow=ellipsis. adjustsFontSizeToFit is not supported on react-native-web so the font never shrinks. At 390px everything fits. Reference: /app/frontend/src/components/GlassTabBar.tsx:48-56 (label style) & :120 (fontSize 10.5).", "testID": "role=tab (Meditazioni)", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "player.tsx", "issues": ["When the AzuraCast metadata URL is unreachable (dev) the big square artwork on /player is fully empty/dark because track.artwork is an empty string coming from the API. Acceptable for TEST env but consider a branded fallback (logo) so screen doesn't look broken to real users if metadata briefly drops."]}
+    ],
+    "react_native_issues": [
+      {"component": "GlassTabBar/Text label", "issue": "Text has adjustsFontSizeToFit + minimumFontScale={0.75} — these props are silently ignored on react-native-web, so labels can only truncate (they can't shrink). This is the source of the 360px 'Meditazi…' truncation. Consider platform-specific fontSize (e.g. 10 on web, or scale by Dimensions width) OR shorten the label to 'Preghiere/Meditaz.' at very narrow widths. Reference: /app/frontend/src/components/GlassTabBar.tsx:48-53."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_live_status_radio_player.py",
+    "/app/test_reports/pytest/iteration_35_live_status.xml"
+  ],
+  "action_items": [
+    "GlassTabBar: fix label truncation on narrow phones (<=360px). Options: (a) drop fontSize from 10.5 to 10 on web, (b) reduce letter-spacing / horizontal padding of item, (c) use platform-specific label text (e.g. 'Meditaz.'/'Palinsesto' shortcut), or (d) implement a manual measure-and-scale hook because adjustsFontSizeToFit is a no-op on react-native-web. Verified with page.evaluate that scrollW 58 > parentW 55 at 360.",
+    "Player UI polish (optional): when liveInfo.artwork is empty (metadata offline) render the app logo or a subtle branded gradient inside styles.bigArt so the square doesn't render pitch-black."
+  ],
+  "critical_code_review_comments": [
+    "server.py:151-188 _next_program iterates offset 0..7 inclusive (range(0,8)) — that's 8 days, but the docstring says 'coming 7 days'. Off-by-one is inconsequential (the earliest match wins) but the docstring should say 'coming 8 days' or the range() should be range(0,7).",
+    "PlayerContext.tsx:176 refresh polling uses `Math.max(5, liveInfo?.refresh_interval || 15)` — this is inside the setTimeout callback but the closure captures the stale `liveInfo` due to the outer effect dependency on liveInfo?.refresh_interval. Works today because the effect re-mounts when refresh_interval changes, but if backend ever returns 0 or missing, tick will still work — no bug, just fragile.",
+    "GlassTabBar.tsx uses adjustsFontSizeToFit which is a documented no-op on react-native-web. Consider `Platform.OS === 'web' ? {fontSize: 10} : {}` for tighter labels on the web preview, or use `useWindowDimensions()` to compute font size dynamically. This is the root cause of the 360px truncation.",
+    "server.py has grown to 5186 lines — split into routers/ modules (auth, live, programs, prayer_board, finance, admin, etc.) for maintainability (already noted in prior iterations).",
+    "/api/live/status re-fetches the palinsesto (db.programs.find, limit 500) on EVERY 15s poll from every client. Consider caching the normalized programs list in memory with a 60s TTL — currently at low traffic this is fine but does not scale."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_live_status_radio_player.py (new)"
+  ],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "~90% (all core flows pass; 1 label truncation at 360px)"},
+  "seed_data_creation": "None. Tests read /api/live/status only. No DB writes.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend /api/live/status is stable and always 200 even when AzuraCast is offline. next_program is correctly computed and returns 'Note di Grazia' with weekdays ['Mercoledì','Sabato']. The Radio Player UI (/player) is fully wired: mini-player tap navigates in-app to /player without full reload; IN ONDA DOPO, IN ONDA ADESSO and ULTIMI BRANI TRASMESSI sections render exactly as required; empty state is elegant. GlassTabBar persists across all 6 tabs. Only known FE issue: 'Meditazioni' label truncates to 'Meditazi…' at 360px viewport because adjustsFontSizeToFit is a no-op on react-native-web (works fine at 390px). No backend issues.",
+  "rca_of_issue": "GlassTabBar label truncation @360px — RCA: React Native Text prop `adjustsFontSizeToFit` and `minimumFontScale` are silently ignored on react-native-web (they only work on iOS/Android). The label style uses numberOfLines={1} + width:'100%', so on narrow viewports where 'Meditazioni' (11 chars @ fontSize 10.5) needs ~58px but only 55px of horizontal space is available, the browser applies text-overflow: ellipsis. Repro: viewport 360×780 → /welcome → welcome-card-guest → home → inspect tabs — 'Meditazioni' shows 'Meditazi…'. Mitigations (any one): (1) lower fontSize on web via Platform.select({web:{fontSize:10}}), (2) reduce paddingHorizontal on styles.item from 2 to 0, (3) use useWindowDimensions() and dynamic fontSize (10 when width<380 else 10.5), (4) provide short labels on web (e.g. 'Meditaz.')."
+}

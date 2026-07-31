@@ -570,3 +570,45 @@ frontend:
 agent_communication:
     -agent: "main"
     -message: "TEST Finance backend thoroughly. Admin(super): pescatoridiuomini@outlook.it/AdminTestPwd1!. (1) POST /api/admin/finance/entries income & expense -> 201; GET summary reflects balance=income-expense, month totals, total_offerings (categories Offerta dal sito/Donazione/Abbonamento Premium). (2) PUT edit -> audit 'update' has before/after; DELETE -> audit 'delete'; GET /api/admin/finance/audit returns entries with at,user_name,operation,section,record_id,before,after,ip. Audit is insert-only (no update/delete endpoints exist). (3) GET ledger returns rows with progressive 'balance'. (4) Filters on entries: type,category,year,month,q,min_amount,max_amount. (5) RBAC: register a normal listener -> GET /api/admin/finance/summary => 403; a collaborator with 'finance' perm can GET (read) but POST/PUT/DELETE => 403; only allowlist super can GET /api/admin/finance/audit (a plain administrator (non-allowlist) => 403, but note current admin is allowlist). (6) Auto-registration: it's driven by Stripe payment finalization (record_auto_income idempotent by session_id) - verify function presence/idempotency logically; do NOT attempt real Stripe payments. Clean up all finance test rows you create (DELETE). Frontend: main agent already screenshot-verified dashboard; optionally verify tab switching + add entry modal saves."
+
+## --- Radio Player: In onda dopo + Cronologia (v1.2) ---
+backend:
+  - task: "GET /api/live/status extended: playing_next, song_history, next_program"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Extended /live/status. Parses AzuraCast now-playing 'playing_next' (song title/artist/art) and 'song_history' (last 8 tracks: title/artist/art/played_at). Added _next_program(programs, now) helper computing the next scheduled program from db.programs over the coming 7 days (weekly recurrence, skips on-air). Response always includes playing_next (null when none), song_history ([] when none), current_program (existing), next_program (null when none). Verified via curl: next_program correctly returned ('Note di Grazia' Mercoledi 22:00). playing_next/song_history empty in dev because the configured AzuraCast metadata URL is a TEST fallback and unreachable (is_online:false) - real station will populate. Never raises."
+frontend:
+  - task: "Player screen live sections: In onda adesso, In onda dopo, Ultimi brani trasmessi"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/player.tsx, frontend/src/context/PlayerContext.tsx"
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "PlayerContext LiveInfo extended with playing_next, song_history, current_program, next_program types (poll already refreshes every refresh_interval). player.tsx: when track.isLive, below controls renders 3 cards: 'IN ONDA ADESSO' (current_program title/host/time, only if on-air), 'IN ONDA DOPO' (prefers playing_next song; else next_program title/host/weekday+start; else 'Nessun dato disponibile'), 'ULTIMI BRANI TRASMESSI' (song_history list w/ title/artist/played local time, else elegant empty state icon + 'Nessun dato disponibile'). Screenshot-verified rendering: IN ONDA DOPO shows next program, history shows empty state. Styled coherent w/ navy glass cards."
+
+## --- Bottom Navigation Revamp (GlassTabBar) - thorough validation requested ---
+frontend:
+  - task: "GlassTabBar: persistent across all main sections, no label truncation, safe-area, animations, no state loss on tab switch"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/GlassTabBar.tsx, frontend/app/(tabs)/_layout.tsx"
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Custom tabBar via expo-blur glassmorphism. 6 tabs: Home, Podcast, Meditazioni, Notizie, Palinsesto, Profilo. Labels use adjustsFontSizeToFit minimumFontScale 0.75 to avoid truncation; animated pill + top dot indicator (240ms). SafeArea via useSafeAreaInsets paddingBottom. Needs thorough validation per user: (1) tab bar always visible in all 6 sections and does not disappear during navigation; (2) all labels fully readable, no truncation (test narrow iPhone widths); (3) safe area respected (notch/Dynamic Island/Android); (4) smooth animations + glass style intact; (5) switching tabs preserves page state / no unnecessary reloads."
+
+agent_communication:
+    -agent: "main"
+    -message: "TEST TWO features. Admin: pescatoridiuomini@outlook.it / AdminTestPwd1! (not needed for these). Guest mode is fine (Welcome -> 'Continua come Ospite'). (A) Radio Player backend: GET /api/live/status must return keys playing_next (null ok), song_history (array, [] ok), current_program, next_program (object w/ id,title,host,start_time,end_time,weekdays,starts_at OR null). next_program logic: earliest active program after now within 7 days. Do NOT expect real playing_next/song_history data (AzuraCast TEST URL unreachable in dev) - assert the keys exist and types are correct; empty is acceptable. Frontend: open live player (Home -> 'Ascolta la Diretta' pulse button, force click; then tap mini-player testID 'mini-player' to open /player via in-app nav - do NOT page.goto('/player') as full reload clears the player state). Verify 'IN ONDA DOPO' card renders (shows next_program when playing_next empty) and 'ULTIMI BRANI TRASMESSI' shows list or elegant empty 'Nessun dato disponibile'. (B) Bottom Navigation (GlassTabBar): validate the 5 points in the task comment across all tabs at phone width 390 and a narrow 360 width. Report any label truncation or tab bar disappearing."
+

@@ -11,6 +11,32 @@ export type Track = {
   isLive: boolean;
 };
 
+export type NextProgram = {
+  id: string;
+  title: string;
+  host: string;
+  start_time: string;
+  end_time: string;
+  weekdays?: string[];
+  images?: string[];
+  starts_at?: string;
+};
+
+export type CurrentProgram = {
+  id: string;
+  title: string;
+  host: string;
+  start_time: string;
+  end_time: string;
+};
+
+export type HistoryTrack = {
+  title: string;
+  artist: string;
+  artwork?: string;
+  played_at?: number;
+};
+
 export type LiveInfo = {
   is_live: boolean;
   is_online: boolean;
@@ -24,6 +50,10 @@ export type LiveInfo = {
   live_mode?: boolean;
   live_watch_url?: string;
   live_links?: Record<string, string>;
+  playing_next?: { title: string; artist: string; artwork?: string } | null;
+  song_history?: HistoryTrack[];
+  current_program?: CurrentProgram | null;
+  next_program?: NextProgram | null;
 };
 
 export type Connection = "online" | "offline" | "reconnecting";
