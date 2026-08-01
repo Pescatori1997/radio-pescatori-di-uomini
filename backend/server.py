@@ -378,7 +378,7 @@ async def me(authorization: Optional[str] = Header(None)):
     # record (never from client data). Read-only from DB here (fast); the profile
     # screen calls GET /me/subscription to force a fresh Stripe sync.
     try:
-        state = await get_supporter_state(user["user_id"])
+        state = await get_supporter_state(user)
         user["is_supporter"] = state["is_supporter"]
         user["subscription"] = state["subscription"]
     except Exception:
@@ -2645,22 +2645,81 @@ async def _link_subscription_from_session(session_obj: dict):
     return await _sync_subscription_by_id(sub_id, uid)
 
 
-async def get_supporter_state(user_id: str, sync: bool = False) -> dict:
-    """Return {is_supporter, subscription} for a user. When sync=True and a
-    subscription id is known, refresh it from Stripe first (cross-device truth)."""
-    sub = await db.subscriptions.find_one({"user_id": user_id})
-    if sync and sub and sub.get("stripe_subscription_id"):
-        refreshed = await _sync_subscription_by_id(sub["stripe_subscription_id"], user_id)
-        if refreshed:
-            sub = await db.subscriptions.find_one({"user_id": user_id})
+async def _reconcile_user_subscription(user: dict):
+    """Backfill/recover a user's subscription from Stripe when we have no local
+    record yet (e.g. subscribed BEFORE this feature existed, or on another env).
+    Tries the stored checkout sessions first, then a lookup by customer email.
+    Requires a real Stripe key (no-op with the placeholder key)."""
+    if not STRIPE_API_KEY:
+        return None
+    uid = user.get("user_id")
+    email = (user.get("email") or "").lower()
+
+    # (a) From historical monthly donation_transactions -> checkout session -> subscription.
+    try:
+        cur = db.donation_transactions.find(
+            {"user_id": uid, "frequency": "monthly", "session_id": {"$exists": True}}
+        ).sort("created_at", -1).limit(5)
+        async for tx in cur:
+            sid = tx.get("session_id")
+            if not sid:
+                continue
+            try:
+                s = await asyncio.to_thread(lambda: stripe_sdk.checkout.Session.retrieve(sid))
+            except Exception:
+                continue
+            if s.get("subscription"):
+                res = await _sync_subscription_by_id(s["subscription"], uid)
+                if res:
+                    return res
+    except Exception as e:
+        logger.warning("reconcile via tx failed: %s", e)
+
+    # (b) By customer email -> most relevant subscription.
+    if email:
+        try:
+            def _lookup():
+                custs = stripe_sdk.Customer.list(email=email, limit=5).data
+                best = None
+                rank = {"active": 4, "trialing": 3, "past_due": 2}
+                for c in custs:
+                    subs = stripe_sdk.Subscription.list(customer=c.id, status="all", limit=10).data
+                    for sub in subs:
+                        r = rank.get(sub.get("status"), 1)
+                        if best is None or r > best[0] or (r == best[0] and (sub.get("current_period_end") or 0) > (best[1].get("current_period_end") or 0)):
+                            best = (r, sub)
+                return best[1] if best else None
+            sub_obj = await asyncio.to_thread(_lookup)
+            if sub_obj:
+                return await _apply_subscription(dict(sub_obj), uid)
+        except Exception as e:
+            logger.warning("reconcile via email failed: %s", e)
+    return None
+
+
+async def get_supporter_state(user: dict, sync: bool = False) -> dict:
+    """Return {is_supporter, subscription} for a user. When sync=True: refresh a
+    known subscription from Stripe, or reconcile from Stripe if none is stored yet
+    (recovers subscriptions created before this feature / on another environment)."""
+    uid = user.get("user_id") if isinstance(user, dict) else user
+    sub = await db.subscriptions.find_one({"user_id": uid})
+    if sync:
+        if sub and sub.get("stripe_subscription_id"):
+            refreshed = await _sync_subscription_by_id(sub["stripe_subscription_id"], uid)
+            if refreshed:
+                sub = await db.subscriptions.find_one({"user_id": uid})
+        elif not sub and isinstance(user, dict):
+            recovered = await _reconcile_user_subscription(user)
+            if recovered:
+                sub = await db.subscriptions.find_one({"user_id": uid})
     return {"is_supporter": _is_supporter(sub), "subscription": _sub_public(sub)}
 
 
 @api_router.get("/me/subscription")
 async def my_subscription(authorization: Optional[str] = Header(None)):
-    """Authoritative supporter status for the current user (syncs from Stripe)."""
+    """Authoritative supporter status for the current user (syncs/reconciles from Stripe)."""
     user = await get_current_user(authorization)
-    return await get_supporter_state(user["user_id"], sync=True)
+    return await get_supporter_state(user, sync=True)
 
 
 # ---------------- Merchandising orders (Stripe payment mode, multi line-item) ----------------
