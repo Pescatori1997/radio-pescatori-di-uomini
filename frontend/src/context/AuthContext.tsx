@@ -29,6 +29,13 @@ type User = {
   picture?: string | null;
   role?: string;
   permissions?: string[];
+  is_supporter?: boolean;
+  subscription?: {
+    plan?: string;
+    status?: string;
+    cancel_at_period_end?: boolean;
+    current_period_end?: string | null;
+  } | null;
 };
 
 type AuthState = {

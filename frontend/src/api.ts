@@ -444,6 +444,9 @@ export const api = {
   timoteoChat: (messages: { role: string; content: string }[]) =>
     request("/timoteo/chat", { method: "POST", body: JSON.stringify({ messages }) }, true),
 
+  // supporter status (authoritative, synced from Stripe server-side)
+  mySubscription: () => request("/me/subscription", {}, true),
+
   /**
    * Streaming chat via SSE over XMLHttpRequest (works on both web and native —
    * React Native's fetch has no ReadableStream reader, XHR.onprogress does).

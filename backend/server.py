@@ -373,7 +373,18 @@ async def auth_session(body: SessionIn):
 
 @api_router.get("/auth/me")
 async def me(authorization: Optional[str] = Header(None)):
-    return await get_current_user(authorization)
+    user = await get_current_user(authorization)
+    # Attach supporter status derived server-side from the live subscription
+    # record (never from client data). Read-only from DB here (fast); the profile
+    # screen calls GET /me/subscription to force a fresh Stripe sync.
+    try:
+        state = await get_supporter_state(user["user_id"])
+        user["is_supporter"] = state["is_supporter"]
+        user["subscription"] = state["subscription"]
+    except Exception:
+        user["is_supporter"] = False
+        user["subscription"] = None
+    return user
 
 
 @api_router.post("/auth/logout")
@@ -2409,6 +2420,10 @@ async def donation_status(session_id: str, request: Request):
     amount_total = s.get("amount_total")
     currency = s.get("currency")
     await _finalize_donation(session_id, payment_status, status, amount_total, currency)
+    # Subscription checkout -> link & sync the subscription so supporter status is
+    # correct even without a webhook (dev/preview) after the buyer returns.
+    if s.get("mode") == "subscription" and s.get("subscription"):
+        await _link_subscription_from_session(dict(s))
     return {
         "session_id": session_id,
         "status": status,
@@ -2439,6 +2454,30 @@ async def stripe_webhook(request: Request):
                                  obj.get("amount_total"), obj.get("currency"))
         # Also finalize merch orders (no-op if the session is not an order).
         await _finalize_order(session_id)
+        # Subscription checkout -> link & sync the subscription (source of truth).
+        if obj.get("mode") == "subscription" and obj.get("subscription"):
+            await _link_subscription_from_session(obj)
+    elif event.get("type", "").startswith("customer.subscription"):
+        # created | updated | deleted -> refresh supporter state.
+        await _apply_subscription(dict(event["data"]["object"]))
+    elif event.get("type") in ("invoice.paid", "invoice.payment_succeeded", "invoice.payment_failed"):
+        obj = event["data"]["object"]
+        sub_id = obj.get("subscription")
+        if sub_id:
+            synced = await _sync_subscription_by_id(sub_id)
+            # Record income for RENEWALS only (the first invoice is already booked
+            # by the checkout.session flow -> avoids double counting).
+            if event.get("type") in ("invoice.paid", "invoice.payment_succeeded") \
+                    and obj.get("billing_reason") == "subscription_cycle" \
+                    and (obj.get("amount_paid") or 0) > 0:
+                plan = (synced or {}).get("plan") or ""
+                await record_auto_income(
+                    ref=obj.get("id"),
+                    amount=round((obj.get("amount_paid") or 0) / 100, 2),
+                    category="Abbonamento Premium",
+                    description=f"Rinnovo abbonamento mensile €{plan}",
+                    source="Abbonamento dal sito",
+                )
     return {"received": True}
 
 
@@ -2472,6 +2511,7 @@ async def create_subscription_checkout(body: SubscribeIn, request: Request,
                 success_url=f"{origin}/donation-success?session_id={{CHECKOUT_SESSION_ID}}&type=sub",
                 cancel_url=f"{origin}/donate",
                 metadata=metadata,
+                subscription_data={"metadata": metadata},
                 **({"customer_email": body.donor_email} if body.donor_email else {}),
             )
 
@@ -2490,6 +2530,137 @@ async def create_subscription_checkout(body: SubscribeIn, request: Request,
         "created_at": now_utc(), "updated_at": now_utc(),
     })
     return {"url": session.url, "session_id": session.id}
+
+
+# ---------------- Supporter status (derived from a live Stripe subscription) ----------------
+# The `subscriptions` collection is the SINGLE SOURCE OF TRUTH for supporter state,
+# kept in sync with Stripe via webhooks (prod) and on-demand sync (GET /me/subscription).
+# A user can NEVER become a supporter from client-supplied data.
+
+def _plan_from_stripe_sub(sub_obj: dict) -> Optional[str]:
+    try:
+        item = (sub_obj.get("items", {}).get("data") or [{}])[0]
+        price = item.get("price") or {}
+        lk = price.get("lookup_key") or ""
+        if lk.startswith("pdu_monthly_"):
+            return lk.replace("pdu_monthly_", "")
+        amt = price.get("unit_amount")
+        if amt:
+            return str(int(amt / 100))
+    except Exception:
+        pass
+    return None
+
+
+def _dt_from_ts(ts) -> Optional[datetime]:
+    if not ts:
+        return None
+    try:
+        return datetime.fromtimestamp(int(ts), tz=timezone.utc)
+    except Exception:
+        return None
+
+
+def _is_supporter(sub: Optional[dict]) -> bool:
+    """Supporter iff a valid subscription exists. Stripe keeps status='active'
+    (with cancel_at_period_end=true) until the paid period ends, then fires
+    subscription.deleted -> status='canceled'. So benefits persist until the real
+    end of the paid period automatically; past_due keeps a grace until period end."""
+    if not sub:
+        return False
+    status = sub.get("status")
+    cpe = sub.get("current_period_end")
+    if isinstance(cpe, str):
+        try:
+            cpe = datetime.fromisoformat(cpe)
+        except Exception:
+            cpe = None
+    if cpe and cpe.tzinfo is None:
+        cpe = cpe.replace(tzinfo=timezone.utc)
+    if status in ("active", "trialing"):
+        return True
+    if status == "past_due" and cpe and cpe > now_utc():
+        return True
+    return False
+
+
+def _sub_public(sub: Optional[dict]) -> Optional[dict]:
+    if not sub:
+        return None
+    cpe = sub.get("current_period_end")
+    return {
+        "plan": sub.get("plan"),
+        "status": sub.get("status"),
+        "cancel_at_period_end": bool(sub.get("cancel_at_period_end")),
+        "current_period_end": cpe.isoformat() if isinstance(cpe, datetime) else cpe,
+    }
+
+
+async def _apply_subscription(sub_obj: dict, user_id: Optional[str] = None):
+    """Upsert our subscriptions doc from a Stripe Subscription object. Idempotent."""
+    sub_id = sub_obj.get("id")
+    if not sub_id:
+        return None
+    uid = user_id or (sub_obj.get("metadata") or {}).get("user_id")
+    # Resolve user_id from an existing record if the event carries no metadata.
+    existing = await db.subscriptions.find_one({"stripe_subscription_id": sub_id})
+    if not uid and existing:
+        uid = existing.get("user_id")
+    doc = {
+        "stripe_subscription_id": sub_id,
+        "stripe_customer_id": sub_obj.get("customer"),
+        "status": sub_obj.get("status"),
+        "cancel_at_period_end": bool(sub_obj.get("cancel_at_period_end")),
+        "current_period_end": _dt_from_ts(sub_obj.get("current_period_end")),
+        "plan": _plan_from_stripe_sub(sub_obj),
+        "updated_at": now_utc(),
+    }
+    if uid:
+        doc["user_id"] = uid
+    key = {"user_id": uid} if uid else {"stripe_subscription_id": sub_id}
+    await db.subscriptions.update_one(
+        key, {"$set": doc, "$setOnInsert": {"created_at": now_utc()}}, upsert=True)
+    return doc
+
+
+async def _sync_subscription_by_id(sub_id: str, user_id: Optional[str] = None):
+    """Fetch a subscription from Stripe and persist it (authoritative refresh)."""
+    if not STRIPE_API_KEY or not sub_id:
+        return None
+    try:
+        sub_obj = await asyncio.to_thread(lambda: stripe_sdk.Subscription.retrieve(sub_id))
+    except Exception as e:
+        logger.warning("sub sync %s failed: %s", sub_id, e)
+        return None
+    return await _apply_subscription(dict(sub_obj), user_id)
+
+
+async def _link_subscription_from_session(session_obj: dict):
+    """After a subscription Checkout completes, store its subscription id/customer
+    and sync live status. Works even without a webhook (dev) via status polling."""
+    sub_id = session_obj.get("subscription")
+    if not sub_id:
+        return None
+    uid = (session_obj.get("metadata") or {}).get("user_id")
+    return await _sync_subscription_by_id(sub_id, uid)
+
+
+async def get_supporter_state(user_id: str, sync: bool = False) -> dict:
+    """Return {is_supporter, subscription} for a user. When sync=True and a
+    subscription id is known, refresh it from Stripe first (cross-device truth)."""
+    sub = await db.subscriptions.find_one({"user_id": user_id})
+    if sync and sub and sub.get("stripe_subscription_id"):
+        refreshed = await _sync_subscription_by_id(sub["stripe_subscription_id"], user_id)
+        if refreshed:
+            sub = await db.subscriptions.find_one({"user_id": user_id})
+    return {"is_supporter": _is_supporter(sub), "subscription": _sub_public(sub)}
+
+
+@api_router.get("/me/subscription")
+async def my_subscription(authorization: Optional[str] = Header(None)):
+    """Authoritative supporter status for the current user (syncs from Stripe)."""
+    user = await get_current_user(authorization)
+    return await get_supporter_state(user["user_id"], sync=True)
 
 
 # ---------------- Merchandising orders (Stripe payment mode, multi line-item) ----------------

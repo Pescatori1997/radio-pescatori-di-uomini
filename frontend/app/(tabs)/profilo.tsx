@@ -7,12 +7,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/src/context/AuthContext";
 import { usePlayer } from "@/src/context/PlayerContext";
 import { api } from "@/src/api";
+import { SupporterMedal, SupporterTag } from "@/src/components/SupporterBadge";
 import { colors, spacing, radius } from "@/src/theme";
 
 export default function Profilo() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const { playTrack } = usePlayer();
   const [favs, setFavs] = useState<any[]>([]);
   const [history, setHistory] = useState<any[]>([]);
@@ -24,10 +25,14 @@ export default function Profilo() {
         api.favorites().then(setFavs).catch(() => {});
         api.history().then(setHistory).catch(() => {});
         api.adminMe().then(() => setIsAdmin(true)).catch(() => setIsAdmin(false));
+        // Authoritative supporter refresh: sync the subscription from Stripe
+        // (server-side) then refresh the user so the badge reflects the real
+        // state on any device, after cancellation, renewal or expiry.
+        api.mySubscription().then(() => refreshUser()).catch(() => {});
       } else {
         setIsAdmin(false);
       }
-    }, [user])
+    }, [user?.user_id]) // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const menu = [
@@ -62,8 +67,21 @@ export default function Profilo() {
             <View style={[styles.avatar, styles.avatarFallback]}><Text style={styles.avatarInit}>{user.name?.[0]?.toUpperCase() || "U"}</Text></View>
           )}
           <View style={{ flex: 1 }}>
-            <Text style={styles.userName}>{user.name}</Text>
-            <Text style={styles.userEmail}>{user.email}</Text>
+            <View style={styles.nameRow}>
+              <Text style={styles.userName} numberOfLines={1}>{user.name}</Text>
+              {user.is_supporter && <SupporterMedal size={18} />}
+            </View>
+            {user.is_supporter ? (
+              <SupporterTag />
+            ) : (
+              <>
+                <Text style={styles.userEmail}>{user.email}</Text>
+                <Pressable testID="become-supporter" onPress={() => router.push("/donate")} hitSlop={6} style={styles.supportInvite}>
+                  <Ionicons name="heart" size={13} color={colors.brandPrimary} />
+                  <Text style={styles.supportInviteText}>Sostieni il progetto</Text>
+                </Pressable>
+              </>
+            )}
           </View>
           <Pressable testID="logout-button" onPress={logout} hitSlop={10}><Ionicons name="log-out-outline" size={24} color={colors.error} /></Pressable>
         </View>
@@ -133,8 +151,11 @@ const styles = StyleSheet.create({
   avatar: { width: 56, height: 56, borderRadius: 28 },
   avatarFallback: { backgroundColor: colors.navy, alignItems: "center", justifyContent: "center" },
   avatarInit: { color: colors.white, fontSize: 22, fontWeight: "800" },
-  userName: { fontSize: 18, fontWeight: "800", color: colors.onSurface },
+  userName: { fontSize: 18, fontWeight: "800", color: colors.onSurface, flexShrink: 1 },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   userEmail: { fontSize: 13, color: colors.onSurfaceTertiary, marginTop: 2 },
+  supportInvite: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 6 },
+  supportInviteText: { fontSize: 13, color: colors.brandPrimary, fontWeight: "700" },
   loginCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginHorizontal: spacing.lg, marginTop: spacing.lg, backgroundColor: colors.navy, borderRadius: radius.lg, padding: spacing.lg },
   loginIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
   loginTitle: { fontSize: 16, fontWeight: "800", color: colors.white },
