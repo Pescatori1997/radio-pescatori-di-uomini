@@ -1,0 +1,37 @@
+{
+  "summary": "Tested new 'Statistiche utenti, attività community & social proof' feature end-to-end (BE + FE, mobile 390x844). Backend: analytics pytest suite 6/6 PASS + live curl verification against the public URL for GET /api/community/stats, /api/community/radio-listeners, /api/content/stats (aggregated-only, no PII leak); dedup for /api/track/content (3x same user+kind+id+action → counted:true then false,false); guests correctly ignored on /api/track/active, /api/track/content and /api/track/radio/start (session_id:null); radio session reuse verified (2 consecutive /track/radio/start return same rs_ id); /api/admin/analytics: 401 no auth, 403 normal user, 200 admin with the exact required shape (users.total/new_today/new_7/new_30/growth_30_pct/active_today/active_7/active_30/online_now, registrations_series[], active_series[], radio{current,stream_listeners,unique_today,unique_range,peak_concurrent,avg_minutes,total_hours,sessions}, content.meditations{views,unique_users,top[]}, content.podcasts{plays,unique_users,top[]}, community{prayer_requests,amen_total,testimonies,messages}); range=7|30|90|all all valid. Frontend: guest home shows community social-proof band 'Una comunità che cresce insieme' with real counts (59 membri, 3 attivi oggi, +27 nuovi questa settimana) and testID community-join. Admin UI login → /admin/statistiche renders all sections and all 4 range chips (range-7/30/90/all testIDs present) with 2 SVG line charts (Andamento). Normal user → 'Accesso Negato' at /admin/statistiche (correct). Meditation detail /meditazioni/med_50209f73871c triggers /api/track/content on mount, shows '1 lettura' social proof; page refresh does NOT inflate the count (backend dedup confirmed: views stayed at 1 after 4+ refreshes). LiveListeners is correctly hidden when count<=0 and only rendered while isPlaying (player.tsx L104). Stream (AzuraCast) shows '—' when null (graceful). No regressions detected. Everything works as specified.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_analytics.py",
+    "/app/test_reports/pytest/iteration_38_analytics.xml"
+  ],
+  "action_items": [
+    "(Optional / nice-to-have — not a bug) Consider adding a lightweight client-side per-session guard around api.trackContent so it fires once per user+content mount instead of on every remount/refresh; the backend already dedups so counts are correct, this would only reduce API chatter.",
+    "(Optional — not blocking) Podcast collection is empty in this env, so /podcast/<id> play-tracking couldn't be validated visually; contract path is identical to meditation and was verified via backend curl (kind='podcast', action='play', dedup works). Consider seeding one podcast for E2E.",
+    "(Optional — testID hygiene) Login form fields have no testIDs (login-email/login-password/login-submit) — required us to fall back to input index + text scan. Adding them would make future E2E more robust."
+  ],
+  "critical_code_review_comments": [
+    "analytics.py is well-scoped (~450 lines), uses parameter injection to avoid circular imports (mirrors timoteo pattern) — good.",
+    "TTL cleanup enforced via expireAfterSeconds on radio_sessions (120 days) to bound growth — good.",
+    "Public endpoints return ONLY aggregated dicts; verified no user identifiers leak. Set of keys strictly {members, active_today, new_this_week, online_now}.",
+    "Radio start correctly reuses an open session for the same user within the last 90s of heartbeat — prevents refresh inflation.",
+    "growth_30_pct returns null when prev_30==0 (avoids divide-by-zero) — the admin UI handles it correctly (renders no sub-line when null).",
+    "content_views dedup key is content_kind:content_id:action:user_id — refresh-safe; unique-view increment only on upsert insert.",
+    "guests properly ignored across track/active, track/content, track/radio/start (session_id null).",
+    "Consider: MiniLineChart empty state message 'Il tracking degli attivi parte da ora' is friendly and matches spec (metrics start from implementation time).",
+    "server.py already very large (previously flagged >5600 lines); analytics being a separate module is the correct approach and does not add to server.py bloat."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Existing test users created earlier iterations were reused (an.normal@test.it, an.admin@test.it, test@pescatoridiuomini.it, pescatoridiuomini@outlook.it). Created one meditation view record (med_50209f73871c by user_6d3efb985a8b) and one podcast play record (pod_1 by user_an_normal) via tracking endpoints during testing. Also produced one closed radio session for user_6d3efb985a8b. All data is aggregated-only and safe.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Analytics feature is stable. Backend endpoints: /api/community/stats (public 60s cache), /api/community/radio-listeners (public 10s cache), /api/content/stats?kind=&id= (public 60s cache), /api/track/{active,content,radio/start,radio/beat,radio/stop} (auth optional; guests ignored), /api/admin/analytics?range=7|30|90|all (admin only, 401/403/200). Frontend: /admin/statistiche uses testIDs range-7/30/90/all. Home community band uses testID community-join. LiveListeners renders inside player.tsx only when isPlaying=true and count>0. Meditation detail fires api.trackContent on mount. Podcast detail fires it on play (playback press). No blockers for main agent — can self-verify.",
+  "rca_of_issue": "N/A — no defects found in the new feature."
+}
