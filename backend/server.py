@@ -3731,6 +3731,114 @@ async def get_meditation(mid: str):
     return _decorate_meditation(doc)
 
 
+# ---------------- Meditation interactions (like / praying / comments) ----------------
+# Toggle interactions are per-user (unique index) so a single user can't inflate a
+# counter by tapping repeatedly. Guests can read counts but not interact.
+class MedCommentIn(BaseModel):
+    text: str
+
+
+async def _med_state(mid: str, user: Optional[dict]):
+    doc = await db.meditations.find_one({"id": mid}, {"_id": 0, "likes_count": 1, "praying_count": 1, "comments_count": 1})
+    liked = praying = False
+    if user:
+        uid = user["user_id"]
+        liked = bool(await db.meditation_likes.find_one({"mid": mid, "uid": uid}))
+        praying = bool(await db.meditation_prayers.find_one({"mid": mid, "uid": uid}))
+    return {
+        "likes_count": (doc or {}).get("likes_count", 0),
+        "praying_count": (doc or {}).get("praying_count", 0),
+        "comments_count": (doc or {}).get("comments_count", 0),
+        "liked": liked, "praying": praying,
+    }
+
+
+@api_router.get("/meditations/{mid}/interactions")
+async def meditation_interactions(mid: str, authorization: Optional[str] = Header(None)):
+    user = None
+    if authorization:
+        try:
+            user = await get_current_user(authorization)
+        except Exception:
+            user = None
+    return await _med_state(mid, user)
+
+
+@api_router.post("/meditations/{mid}/like")
+async def meditation_like(mid: str, authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    uid = user["user_id"]
+    existing = await db.meditation_likes.find_one({"mid": mid, "uid": uid})
+    if existing:
+        await db.meditation_likes.delete_one({"mid": mid, "uid": uid})
+        await db.meditations.update_one({"id": mid}, {"$inc": {"likes_count": -1}})
+        liked = False
+    else:
+        await db.meditation_likes.update_one({"mid": mid, "uid": uid},
+            {"$set": {"mid": mid, "uid": uid, "at": now_utc()}}, upsert=True)
+        await db.meditations.update_one({"id": mid}, {"$inc": {"likes_count": 1}})
+        liked = True
+    doc = await db.meditations.find_one({"id": mid}, {"_id": 0, "likes_count": 1})
+    return {"liked": liked, "likes_count": max(0, (doc or {}).get("likes_count", 0))}
+
+
+@api_router.post("/meditations/{mid}/pray")
+async def meditation_pray(mid: str, authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    uid = user["user_id"]
+    existing = await db.meditation_prayers.find_one({"mid": mid, "uid": uid})
+    if existing:
+        await db.meditation_prayers.delete_one({"mid": mid, "uid": uid})
+        await db.meditations.update_one({"id": mid}, {"$inc": {"praying_count": -1}})
+        praying = False
+    else:
+        await db.meditation_prayers.update_one({"mid": mid, "uid": uid},
+            {"$set": {"mid": mid, "uid": uid, "at": now_utc()}}, upsert=True)
+        await db.meditations.update_one({"id": mid}, {"$inc": {"praying_count": 1}})
+        praying = True
+    doc = await db.meditations.find_one({"id": mid}, {"_id": 0, "praying_count": 1})
+    return {"praying": praying, "praying_count": max(0, (doc or {}).get("praying_count", 0))}
+
+
+@api_router.get("/meditations/{mid}/comments")
+async def meditation_comments(mid: str):
+    docs = await db.meditation_comments.find({"mid": mid}, {"_id": 0}).sort("created_at", -1).to_list(300)
+    return docs
+
+
+@api_router.post("/meditations/{mid}/comments", status_code=201)
+async def meditation_comment_create(mid: str, body: MedCommentIn, authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    text = (body.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Commento vuoto")
+    if not await db.meditations.find_one({"id": mid}, {"_id": 0, "id": 1}):
+        raise HTTPException(status_code=404, detail="Meditazione non trovata")
+    doc = {
+        "id": new_id("mc"), "mid": mid, "uid": user["user_id"],
+        "name": user.get("name") or "Utente", "picture": user.get("picture"),
+        "text": text[:2000], "created_at": now_utc(),
+    }
+    await db.meditation_comments.insert_one(doc)
+    await db.meditations.update_one({"id": mid}, {"$inc": {"comments_count": 1}})
+    doc.pop("_id", None)
+    return doc
+
+
+@api_router.delete("/meditations/comments/{cid}")
+async def meditation_comment_delete(cid: str, authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    c = await db.meditation_comments.find_one({"id": cid})
+    if not c:
+        raise HTTPException(status_code=404, detail="Commento non trovato")
+    is_admin = user.get("role") == ROLE_ADMIN or _is_super_admin(user)
+    if c["uid"] != user["user_id"] and not is_admin:
+        raise HTTPException(status_code=403, detail="Non autorizzato")
+    await db.meditation_comments.delete_one({"id": cid})
+    await db.meditations.update_one({"id": c["mid"]}, {"$inc": {"comments_count": -1}})
+    return {"ok": True}
+
+
 @api_router.get("/admin/meditations")
 async def admin_meditations(status: Optional[str] = None, search: Optional[str] = None,
                             admin=Depends(require_perm("meditations"))):
@@ -5659,6 +5767,9 @@ async def startup():
         await db.finance_entries.create_index("ref")
         await db.finance_audit_log.create_index([("at", -1)])
         await db.messages.create_index("created_at")
+        await db.meditation_likes.create_index([("mid", 1), ("uid", 1)], unique=True)
+        await db.meditation_prayers.create_index([("mid", 1), ("uid", 1)], unique=True)
+        await db.meditation_comments.create_index([("mid", 1), ("created_at", -1)])
     except Exception as e:
         logger.warning("index creation: %s", e)
 

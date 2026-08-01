@@ -175,6 +175,11 @@ export const api = {
   },
   meditationCategories: () => request("/meditations/categories"),
   meditationItem: (id: string) => request(`/meditations/${id}`),
+  meditationInteractions: (id: string) => request(`/meditations/${id}/interactions`, {}, true).catch(() => request(`/meditations/${id}/interactions`)),
+  meditationLike: (id: string) => request(`/meditations/${id}/like`, { method: "POST" }, true),
+  meditationPray: (id: string) => request(`/meditations/${id}/pray`, { method: "POST" }, true),
+  meditationComments: (id: string) => request(`/meditations/${id}/comments`),
+  meditationComment: (id: string, text: string) => request(`/meditations/${id}/comments`, { method: "POST", body: JSON.stringify({ text }) }, true),
   adminMeditations: (status?: string, search?: string) => {
     const q = new URLSearchParams();
     if (status) q.set("status", status);

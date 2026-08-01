@@ -78,7 +78,7 @@ export default function MeditazioniTab() {
           <View style={styles.list}>
             {items.map((m, i) => (
               <Animated.View key={m.id} entering={FadeInDown.delay(Math.min(i * 50, 300))}>
-                <PressableScale testID={`med-card-${m.id}`} style={styles.card} onPress={() => router.push(`/meditazioni/${m.id}`)}>
+                <PressableScale testID={`med-card-${m.id}`} style={styles.card} onPress={() => router.push({ pathname: "/meditazioni/player", params: { start: m.id, q: search, cat } })}>
                   <View style={styles.thumbWrap}>
                     {m.thumbnail ? <Image source={{ uri: m.thumbnail }} style={[styles.thumb, { aspectRatio: thumbAspect }]} contentFit="cover" /> : <View style={[styles.thumb, styles.thumbEmpty, { aspectRatio: thumbAspect }]}><MaterialCommunityIcons name="play-circle" size={44} color={colors.white} /></View>}
                     <View style={styles.playOverlay}><Ionicons name="play" size={20} color={colors.navy} /></View>
