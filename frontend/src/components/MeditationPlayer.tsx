@@ -4,42 +4,46 @@ import { WebView } from "react-native-webview";
 import { mediaUrl } from "@/src/api";
 import { embedSrc } from "@/src/utils/embeds";
 
-function pageHtml(inner: string) {
-  return `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"><style>*{margin:0;padding:0;box-sizing:border-box}html,body{background:#000;height:100%;width:100%}.w{position:relative;width:100%;height:100%}iframe,video,audio{position:absolute;inset:0;width:100%;height:100%;border:0}audio{position:static;width:90%;margin:12px auto;display:block}</style></head><body><div class="w">${inner}</div></body></html>`;
+function pageHtml(inner: string, fill: boolean) {
+  const fit = fill ? "cover" : "contain";
+  return `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"><style>*{margin:0;padding:0;box-sizing:border-box}html,body{background:#000;height:100%;width:100%;overflow:hidden}.w{position:relative;width:100%;height:100%}iframe{position:absolute;inset:0;width:100%;height:100%;border:0}video{position:absolute;inset:0;width:100%;height:100%;object-fit:${fit};border:0}audio{position:static;width:90%;margin:12px auto;display:block}</style></head><body><div class="w">${inner}</div></body></html>`;
 }
 
-// Append autoplay/mute params to an embed URL. Browsers/mobile only allow
-// autoplay when muted, so we start muted (user can unmute via the player chrome).
+// Tap-to-control script for the fullscreen (TikTok-style) player: first tap
+// unmutes, next taps toggle play/pause. Keeps a native-app feel without chrome.
+const TAP_JS = `<script>(function(){var v=document.getElementById('v');if(!v)return;document.body.addEventListener('click',function(){if(v.muted){v.muted=false;v.play();}else if(v.paused){v.play();}else{v.pause();}});})();</script>`;
+
 function withAutoplay(url: string): string {
   const sep = url.includes("?") ? "&" : "?";
   return `${url}${sep}autoplay=1&mute=1&muted=1&playsinline=1`;
 }
 
 /**
- * Native renderer: everything plays inside a WebView so the user never leaves
- * the app. Supports the continuous vertical player via `active`/`autoplay`:
- * only the active card autoplays (muted); the WebView is keyed on `active` so it
- * remounts when a card becomes active/inactive — this reliably STOPS audio when
- * you swipe away (no overlapping streams).
+ * Renders meditation media inside a WebView (user never leaves the app).
+ * - `fill` = fullscreen vertical (TikTok-like) with object-fit: cover, no chrome,
+ *   autoplay muted + loop, tap to unmute / play-pause.
+ * - default = classic contained player with native controls.
+ * The WebView is keyed on `active` so it remounts when a card gains/loses focus,
+ * reliably stopping audio on swipe (no overlapping streams).
  */
 export default function MeditationPlayer({
-  m, active = true, autoplay = false,
-}: { m: any; active?: boolean; autoplay?: boolean }) {
+  m, active = true, autoplay = false, fill = false,
+}: { m: any; active?: boolean; autoplay?: boolean; fill?: boolean }) {
   let html: string | null = null;
   let uri: string | null = null;
   const auto = active && autoplay;
-  const autoAttr = auto ? "autoplay muted" : "";
+  const vAttrs = `playsinline webkit-playsinline ${auto ? "autoplay muted" : ""} ${fill ? "loop" : "controls"}`;
 
   if (m?.media_id && m?.media_type === "video") {
-    html = pageHtml(`<video src="${mediaUrl(m.media_id)}" ${m.thumbnail ? `poster="${m.thumbnail}"` : ""} controls playsinline webkit-playsinline ${autoAttr}></video>`);
+    html = pageHtml(`<video id="v" src="${mediaUrl(m.media_id)}" ${m.thumbnail ? `poster="${m.thumbnail}"` : ""} ${vAttrs}></video>${fill ? TAP_JS : ""}`, fill);
   } else if (m?.media_id && m?.media_type === "audio") {
-    html = pageHtml(`<div style="display:flex;align-items:center;justify-content:center;height:100%;background:#0A1128"><audio src="${mediaUrl(m.media_id)}" controls ${autoAttr}></audio></div>`);
+    html = pageHtml(`<div style="display:flex;align-items:center;justify-content:center;height:100%;background:#0A1128"><audio src="${mediaUrl(m.media_id)}" controls ${auto ? "autoplay" : ""}></audio></div>`, fill);
   } else if (m?.media_id && m?.media_type === "pdf") {
     uri = `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(mediaUrl(m.media_id))}`;
   } else {
     const src = embedSrc(m?.video_url || "", m?.provider);
     if (src) uri = auto ? withAutoplay(src) : src;
-    else if (m?.video_url) html = pageHtml(`<video src="${m.video_url}" controls playsinline webkit-playsinline ${autoAttr}></video>`);
+    else if (m?.video_url) html = pageHtml(`<video id="v" src="${m.video_url}" ${vAttrs}></video>${fill ? TAP_JS : ""}`, fill);
   }
 
   if (!html && !uri) {
@@ -56,6 +60,7 @@ export default function MeditationPlayer({
       allowsInlineMediaPlayback
       javaScriptEnabled
       domStorageEnabled
+      scrollEnabled={false}
       mediaPlaybackRequiresUserAction={false}
       originWhitelist={["*"]}
     />
