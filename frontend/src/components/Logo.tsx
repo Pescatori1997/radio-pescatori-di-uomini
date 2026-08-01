@@ -5,8 +5,11 @@ import { colors } from "@/src/theme";
 
 // Shared official "Pescatori di Uomini" logo badge. Single source of truth used
 // across the public app (Home hero) and the Admin panel sidebar, so any future
-// logo update (assets/images/logo.png) reflects everywhere automatically.
-const LOGO = require("@/assets/images/logo.png");
+// logo update reflects everywhere automatically. We use a TIGHTLY CROPPED SQUARE
+// emblem (logo-badge.png) so it fills the circular badge crisply — the original
+// logo.png is a tall portrait with large transparent padding that rendered the
+// emblem too small (and blurry when captured for share cards).
+const LOGO = require("@/assets/images/logo-badge.png");
 
 export default function Logo({
   size = 52,
