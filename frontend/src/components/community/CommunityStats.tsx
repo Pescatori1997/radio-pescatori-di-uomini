@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { api } from "@/src/api";
+import { useAuth } from "@/src/context/AuthContext";
 import { colors, spacing, radius } from "@/src/theme";
 
 /**
@@ -40,6 +41,7 @@ export function AnimatedCounter({ value, duration = 1100, style }: { value: numb
  */
 export default function CommunityStats() {
   const router = useRouter();
+  const { user } = useAuth();
   const [stats, setStats] = useState<{ members: number; active_today: number; new_this_week: number } | null>(null);
 
   useEffect(() => {
@@ -71,10 +73,12 @@ export default function CommunityStats() {
       {stats.new_this_week > 0 && (
         <Text style={styles.newLine}>🔥 +{stats.new_this_week} nuovi membri questa settimana</Text>
       )}
-      <Pressable testID="community-join" onPress={() => router.push("/podcast")} hitSlop={4} style={styles.cta}>
-        <Text style={styles.ctaText}>Fai parte della community</Text>
-        <Ionicons name="arrow-forward" size={14} color={colors.brandPrimary} />
-      </Pressable>
+      {!user && (
+        <Pressable testID="community-join" onPress={() => router.push("/login?mode=register")} hitSlop={4} style={styles.cta}>
+          <Text style={styles.ctaText}>Fai parte della community</Text>
+          <Ionicons name="arrow-forward" size={14} color={colors.brandPrimary} />
+        </Pressable>
+      )}
     </Animated.View>
   );
 }

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { View, Text, StyleSheet, TextInput, Pressable, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/src/context/AuthContext";
 import PressableScale from "@/src/components/PressableScale";
@@ -14,7 +14,8 @@ export default function Login() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { loginEmail, register, loginGoogle } = useAuth();
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const params = useLocalSearchParams<{ mode?: string }>();
+  const [mode, setMode] = useState<"login" | "register">(params.mode === "register" ? "register" : "login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
