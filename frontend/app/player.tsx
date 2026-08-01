@@ -7,6 +7,7 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePlayer } from "@/src/context/PlayerContext";
 import PressableScale from "@/src/components/PressableScale";
+import LiveListeners from "@/src/components/community/LiveListeners";
 import { colors, spacing, radius } from "@/src/theme";
 
 function fmt(s: number) {
@@ -100,6 +101,7 @@ export default function PlayerScreen() {
                 <Text style={styles.listenersText}>{liveInfo.listeners} in ascolto</Text>
               </View>
             )}
+            {isPlaying && <LiveListeners />}
           </View>
         ) : (
           <View style={styles.progressWrap}>

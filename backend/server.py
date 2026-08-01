@@ -22,6 +22,7 @@ from typing import List, Optional, Dict
 from datetime import datetime, timezone, timedelta
 from verses_data import VERSES_SEED
 import timoteo
+import analytics
 try:
     from zoneinfo import ZoneInfo
     ROME_TZ = ZoneInfo("Europe/Rome")
@@ -5575,6 +5576,11 @@ async def agenda_collaborators(user=Depends(require_agenda("view"))):
 
 app.include_router(api_router)
 
+# Analytics & community social-proof (modular router, injected deps).
+analytics.init(db=db, get_current_user=get_current_user, require_admin=require_admin,
+               now_utc=now_utc, new_id=new_id, live_status=live_status, logger=logger)
+app.include_router(analytics.router)
+
 # ---------------- Lightweight rate limiting (per IP, sliding window) ----------------
 from collections import defaultdict, deque
 import time as _time
@@ -5655,6 +5661,11 @@ async def startup():
         await db.messages.create_index("created_at")
     except Exception as e:
         logger.warning("index creation: %s", e)
+
+    try:
+        await analytics.ensure_indexes()
+    except Exception as e:
+        logger.warning("analytics index creation: %s", e)
 
     if not await db.live_status.find_one({"_id": "current"}):
         await db.live_status.insert_one({

@@ -447,6 +447,19 @@ export const api = {
   // supporter status (authoritative, synced from Stripe server-side)
   mySubscription: () => request("/me/subscription", {}, true),
 
+  // ---- analytics & community social proof ----
+  trackActive: () => request("/track/active", { method: "POST" }, true).catch(() => null),
+  trackContent: (kind: string, id: string, action: "view" | "play" = "view") =>
+    request("/track/content", { method: "POST", body: JSON.stringify({ kind, id, action }) }, true).catch(() => null),
+  radioStart: () => request("/track/radio/start", { method: "POST" }, true).catch(() => ({ session_id: null })),
+  radioBeat: (session_id: string) => request("/track/radio/beat", { method: "POST", body: JSON.stringify({ session_id }) }, true).catch(() => null),
+  radioStop: (session_id: string) => request("/track/radio/stop", { method: "POST", body: JSON.stringify({ session_id }) }, true).catch(() => null),
+  communityStats: () => request("/community/stats"),
+  radioListeners: () => request("/community/radio-listeners"),
+  contentStats: (kind: string, id: string) =>
+    request(`/content/stats?kind=${encodeURIComponent(kind)}&id=${encodeURIComponent(id)}`),
+  adminAnalytics: (range: string) => request(`/admin/analytics?range=${range}`, {}, true),
+
   /**
    * Streaming chat via SSE over XMLHttpRequest (works on both web and native —
    * React Native's fetch has no ReadableStream reader, XHR.onprogress does).

@@ -100,6 +100,37 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null; }
   };
 
+  // --- Radio listening tracking: a listener is counted ONLY while the LIVE
+  // audio is actually playing (not merely opening the page). Session +
+  // heartbeat with a timeout server-side removes stale/closed listeners. ---
+  const radioSessionRef = useRef<string | null>(null);
+  const radioBeatTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isLivePlaying = isPlaying && !!track?.isLive;
+  useEffect(() => {
+    let cancelled = false;
+    const stopSession = () => {
+      if (radioBeatTimer.current) { clearInterval(radioBeatTimer.current); radioBeatTimer.current = null; }
+      const sid = radioSessionRef.current;
+      if (sid) { radioSessionRef.current = null; api.radioStop(sid); }
+    };
+    if (isLivePlaying) {
+      api.radioStart().then((r: any) => {
+        if (cancelled || !r?.session_id) return;
+        radioSessionRef.current = r.session_id;
+        radioBeatTimer.current = setInterval(() => {
+          if (radioSessionRef.current) api.radioBeat(radioSessionRef.current);
+        }, 60000);
+      });
+    } else {
+      stopSession();
+    }
+    return () => { cancelled = true; if (!isLivePlaying) stopSession(); };
+  }, [isLivePlaying]);
+  useEffect(() => () => {
+    if (radioBeatTimer.current) clearInterval(radioBeatTimer.current);
+    if (radioSessionRef.current) api.radioStop(radioSessionRef.current);
+  }, []);
+
   const attemptReconnect = () => {
     const player = playerRef.current;
     const t = trackRef.current;

@@ -10,6 +10,7 @@ import { goBackOrHome } from "@/src/utils/nav";
 import { usePlayer } from "@/src/context/PlayerContext";
 import { useAuth } from "@/src/context/AuthContext";
 import PressableScale from "@/src/components/PressableScale";
+import ContentSocialProof from "@/src/components/community/ContentSocialProof";
 import { colors, spacing, radius } from "@/src/theme";
 
 export default function PodcastDetail() {
@@ -33,7 +34,7 @@ export default function PodcastDetail() {
   const play = () => {
     if (isThis) { togglePlay(); return; }
     playTrack({ id: p.id, title: p.title, artist: p.author, artwork: p.artwork, url: p.audio_url, isLive: false });
-    if (user) api.addHistory(p.id).catch(() => {});
+    if (user) { api.addHistory(p.id).catch(() => {}); api.trackContent("podcast", p.id, "play"); }
   };
   const toggleFav = async () => {
     if (!user) { router.push("/login"); return; }
@@ -73,6 +74,10 @@ export default function PodcastDetail() {
           <PressableScale testID="pod-detail-share" style={styles.circleBtn} onPress={() => Share.share({ message: `Ascolta "${p.title}" su Pescatori di Uomini` })}>
             <Ionicons name="share-outline" size={22} color={colors.onSurface} />
           </PressableScale>
+        </View>
+
+        <View style={{ paddingHorizontal: spacing.lg }}>
+          <ContentSocialProof kind="podcast" id={id as string} metric="plays" />
         </View>
 
         {p.description ? (

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { Platform } from "react-native";
+import { Platform, AppState } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import { api, TOKEN_KEY } from "@/src/api";
@@ -64,6 +64,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [guestChosen, setGuestChosen] = useState(false);
 
   const setToken = async (token: string) => storage.secureSet(TOKEN_KEY, token);
+
+  // Throttled activity ping: marks the registered user "active"/"online" on app
+  // open and each time it returns to foreground, at most once per 90s. Guests are
+  // ignored server-side. No aggressive polling — event-driven + a light interval.
+  useEffect(() => {
+    if (!user) return;
+    let last = 0;
+    const ping = () => {
+      const now = Date.now();
+      if (now - last < 90000) return;
+      last = now;
+      api.trackActive();
+    };
+    ping();
+    const sub = AppState.addEventListener("change", (s) => { if (s === "active") ping(); });
+    const iv = setInterval(ping, 4 * 60 * 1000);
+    return () => { sub.remove(); clearInterval(iv); };
+  }, [user?.user_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadMe = async () => {
     try {

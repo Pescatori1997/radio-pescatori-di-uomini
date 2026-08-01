@@ -16,6 +16,7 @@ import WeatherWidget from "@/src/components/WeatherWidget";
 import Collaborators from "@/src/components/Collaborators";
 import WhatsAppSection from "@/src/components/WhatsAppSection";
 import VerseOfDayCard from "@/src/components/VerseOfDayCard";
+import CommunityStats from "@/src/components/community/CommunityStats";
 import BibleCard from "@/src/components/BibleCard";
 import { PulsingDot, SoundRings } from "@/src/components/LiveHeroFx";
 import PressableScale from "@/src/components/PressableScale";
@@ -167,6 +168,9 @@ export default function Home() {
       <View style={styles.weatherWrap}>
         <WeatherWidget />
       </View>
+
+      {/* COMMUNITY SOCIAL PROOF */}
+      <CommunityStats />
 
       {/* PODCASTS */}
       <SectionHeader title="Ultimi Podcast" onPress={() => router.push("/podcast")} />

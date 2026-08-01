@@ -7,6 +7,7 @@ import { api, mediaUrl } from "@/src/api";
 import { goBackOrHome } from "@/src/utils/nav";
 import MeditationPlayer from "@/src/components/MeditationPlayer";
 import PressableScale from "@/src/components/PressableScale";
+import ContentSocialProof from "@/src/components/community/ContentSocialProof";
 import { PROVIDER_LABEL } from "@/src/utils/embeds";
 import { colors, spacing, radius } from "@/src/theme";
 
@@ -24,7 +25,10 @@ export default function MeditationDetail() {
   const [loading, setLoading] = useState(true);
 
   useFocusEffect(useCallback(() => {
-    if (id) api.meditationItem(id).then(setM).catch(() => setM(null)).finally(() => setLoading(false));
+    if (id) {
+      api.meditationItem(id).then(setM).catch(() => setM(null)).finally(() => setLoading(false));
+      api.trackContent("meditation", id, "view");
+    }
   }, [id]));
 
   const share = () => {
@@ -72,6 +76,7 @@ export default function MeditationDetail() {
             {!!m.provider && m.provider !== "upload" && <View style={styles.metaPill}><Ionicons name="globe-outline" size={13} color={colors.brandPrimary} /><Text style={styles.metaText}>{PROVIDER_LABEL[m.provider] || m.provider}</Text></View>}
           </View>
           <Text style={styles.date}>{fmtDate(m.publish_date)}</Text>
+          <ContentSocialProof kind="meditation" id={id as string} metric="views" />
 
           {!!m.verse && (
             <View style={styles.verseCard}>
