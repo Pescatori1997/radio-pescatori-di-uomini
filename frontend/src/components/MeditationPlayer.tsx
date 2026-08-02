@@ -3,6 +3,7 @@ import { View, StyleSheet, Text } from "react-native";
 import { WebView } from "react-native-webview";
 import { mediaUrl } from "@/src/api";
 import { embedSrc } from "@/src/utils/embeds";
+import MeditationVideo from "@/src/components/meditations/MeditationVideo";
 
 function pageHtml(inner: string, fill: boolean) {
   const fit = fill ? "cover" : "contain";
@@ -34,6 +35,18 @@ function withAutoplay(url: string): string {
 export default function MeditationPlayer({
   m, active = true, autoplay = false, fill = false,
 }: { m: any; active?: boolean; autoplay?: boolean; fill?: boolean }) {
+  // Fullscreen (TikTok-style) direct video files use the dedicated MeditationVideo
+  // player (expo-video on native, a raw DOM <video> on web) so muted autoplay
+  // works reliably without a manual play tap.
+  if (fill && autoplay) {
+    let directUri: string | null = null;
+    if (m?.media_id && m?.media_type === "video") directUri = mediaUrl(m.media_id);
+    else if (m?.video_url && !embedSrc(m.video_url, m?.provider)) directUri = m.video_url;
+    if (directUri) {
+      return <MeditationVideo uri={directUri} active={active} poster={m?.thumbnail} />;
+    }
+  }
+
   let html: string | null = null;
   let uri: string | null = null;
   const auto = active && autoplay;
