@@ -55,6 +55,13 @@ export default function MeditationPlayer({
     return <View style={styles.empty}><Text style={styles.emptyText}>Contenuto non disponibile</Text></View>;
   }
 
+  // On native (iOS/Android) some WebViews ignore the HTML `autoplay` attribute;
+  // this injected script keeps calling muted play() until it succeeds so the
+  // active card starts automatically. Audio stays off until the user taps.
+  const playJS = fill && auto
+    ? `(function(){function go(){var v=document.getElementById('v');if(v){v.muted=true;v.setAttribute('muted','');var p=v.play();if(p&&p.then){p.then(function(){window.__pl=1;}).catch(function(){});}}}var t=setInterval(function(){if(window.__pl){clearInterval(t);}else{go();}},250);go();setTimeout(function(){clearInterval(t);},8000);})();true;`
+    : undefined;
+
   return (
     <WebView
       key={`${m?.id}-${active ? "on" : "off"}`}
@@ -67,6 +74,7 @@ export default function MeditationPlayer({
       domStorageEnabled
       scrollEnabled={false}
       mediaPlaybackRequiresUserAction={false}
+      injectedJavaScript={playJS}
       originWhitelist={["*"]}
     />
   );

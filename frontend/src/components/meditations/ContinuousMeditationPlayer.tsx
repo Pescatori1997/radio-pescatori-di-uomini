@@ -176,7 +176,6 @@ export default function ContinuousMeditationPlayer({
             <RailBtn testID={`med-pray-${m.id}`} icon={st.praying ? "hand-left" : "hand-left-outline"} activeColor="#38BDF8" active={st.praying} label={st.praying ? "Prego" : `${st.praying_count || 0}`} onPress={() => togglePray(m)} />
             <RailBtn testID={`med-comments-${m.id}`} icon="chatbubble-outline" label={`${st.comments_count || 0}`} onPress={() => openComments(m.id)} />
             <RailBtn testID={`med-share-${m.id}`} icon="arrow-redo-outline" label="Condividi" onPress={() => share(m)} />
-            <RailBtn testID={`med-info-${m.id}`} icon="ellipsis-horizontal" label="Info" onPress={() => setInfoItem(m)} />
           </View>
         )}
 
@@ -200,7 +199,11 @@ export default function ContinuousMeditationPlayer({
           </Pressable>
         ) : <View style={{ width: 40 }} />}
         <Text style={styles.topTitle}>Meditazioni</Text>
-        <View style={{ width: 40 }} />
+        {items.length > 0 && !commentsOpen ? (
+          <Pressable testID="med-info-top" onPress={() => setInfoItem(items[active])} hitSlop={12} style={styles.backBtn}>
+            <Ionicons name="ellipsis-vertical" size={22} color={WHITE} />
+          </Pressable>
+        ) : <View style={{ width: 40 }} />}
       </View>
 
       <View style={{ height: itemH, width, overflow: "hidden" }}>
