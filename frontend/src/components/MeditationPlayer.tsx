@@ -13,6 +13,11 @@ function pageHtml(inner: string, fill: boolean) {
 // unmutes, next taps toggle play/pause. Keeps a native-app feel without chrome.
 const TAP_JS = `<script>(function(){var v=document.getElementById('v');if(!v)return;document.body.addEventListener('click',function(){if(v.muted){v.muted=false;v.play();}else if(v.paused){v.play();}else{v.pause();}});})();</script>`;
 
+// Forces muted autoplay on load (only injected for the ACTIVE card). Retries a
+// few times because iOS/WebView can reject the first play() call. Audio stays
+// off until the user taps (OS rule), handled by TAP_JS.
+const AUTOPLAY_JS = `<script>(function(){var v=document.getElementById('v');if(!v)return;v.muted=true;v.setAttribute('muted','');v.setAttribute('playsinline','');var n=0;var go=function(){var p=v.play();if(p&&p.catch){p.catch(function(){if(n++<10)setTimeout(go,300);});}};go();v.addEventListener('canplay',go);})();</script>`;
+
 function withAutoplay(url: string): string {
   const sep = url.includes("?") ? "&" : "?";
   return `${url}${sep}autoplay=1&mute=1&muted=1&playsinline=1`;
@@ -35,7 +40,7 @@ export default function MeditationPlayer({
   const vAttrs = `playsinline webkit-playsinline ${auto ? "autoplay muted" : ""} ${fill ? "loop" : "controls"}`;
 
   if (m?.media_id && m?.media_type === "video") {
-    html = pageHtml(`<video id="v" src="${mediaUrl(m.media_id)}" ${m.thumbnail ? `poster="${m.thumbnail}"` : ""} ${vAttrs}></video>${fill ? TAP_JS : ""}`, fill);
+    html = pageHtml(`<video id="v" src="${mediaUrl(m.media_id)}" ${m.thumbnail ? `poster="${m.thumbnail}"` : ""} ${vAttrs}></video>${fill ? TAP_JS : ""}${fill && auto ? AUTOPLAY_JS : ""}`, fill);
   } else if (m?.media_id && m?.media_type === "audio") {
     html = pageHtml(`<div style="display:flex;align-items:center;justify-content:center;height:100%;background:#0A1128"><audio src="${mediaUrl(m.media_id)}" controls ${auto ? "autoplay" : ""}></audio></div>`, fill);
   } else if (m?.media_id && m?.media_type === "pdf") {
@@ -43,7 +48,7 @@ export default function MeditationPlayer({
   } else {
     const src = embedSrc(m?.video_url || "", m?.provider);
     if (src) uri = auto ? withAutoplay(src) : src;
-    else if (m?.video_url) html = pageHtml(`<video id="v" src="${m.video_url}" ${vAttrs}></video>${fill ? TAP_JS : ""}`, fill);
+    else if (m?.video_url) html = pageHtml(`<video id="v" src="${m.video_url}" ${vAttrs}></video>${fill ? TAP_JS : ""}${fill && auto ? AUTOPLAY_JS : ""}`, fill);
   }
 
   if (!html && !uri) {

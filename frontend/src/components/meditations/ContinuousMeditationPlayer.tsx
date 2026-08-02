@@ -11,6 +11,7 @@ import { api, mediaUrl } from "@/src/api";
 import { useAuth } from "@/src/context/AuthContext";
 import MeditationPlayer from "@/src/components/MeditationPlayer";
 import MeditationCommentsPanel from "@/src/components/meditations/MeditationCommentsPanel";
+import MeditationInfoSheet from "@/src/components/meditations/MeditationInfoSheet";
 import { colors, spacing } from "@/src/theme";
 
 const WHITE = "#FFFFFF";
@@ -45,6 +46,7 @@ export default function ContinuousMeditationPlayer({
   const [active, setActive] = useState(0);
   const [state, setState] = useState<Record<string, any>>({});
   const [commentsFor, setCommentsFor] = useState<string | null>(null);
+  const [infoItem, setInfoItem] = useState<any>(null);
   const listRef = useRef<FlatList>(null);
   const trackedViews = useRef<Set<string>>(new Set());
   const H = height;
@@ -174,6 +176,7 @@ export default function ContinuousMeditationPlayer({
             <RailBtn testID={`med-pray-${m.id}`} icon={st.praying ? "hand-left" : "hand-left-outline"} activeColor="#38BDF8" active={st.praying} label={st.praying ? "Prego" : `${st.praying_count || 0}`} onPress={() => togglePray(m)} />
             <RailBtn testID={`med-comments-${m.id}`} icon="chatbubble-outline" label={`${st.comments_count || 0}`} onPress={() => openComments(m.id)} />
             <RailBtn testID={`med-share-${m.id}`} icon="arrow-redo-outline" label="Condividi" onPress={() => share(m)} />
+            <RailBtn testID={`med-info-${m.id}`} icon="ellipsis-horizontal" label="Info" onPress={() => setInfoItem(m)} />
           </View>
         )}
 
@@ -242,6 +245,10 @@ export default function ContinuousMeditationPlayer({
             onPosted={() => setState((s) => ({ ...s, [commentsFor]: { ...s[commentsFor], comments_count: (s[commentsFor]?.comments_count || 0) + 1 } }))}
           />
         </Animated.View>
+      )}
+
+      {infoItem && (
+        <MeditationInfoSheet item={infoItem} onClose={() => setInfoItem(null)} />
       )}
     </View>
   );
