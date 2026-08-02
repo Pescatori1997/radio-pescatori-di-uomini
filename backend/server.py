@@ -863,7 +863,7 @@ async def get_history(authorization: Optional[str] = Header(None)):
 ADMIN_EMAILS = [e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()]
 ROLE_ADMIN, ROLE_COLLAB, ROLE_LISTENER = "administrator", "collaborator", "listener"
 # Sections that can be delegated to a collaborator (each maps to an existing admin area).
-PERM_SECTIONS = ["podcasts", "meditations", "news", "merch", "schedule", "prayers", "messages", "team", "radio", "verses", "finance", "agenda"]
+PERM_SECTIONS = ["podcasts", "meditations", "news", "showcase", "merch", "schedule", "prayers", "messages", "team", "radio", "verses", "finance", "agenda"]
 
 # Granular Agenda permissions (configurable per collaborator by the Super Admin).
 AGENDA_PERMS = [
@@ -1136,6 +1136,7 @@ async def admin_stats(admin=Depends(require_admin)):
         "new_messages": await db.messages.count_documents({"status": "new"}),
         "programs": await db.programs.count_documents({}),
         "news": await db.news.count_documents({}),
+        "showcase": await db.showcase.count_documents({}),
         "podcasts": await db.podcasts.count_documents({}),
         "meditations": await db.meditations.count_documents({}),
         "products": await db.products.count_documents({}),
@@ -1421,6 +1422,114 @@ async def admin_edit_news(nid: str, body: NewsEdit, admin=Depends(require_perm("
 @api_router.delete("/admin/news/{nid}")
 async def admin_delete_news(nid: str, admin=Depends(require_perm("news"))):
     await db.news.delete_one({"id": nid})
+    return {"ok": True}
+
+
+# ---------------- Showcase (Vetrina) ----------------
+def _parse_ymd(s):
+    if not s:
+        return None
+    try:
+        return datetime.strptime(str(s)[:10], "%Y-%m-%d").date()
+    except Exception:
+        return None
+
+
+def _showcase_visible(doc, today):
+    if not doc.get("active", True):
+        return False
+    sd = _parse_ymd(doc.get("start_date"))
+    ed = _parse_ymd(doc.get("end_date"))
+    if sd and today < sd:
+        return False
+    if ed and today > ed:
+        return False
+    return True
+
+
+@api_router.get("/showcase")
+async def get_showcase():
+    """Public Vetrina: only active cards inside their publication window,
+    ordered by `order`. Expired cards stay in the DB (admin history) but are
+    hidden here."""
+    docs = await db.showcase.find({"active": True}, {"_id": 0}).sort([("order", 1), ("created_at", 1)]).to_list(200)
+    today = now_utc().date()
+    return [d for d in docs if _showcase_visible(d, today)]
+
+
+class ShowcaseIn(BaseModel):
+    title: str
+    description: Optional[str] = ""
+    image: Optional[str] = None
+    category: Optional[str] = "IN EVIDENZA"
+    cta_text: Optional[str] = ""
+    cta_url: Optional[str] = ""
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    active: Optional[bool] = True
+    order: Optional[int] = None
+
+
+class ShowcaseEdit(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    image: Optional[str] = None
+    category: Optional[str] = None
+    cta_text: Optional[str] = None
+    cta_url: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    active: Optional[bool] = None
+    order: Optional[int] = None
+
+
+@api_router.get("/admin/showcase")
+async def admin_showcase(admin=Depends(require_perm("showcase"))):
+    docs = await db.showcase.find({}, {"_id": 0}).sort([("order", 1), ("created_at", 1)]).to_list(500)
+    return docs
+
+
+@api_router.get("/admin/showcase/{sid}")
+async def admin_showcase_item(sid: str, admin=Depends(require_perm("showcase"))):
+    doc = await db.showcase.find_one({"id": sid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Non trovato")
+    return doc
+
+
+@api_router.post("/admin/showcase", status_code=201)
+async def admin_create_showcase(body: ShowcaseIn, admin=Depends(require_perm("showcase"))):
+    doc = body.model_dump()
+    doc["id"] = new_id("showcase")
+    doc["created_at"] = now_utc().isoformat()
+    doc["updated_at"] = doc["created_at"]
+    if doc.get("order") is None:
+        doc["order"] = await db.showcase.count_documents({})
+    await db.showcase.insert_one(dict(doc))
+    await log_activity(admin, f"ha creato la card Vetrina \"{doc.get('title', '')}\"", "showcase", {"id": doc["id"]})
+    return {"ok": True, "id": doc["id"]}
+
+
+@api_router.patch("/admin/showcase/{sid}")
+async def admin_edit_showcase(sid: str, body: ShowcaseEdit, admin=Depends(require_perm("showcase"))):
+    updates = body.model_dump(exclude_unset=True)
+    if updates:
+        updates["updated_at"] = now_utc().isoformat()
+        await db.showcase.update_one({"id": sid}, {"$set": updates})
+    return {"ok": True}
+
+
+@api_router.delete("/admin/showcase/{sid}")
+async def admin_delete_showcase(sid: str, admin=Depends(require_perm("showcase"))):
+    await db.showcase.delete_one({"id": sid})
+    return {"ok": True}
+
+
+@api_router.post("/admin/showcase/order")
+async def admin_showcase_order(body: dict, admin=Depends(require_perm("showcase"))):
+    ids = body.get("ids") or []
+    for i, sid in enumerate(ids):
+        await db.showcase.update_one({"id": sid}, {"$set": {"order": i}})
     return {"ok": True}
 
 

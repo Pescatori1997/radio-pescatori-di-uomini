@@ -17,6 +17,7 @@ const CARDS = [
   { key: "messages", label: "Messaggi", icon: "message-text", color: "#F97316", route: "/admin/messages" },
   { key: "programs", label: "Programmi", icon: "calendar-month", color: "#14B8A6", route: "/admin/schedule" },
   { key: "news", label: "Articoli Notizie", icon: "newspaper-variant", color: "#38BDF8", route: "/admin/news" },
+  { key: "showcase", label: "Vetrina", icon: "star-circle", color: "#F59E0B", route: "/admin/showcase" },
   { key: "verses", label: "Versetti del Giorno", icon: "book-cross", color: "#F59E0B", route: "/admin/verses" },
   { key: "podcasts", label: "Podcast", icon: "microphone", color: "#EF4444", route: "/admin/podcasts" },
   { key: "meditations", label: "Meditazioni", icon: "book-open-variant", color: "#14B8A6", route: "/admin/meditations" },

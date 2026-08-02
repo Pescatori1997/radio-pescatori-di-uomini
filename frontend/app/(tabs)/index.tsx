@@ -18,6 +18,7 @@ import WhatsAppSection from "@/src/components/WhatsAppSection";
 import VerseOfDayCard from "@/src/components/VerseOfDayCard";
 import CommunityStats from "@/src/components/community/CommunityStats";
 import BibleCard from "@/src/components/BibleCard";
+import ShowcaseCarousel from "@/src/components/showcase/ShowcaseCarousel";
 import { PulsingDot, SoundRings } from "@/src/components/LiveHeroFx";
 import PressableScale from "@/src/components/PressableScale";
 import Logo from "@/src/components/Logo";
@@ -30,7 +31,6 @@ export default function Home() {
   const router = useRouter();
   const { playLive, playTrack, track, isPlaying, liveInfo } = usePlayer();
   const [podcasts, setPodcasts] = useState<any[]>([]);
-  const [news, setNews] = useState<any[]>([]);
   const [programs, setPrograms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -38,13 +38,11 @@ export default function Home() {
 
   const load = useCallback(async () => {
     try {
-      const [p, n, pr] = await Promise.all([
+      const [p, pr] = await Promise.all([
         api.podcasts(),
-        api.news(),
         api.programs(),
       ]);
       setPodcasts(p);
-      setNews(n);
       setPrograms(pr);
     } catch (e) {
     } finally {
@@ -189,18 +187,8 @@ export default function Home() {
         ))}
       </ScrollView>
 
-      {/* NEWS */}
-      <SectionHeader title="Ultime Notizie" onPress={() => router.push("/news")} />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hRow}>
-        {news.slice(0, 5).map((n) => (
-          <PressableScale key={n.id} testID={`home-news-${n.id}`} style={styles.newsCard} onPress={() => router.push(`/news/${n.id}`)}>
-            <Image source={{ uri: n.image }} style={styles.newsImg} contentFit="cover" />
-            <LinearGradient colors={["transparent", "rgba(10,17,40,0.9)"]} style={styles.newsScrim} />
-            <View style={styles.newsBadge}><Text style={styles.newsBadgeText}>{n.category}</Text></View>
-            <Text numberOfLines={2} style={styles.newsTitle}>{n.title}</Text>
-          </PressableScale>
-        ))}
-      </ScrollView>
+      {/* VETRINA */}
+      <ShowcaseCarousel />
 
       {/* ORA IN ONDA (compact widget) */}
       <SectionHeader title="Palinsesto" onPress={() => router.push("/palinsesto")} />

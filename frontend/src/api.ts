@@ -284,6 +284,14 @@ export const api = {
   adminCreateNews: (body: any) => request("/admin/news", { method: "POST", body: JSON.stringify(body) }, true),
   adminEditNews: (id: string, body: any) => request(`/admin/news/${id}`, { method: "PATCH", body: JSON.stringify(body) }, true),
   adminDeleteNews: (id: string) => request(`/admin/news/${id}`, { method: "DELETE" }, true),
+  // Showcase (Vetrina)
+  showcase: () => request("/showcase"),
+  adminShowcase: () => request("/admin/showcase", {}, true),
+  adminShowcaseItem: (id: string) => request(`/admin/showcase/${id}`, {}, true),
+  adminCreateShowcase: (body: any) => request("/admin/showcase", { method: "POST", body: JSON.stringify(body) }, true),
+  adminEditShowcase: (id: string, body: any) => request(`/admin/showcase/${id}`, { method: "PATCH", body: JSON.stringify(body) }, true),
+  adminDeleteShowcase: (id: string) => request(`/admin/showcase/${id}`, { method: "DELETE" }, true),
+  adminShowcaseOrder: (ids: string[]) => request("/admin/showcase/order", { method: "POST", body: JSON.stringify({ ids }) }, true),
   // admin prayers
   adminPrayers: (filter?: string, search?: string) => {
     const q = new URLSearchParams();
