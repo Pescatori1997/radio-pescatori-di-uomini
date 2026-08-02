@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator, Share,
-  useWindowDimensions,
+  useWindowDimensions, Animated,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -10,7 +10,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { api, mediaUrl } from "@/src/api";
 import { useAuth } from "@/src/context/AuthContext";
 import MeditationPlayer from "@/src/components/MeditationPlayer";
-import MeditationComments from "@/src/components/meditations/MeditationComments";
+import MeditationCommentsPanel from "@/src/components/meditations/MeditationCommentsPanel";
 import { colors, spacing } from "@/src/theme";
 
 const WHITE = "#FFFFFF";
@@ -49,6 +49,37 @@ export default function ContinuousMeditationPlayer({
   const trackedViews = useRef<Set<string>>(new Set());
   const H = height;
   const bottomSpace = insets.bottom + (isTab ? 84 : 24);
+
+  // Comments panel layout: the video shrinks to the top, the panel slides up
+  // from the bottom. We only resize the video container (never remount the
+  // WebView) so playback continues while commenting (TikTok/Instagram style).
+  const commentsOpen = !!commentsFor;
+  const topH = Math.round(H * 0.45);
+  const itemH = commentsOpen ? topH : H;
+  const panelH = H - topH;
+  const slide = useRef(new Animated.Value(0)).current;
+  const panelBottomInset = isTab ? insets.bottom + 56 : insets.bottom;
+
+  // Animate the panel in when opened; keep it mounted during the slide-out.
+  useEffect(() => {
+    if (commentsFor) {
+      slide.setValue(0);
+      Animated.timing(slide, { toValue: 1, duration: 260, useNativeDriver: true }).start();
+    }
+  }, [commentsFor, slide]);
+
+  const openComments = (id: string) => setCommentsFor(id);
+  const closeComments = () => {
+    Animated.timing(slide, { toValue: 0, duration: 220, useNativeDriver: true }).start(({ finished }) => {
+      if (finished) setCommentsFor(null);
+    });
+  };
+
+  // Keep the active card aligned to the viewport top after the video resizes.
+  useEffect(() => {
+    const t = setTimeout(() => listRef.current?.scrollToOffset({ offset: active * itemH, animated: false }), 0);
+    return () => clearTimeout(t);
+  }, [commentsOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     api.meditations(q || undefined, cat && cat !== "Tutti" ? cat : undefined)
@@ -113,7 +144,7 @@ export default function ContinuousMeditationPlayer({
     const st = state[m.id] || {};
     const showPlayer = Math.abs(index - active) <= 1;
     return (
-      <View style={{ height: H, width, backgroundColor: "#000" }}>
+      <View style={{ height: itemH, width, backgroundColor: "#000" }}>
         {showPlayer ? (
           <View style={StyleSheet.absoluteFill}>
             <MeditationPlayer m={m} active={index === active} autoplay fill />
@@ -123,24 +154,30 @@ export default function ContinuousMeditationPlayer({
         )}
 
         {/* bottom gradient for legibility */}
-        <LinearGradient colors={["transparent", "rgba(0,0,0,0.75)"]} style={[styles.bottomGrad, { height: H * 0.4 }]} pointerEvents="none" />
+        {!commentsOpen && (
+          <LinearGradient colors={["transparent", "rgba(0,0,0,0.75)"]} style={[styles.bottomGrad, { height: H * 0.4 }]} pointerEvents="none" />
+        )}
 
         {/* info bottom-left */}
-        <View style={[styles.info, { bottom: bottomSpace, right: 84 }]} pointerEvents="box-none">
-          <Text style={styles.title} numberOfLines={2}>{m.title}</Text>
-          {!!m.speaker && <Text style={styles.speaker} numberOfLines={1}>🎙  {m.speaker}</Text>}
-          {!!m.verse && <Text style={styles.verse} numberOfLines={2}>“{m.verse}”</Text>}
-        </View>
+        {!commentsOpen && (
+          <View style={[styles.info, { bottom: bottomSpace, right: 84 }]} pointerEvents="box-none">
+            <Text style={styles.title} numberOfLines={2}>{m.title}</Text>
+            {!!m.speaker && <Text style={styles.speaker} numberOfLines={1}>🎙  {m.speaker}</Text>}
+            {!!m.verse && <Text style={styles.verse} numberOfLines={2}>“{m.verse}”</Text>}
+          </View>
+        )}
 
         {/* right action rail (TikTok-style format) */}
-        <View style={[styles.rail, { bottom: bottomSpace }]}>
-          <RailBtn testID={`med-like-${m.id}`} icon={st.liked ? "heart" : "heart-outline"} activeColor={colors.error} active={st.liked} label={`${st.likes_count || 0}`} onPress={() => toggleLike(m)} />
-          <RailBtn testID={`med-pray-${m.id}`} icon={st.praying ? "hand-left" : "hand-left-outline"} activeColor="#38BDF8" active={st.praying} label={st.praying ? "Prego" : `${st.praying_count || 0}`} onPress={() => togglePray(m)} />
-          <RailBtn testID={`med-comments-${m.id}`} icon="chatbubble-outline" label={`${st.comments_count || 0}`} onPress={() => setCommentsFor(m.id)} />
-          <RailBtn testID={`med-share-${m.id}`} icon="arrow-redo-outline" label="Condividi" onPress={() => share(m)} />
-        </View>
+        {!commentsOpen && (
+          <View style={[styles.rail, { bottom: bottomSpace }]}>
+            <RailBtn testID={`med-like-${m.id}`} icon={st.liked ? "heart" : "heart-outline"} activeColor={colors.error} active={st.liked} label={`${st.likes_count || 0}`} onPress={() => toggleLike(m)} />
+            <RailBtn testID={`med-pray-${m.id}`} icon={st.praying ? "hand-left" : "hand-left-outline"} activeColor="#38BDF8" active={st.praying} label={st.praying ? "Prego" : `${st.praying_count || 0}`} onPress={() => togglePray(m)} />
+            <RailBtn testID={`med-comments-${m.id}`} icon="chatbubble-outline" label={`${st.comments_count || 0}`} onPress={() => openComments(m.id)} />
+            <RailBtn testID={`med-share-${m.id}`} icon="arrow-redo-outline" label="Condividi" onPress={() => share(m)} />
+          </View>
+        )}
 
-        {index === active && index < items.length - 1 && (
+        {!commentsOpen && index === active && index < items.length - 1 && (
           <View style={[styles.swipeHint, { bottom: bottomSpace - 24 }]} pointerEvents="none">
             <Ionicons name="chevron-up" size={16} color="rgba(255,255,255,0.7)" />
           </View>
@@ -163,38 +200,48 @@ export default function ContinuousMeditationPlayer({
         <View style={{ width: 40 }} />
       </View>
 
-      {loading ? (
-        <View style={styles.center}><ActivityIndicator color={WHITE} size="large" /></View>
-      ) : items.length === 0 ? (
-        <View style={styles.center}><Text style={styles.empty}>Nessuna meditazione disponibile.</Text></View>
-      ) : (
-        <FlatList
-          ref={listRef}
-          data={items}
-          keyExtractor={(i) => i.id}
-          renderItem={renderItem}
-          pagingEnabled
-          snapToInterval={H}
-          decelerationRate="fast"
-          disableIntervalMomentum
-          showsVerticalScrollIndicator={false}
-          getItemLayout={(_, index) => ({ length: H, offset: H * index, index })}
-          initialNumToRender={2}
-          maxToRenderPerBatch={2}
-          windowSize={3}
-          onViewableItemsChanged={onViewRef.current}
-          viewabilityConfig={viewConfigRef.current}
-          onScrollToIndexFailed={(info) => setTimeout(() => listRef.current?.scrollToIndex({ index: info.index, animated: false }), 50)}
-        />
-      )}
+      <View style={{ height: itemH, width, overflow: "hidden" }}>
+        {loading ? (
+          <View style={styles.center}><ActivityIndicator color={WHITE} size="large" /></View>
+        ) : items.length === 0 ? (
+          <View style={styles.center}><Text style={styles.empty}>Nessuna meditazione disponibile.</Text></View>
+        ) : (
+          <FlatList
+            ref={listRef}
+            data={items}
+            keyExtractor={(i) => i.id}
+            renderItem={renderItem}
+            pagingEnabled={!commentsOpen}
+            scrollEnabled={!commentsOpen}
+            snapToInterval={itemH}
+            decelerationRate="fast"
+            disableIntervalMomentum
+            showsVerticalScrollIndicator={false}
+            getItemLayout={(_, index) => ({ length: itemH, offset: itemH * index, index })}
+            initialNumToRender={2}
+            maxToRenderPerBatch={2}
+            windowSize={3}
+            onViewableItemsChanged={onViewRef.current}
+            viewabilityConfig={viewConfigRef.current}
+            onScrollToIndexFailed={(info) => setTimeout(() => listRef.current?.scrollToIndex({ index: info.index, animated: false }), 50)}
+          />
+        )}
+      </View>
 
       {commentsFor && (
-        <MeditationComments
-          mid={commentsFor}
-          visible={!!commentsFor}
-          onClose={() => setCommentsFor(null)}
-          onPosted={() => setState((s) => ({ ...s, [commentsFor]: { ...s[commentsFor], comments_count: (s[commentsFor]?.comments_count || 0) + 1 } }))}
-        />
+        <Animated.View
+          style={[
+            styles.panelWrap,
+            { top: topH, height: panelH, transform: [{ translateY: slide.interpolate({ inputRange: [0, 1], outputRange: [panelH, 0] }) }] },
+          ]}
+        >
+          <MeditationCommentsPanel
+            mid={commentsFor}
+            bottomInset={panelBottomInset}
+            onClose={closeComments}
+            onPosted={() => setState((s) => ({ ...s, [commentsFor]: { ...s[commentsFor], comments_count: (s[commentsFor]?.comments_count || 0) + 1 } }))}
+          />
+        </Animated.View>
       )}
     </View>
   );
@@ -219,4 +266,5 @@ const styles = StyleSheet.create({
   railIcon: { width: 46, height: 46, borderRadius: 23, backgroundColor: "rgba(0,0,0,0.3)", alignItems: "center", justifyContent: "center" },
   railLabel: { color: WHITE, fontSize: 12, fontWeight: "700", textShadowColor: "rgba(0,0,0,0.6)", textShadowRadius: 4 },
   swipeHint: { position: "absolute", alignSelf: "center", alignItems: "center" },
+  panelWrap: { position: "absolute", left: 0, right: 0, zIndex: 20 },
 });
