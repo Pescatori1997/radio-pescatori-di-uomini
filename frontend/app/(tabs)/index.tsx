@@ -65,7 +65,9 @@ export default function Home() {
   }, []);
   const glowStyle = useAnimatedStyle(() => ({ opacity: interpolate(glow.value, [0, 1], [0.25, 0.55]), transform: [{ scale: interpolate(glow.value, [0, 1], [0.92, 1.08]) }] }));
   const ctaPulse = useAnimatedStyle(() => (isLive ? { transform: [{ scale: interpolate(glow.value, [0, 1], [1, 1.025]) }] } : {}));
-  const onAirImg = onAir ? (onAir.images?.[0] || onAir.presenters?.find((p: any) => p.image)?.image || "") : "";
+  const onAirPics: string[] = onAir
+    ? ((onAir.images?.length ? onAir.images : (onAir.presenters || []).map((p: any) => p.image)).filter(Boolean))
+    : [];
 
   const onListen = () => {
     playLive();
@@ -196,8 +198,12 @@ export default function Home() {
         <PressableScale testID="home-onair" style={styles.onAirCard} onPress={() => router.push("/palinsesto")}>
           {onAir ? (
             <>
-              {onAirImg ? (
-                <Image source={{ uri: onAirImg }} style={styles.onAirAvatar} contentFit="cover" />
+              {onAirPics.length ? (
+                <View style={styles.onAirStack}>
+                  {onAirPics.slice(0, 3).map((uri, i) => (
+                    <Image key={i} source={{ uri }} style={[styles.onAirAvatar, { marginLeft: i === 0 ? 0 : -16, borderColor: colors.surfaceSecondary, zIndex: 10 - i }]} contentFit="cover" />
+                  ))}
+                </View>
               ) : (
                 <View style={[styles.onAirAvatar, styles.onAirAvatarEmpty]}><Ionicons name="mic" size={22} color={colors.brandPrimary} /></View>
               )}
@@ -297,6 +303,7 @@ const styles = StyleSheet.create({
   newsTitle: { position: "absolute", bottom: spacing.md, left: spacing.md, right: spacing.md, color: colors.white, fontSize: 15, fontWeight: "700" },
   onAirCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.border },
   onAirAvatar: { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.navy, borderWidth: 2, borderColor: colors.brandPrimary },
+  onAirStack: { flexDirection: "row", alignItems: "center" },
   onAirAvatarEmpty: { alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceTertiary, borderColor: colors.border },
   onAirBadge: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 5, backgroundColor: colors.error, paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill, marginBottom: 4 },
   onAirDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.white },
