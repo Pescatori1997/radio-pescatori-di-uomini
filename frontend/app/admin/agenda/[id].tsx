@@ -44,7 +44,11 @@ export default function EventDetail() {
     load();
     api.agendaCollaborators().then(setCollabs).catch(() => {});
     api.agendaCategories().then(setCats).catch(() => {});
-  }, [load]));
+    // Near real-time discussion: refresh the event (comments/tasks) periodically
+    // while the screen is focused, so messages from teammates appear live.
+    const iv = setInterval(() => { api.agendaEvent(id).then(setEv).catch(() => {}); }, 5000);
+    return () => clearInterval(iv);
+  }, [load, id]));
 
   const reload = () => api.agendaEvent(id).then(setEv).catch(() => {});
 
@@ -52,9 +56,15 @@ export default function EventDetail() {
   const del = async () => { if (!(await confirmAsync("Eliminare l'evento?", "Questa azione è irreversibile."))) return; await api.agendaDelete(id); router.back(); };
 
   const addComment = async () => {
-    if (!comment.trim()) return;
-    try { await api.agendaCommentCreate(id, { text: comment.trim(), mentions }); setComment(""); setMentions([]); reload(); }
-    catch (e: any) { alertMessage("Errore", e?.message || "Riprova."); }
+    const text = comment.trim();
+    if (!text) return;
+    const mts = mentions;
+    setComment(""); setMentions([]);
+    try {
+      const created = await api.agendaCommentCreate(id, { text, mentions: mts });
+      // Optimistic: show my message instantly without waiting for a reload.
+      setEv((prev: any) => (prev ? { ...prev, comments: [...(prev.comments || []), created] } : prev));
+    } catch (e: any) { setComment(text); setMentions(mts); alertMessage("Errore", e?.message || "Riprova."); }
   };
   const delComment = async (cid: string) => { await api.agendaCommentDelete(cid); reload(); };
 

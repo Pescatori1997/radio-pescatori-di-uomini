@@ -5413,6 +5413,18 @@ async def push_inbox(user_ids, ntype: str, title: str, body: str = "",
         })
     if docs:
         await db.notifications_center.insert_many(docs)
+        # Also fire a REAL notification (native push + PWA web push) so assigned
+        # collaborators are alerted on their device, not only via the in-app bell.
+        recipients = [d["user_id"] for d in docs]
+        payload = {"title": title, "message": body, "action_url": route}
+        try:
+            await send_push(recipients, payload, idempotency_key=new_id("ntf"))
+        except Exception as e:
+            logger.warning("push_inbox native push failed (%s): %s", ntype, e)
+        try:
+            await send_web_push(recipients, payload)
+        except Exception as e:
+            logger.warning("push_inbox web push failed (%s): %s", ntype, e)
 
 
 @api_router.get("/inbox")
