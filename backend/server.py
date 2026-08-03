@@ -2339,7 +2339,6 @@ from emergentintegrations.payments.stripe.checkout import (
     StripeCheckout,
     CheckoutSessionRequest,
 )
-from fastapi import Request
 
 STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "")
 PRESET_AMOUNTS = [5.0, 10.0, 25.0, 50.0, 100.0]
