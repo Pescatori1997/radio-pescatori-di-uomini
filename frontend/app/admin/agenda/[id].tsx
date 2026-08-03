@@ -1,10 +1,11 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, TextInput, Linking, Image } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { api } from "@/src/api";
 import AdminShell, { ADMIN } from "@/src/components/AdminShell";
 import EventEditor from "@/src/components/agenda/EventEditor";
+import TypingBubble from "@/src/components/agenda/TypingBubble";
 import { pickImageAttachment, pickDocumentAttachment, openAttachment } from "@/src/utils/agendaAttach";
 import { confirmAsync, alertMessage } from "@/src/utils/confirm";
 import { colors, spacing, radius } from "@/src/theme";
@@ -14,6 +15,11 @@ const RSVP_OPTS = [
   { k: "maybe", l: "Forse", icon: "help-circle", c: "#F59E0B" },
   { k: "no", l: "Non posso", icon: "close-circle", c: "#EF4444" },
 ];
+
+function fmtTime(iso?: string) {
+  if (!iso) return "";
+  try { return new Date(iso).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }); } catch { return ""; }
+}
 
 export default function EventDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -29,6 +35,8 @@ export default function EventDetail() {
   const [comment, setComment] = useState("");
   const [mentions, setMentions] = useState<string[]>([]);
   const [newTask, setNewTask] = useState("");
+  const [typingUsers, setTypingUsers] = useState<any[]>([]);
+  const lastPing = useRef(0);
 
   const can = (p: string) => isAdmin || perms.includes(`agenda.${p}`);
 
@@ -46,11 +54,23 @@ export default function EventDetail() {
     api.agendaCategories().then(setCats).catch(() => {});
     // Near real-time discussion: refresh the event (comments/tasks) periodically
     // while the screen is focused, so messages from teammates appear live.
-    const iv = setInterval(() => { api.agendaEvent(id).then(setEv).catch(() => {}); }, 5000);
-    return () => clearInterval(iv);
+    const iv = setInterval(() => { api.agendaEvent(id).then(setEv).catch(() => {}); }, 4000);
+    // Faster poll for the WhatsApp-style "is typing…" indicator.
+    const tv = setInterval(() => { api.agendaTyping(id).then(setTypingUsers).catch(() => {}); }, 2000);
+    return () => { clearInterval(iv); clearInterval(tv); };
   }, [load, id]));
 
   const reload = () => api.agendaEvent(id).then(setEv).catch(() => {});
+
+  // Throttle "typing" pings to the server (max ~1 every 2.5s while typing).
+  const onCommentChange = (v: string) => {
+    setComment(v);
+    const now = Date.now();
+    if (v.trim() && now - lastPing.current > 2500) {
+      lastPing.current = now;
+      api.agendaTypingPing(id).catch(() => {});
+    }
+  };
 
   const doRsvp = async (status: string) => { try { await api.agendaRsvp(id, status); reload(); } catch (e: any) { alertMessage("Errore", e?.message || "Riprova."); } };
   const del = async () => { if (!(await confirmAsync("Eliminare l'evento?", "Questa azione è irreversibile."))) return; await api.agendaDelete(id); router.back(); };
@@ -193,16 +213,34 @@ export default function EventDetail() {
 
         {/* Comments */}
         <Section title="Discussione">
-          {(ev.comments || []).map((c: any) => (
-            <View key={c.id} style={styles.cRow}>
-              <View style={styles.cAvatar}><Text style={styles.cInit}>{(c.user_name || "?")[0]?.toUpperCase()}</Text></View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cName}>{c.user_name}</Text>
-                <Text style={styles.cText}>{c.text}</Text>
-              </View>
-              {(isAdmin || c.user_id === me?.id) && <Pressable onPress={() => delComment(c.id)} hitSlop={8}><Ionicons name="close" size={16} color={ADMIN.muted} /></Pressable>}
-            </View>
-          ))}
+          <View style={styles.chat}>
+            {(() => {
+              const seen = new Set<string>();
+              const comments = (ev.comments || []).filter((c: any) => { if (seen.has(c.id)) return false; seen.add(c.id); return true; });
+              return (
+                <>
+                  {comments.length === 0 && typingUsers.length === 0 && (
+                    <Text style={styles.chatEmpty}>Nessun messaggio. Inizia la conversazione 👋</Text>
+                  )}
+                  {comments.map((c: any) => {
+                    const own = c.user_id === me?.id;
+                    return (
+                      <View key={c.id} style={[styles.msgRow, own && styles.msgRowOwn]}>
+                        {!own && <View style={styles.cAvatar}><Text style={styles.cInit}>{(c.user_name || "?")[0]?.toUpperCase()}</Text></View>}
+                        <View style={[styles.bubble, own ? styles.bubbleOwn : styles.bubbleOther]}>
+                          {!own && <Text style={styles.cName}>{c.user_name}</Text>}
+                          <Text style={[styles.msgText, own && { color: "#fff" }]}>{c.text}</Text>
+                          <Text style={[styles.msgTime, own && { color: "rgba(255,255,255,0.75)" }]}>{fmtTime(c.created_at)}</Text>
+                        </View>
+                        {(isAdmin || own) && <Pressable onPress={() => delComment(c.id)} hitSlop={8} style={{ paddingHorizontal: 2, alignSelf: "center" }}><Ionicons name="close" size={14} color={ADMIN.muted} /></Pressable>}
+                      </View>
+                    );
+                  })}
+                </>
+              );
+            })()}
+            {typingUsers.map((t) => <TypingBubble key={t.user_id} name={t.name} />)}
+          </View>
           {can("comment") && (
             <>
               {collabs.length > 0 && (
@@ -216,7 +254,7 @@ export default function EventDetail() {
                 </View>
               )}
               <View style={styles.addRow}>
-                <TextInput testID="comment-input" value={comment} onChangeText={setComment} placeholder="Scrivi un commento…" placeholderTextColor={ADMIN.muted} style={styles.addInput} multiline />
+                <TextInput testID="comment-input" value={comment} onChangeText={onCommentChange} placeholder="Scrivi un messaggio…" placeholderTextColor={ADMIN.muted} style={styles.addInput} multiline />
                 <Pressable testID="comment-add" onPress={addComment} style={styles.addBtn}><Ionicons name="send" size={18} color="#fff" /></Pressable>
               </View>
             </>
@@ -272,8 +310,16 @@ const styles = StyleSheet.create({
   cRow: { flexDirection: "row", gap: 10, paddingVertical: 8, alignItems: "flex-start" },
   cAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
   cInit: { color: "#fff", fontWeight: "800" },
-  cName: { color: colors.white, fontSize: 13, fontWeight: "700" },
-  cText: { color: "#CBD5E1", fontSize: 14, marginTop: 1 },
+  cName: { color: colors.brandSecondary, fontSize: 12, fontWeight: "800", marginBottom: 2 },
+  chat: { gap: 2, marginBottom: spacing.md },
+  chatEmpty: { color: ADMIN.muted, fontSize: 13, textAlign: "center", paddingVertical: spacing.lg, fontStyle: "italic" },
+  msgRow: { flexDirection: "row", alignItems: "flex-end", gap: 8, marginTop: 8, maxWidth: "100%" },
+  msgRowOwn: { justifyContent: "flex-end", flexDirection: "row-reverse" },
+  bubble: { maxWidth: "78%", paddingHorizontal: 12, paddingVertical: 9, borderRadius: 16 },
+  bubbleOther: { backgroundColor: "rgba(255,255,255,0.08)", borderBottomLeftRadius: 4 },
+  bubbleOwn: { backgroundColor: colors.brandPrimary, borderBottomRightRadius: 4 },
+  msgText: { color: "#E2E8F0", fontSize: 14.5, lineHeight: 20 },
+  msgTime: { color: ADMIN.muted, fontSize: 10, marginTop: 4, alignSelf: "flex-end" },
   mentionRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6, marginTop: spacing.sm },
   mentionLbl: { color: ADMIN.muted, fontWeight: "800" },
   mentionChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill, backgroundColor: ADMIN.surface, borderWidth: 1, borderColor: ADMIN.border },

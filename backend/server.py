@@ -5761,6 +5761,30 @@ async def agenda_comment_delete(cid: str, authorization: Optional[str] = Header(
     return {"ok": True}
 
 
+@api_router.post("/agenda/events/{eid}/typing")
+async def agenda_typing_ping(eid: str, user=Depends(require_agenda("comment"))):
+    """Record that the current user is typing in this event's discussion.
+    Read back via GET; entries are considered active for ~6s (WhatsApp-style)."""
+    await db.agenda_typing.update_one(
+        {"event_id": eid, "user_id": user["user_id"]},
+        {"$set": {"event_id": eid, "user_id": user["user_id"],
+                  "name": user.get("name") or user.get("email") or "?",
+                  "at": now_utc().timestamp()}},
+        upsert=True,
+    )
+    return {"ok": True}
+
+
+@api_router.get("/agenda/events/{eid}/typing")
+async def agenda_typing_list(eid: str, user=Depends(require_agenda("view"))):
+    cutoff = now_utc().timestamp() - 6
+    docs = await db.agenda_typing.find(
+        {"event_id": eid, "at": {"$gte": cutoff}, "user_id": {"$ne": user["user_id"]}},
+        {"_id": 0, "user_id": 1, "name": 1},
+    ).to_list(20)
+    return docs
+
+
 class AttachmentIn(BaseModel):
     name: str
     kind: str = "link"        # link | image | pdf | file
