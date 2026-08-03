@@ -863,7 +863,7 @@ async def get_history(authorization: Optional[str] = Header(None)):
 ADMIN_EMAILS = [e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()]
 ROLE_ADMIN, ROLE_COLLAB, ROLE_LISTENER = "administrator", "collaborator", "listener"
 # Sections that can be delegated to a collaborator (each maps to an existing admin area).
-PERM_SECTIONS = ["podcasts", "meditations", "news", "showcase", "merch", "schedule", "prayers", "messages", "team", "radio", "verses", "finance", "agenda"]
+PERM_SECTIONS = ["podcasts", "meditations", "news", "showcase", "merch", "schedule", "prayers", "messages", "team", "radio", "verses", "plans", "finance", "agenda"]
 
 # Granular Agenda permissions (configurable per collaborator by the Super Admin).
 AGENDA_PERMS = [
@@ -5062,7 +5062,7 @@ async def unenroll_plan(pid: str, authorization: Optional[str] = Header(None)):
 
 # ----- Admin: reading plans CRUD -----
 @api_router.get("/admin/reading-plans")
-async def admin_list_plans(admin=Depends(require_perm("verses"))):
+async def admin_list_plans(admin=Depends(require_perm("plans"))):
     plans = await db.reading_plans.find({}, {"_id": 0, "days": 0}).sort([("order", 1), ("created_at", 1)]).to_list(500)
     for p in plans:
         p["duration_days"] = p.get("duration_days") or 0
@@ -5070,7 +5070,7 @@ async def admin_list_plans(admin=Depends(require_perm("verses"))):
 
 
 @api_router.get("/admin/reading-plans/{pid}")
-async def admin_get_plan(pid: str, admin=Depends(require_perm("verses"))):
+async def admin_get_plan(pid: str, admin=Depends(require_perm("plans"))):
     p = await db.reading_plans.find_one({"id": pid}, {"_id": 0})
     if not p:
         raise HTTPException(status_code=404, detail="Piano non trovato")
@@ -5078,7 +5078,7 @@ async def admin_get_plan(pid: str, admin=Depends(require_perm("verses"))):
 
 
 @api_router.post("/admin/reading-plans", status_code=201)
-async def admin_create_plan(body: ReadingPlanIn, admin=Depends(require_perm("verses"))):
+async def admin_create_plan(body: ReadingPlanIn, admin=Depends(require_perm("plans"))):
     if not (body.title or "").strip():
         raise HTTPException(status_code=400, detail="Il titolo è obbligatorio")
     if body.status not in ("draft", "published"):
@@ -5094,12 +5094,12 @@ async def admin_create_plan(body: ReadingPlanIn, admin=Depends(require_perm("ver
         "published_at": now if body.status == "published" else None,
     }
     await db.reading_plans.insert_one(dict(doc))
-    await log_activity(admin, f"ha creato il piano di lettura '{body.title}'", "verses")
+    await log_activity(admin, f"ha creato il piano di lettura '{body.title}'", "plans")
     return {"ok": True, "id": doc["id"]}
 
 
 @api_router.put("/admin/reading-plans/{pid}")
-async def admin_update_plan(pid: str, body: ReadingPlanIn, admin=Depends(require_perm("verses"))):
+async def admin_update_plan(pid: str, body: ReadingPlanIn, admin=Depends(require_perm("plans"))):
     p = await db.reading_plans.find_one({"id": pid})
     if not p:
         raise HTTPException(status_code=404, detail="Piano non trovato")
@@ -5115,18 +5115,18 @@ async def admin_update_plan(pid: str, body: ReadingPlanIn, admin=Depends(require
     if body.status == "published" and not p.get("published_at"):
         updates["published_at"] = now_utc()
     await db.reading_plans.update_one({"id": pid}, {"$set": updates})
-    await log_activity(admin, f"ha aggiornato il piano di lettura '{body.title}'", "verses")
+    await log_activity(admin, f"ha aggiornato il piano di lettura '{body.title}'", "plans")
     return {"ok": True}
 
 
 @api_router.delete("/admin/reading-plans/{pid}")
-async def admin_delete_plan(pid: str, admin=Depends(require_perm("verses"))):
+async def admin_delete_plan(pid: str, admin=Depends(require_perm("plans"))):
     p = await db.reading_plans.find_one({"id": pid})
     if not p:
         raise HTTPException(status_code=404, detail="Piano non trovato")
     await db.reading_plans.delete_one({"id": pid})
     await db.plan_enrollments.delete_many({"plan_id": pid})
-    await log_activity(admin, f"ha eliminato il piano di lettura '{p.get('title')}'", "verses")
+    await log_activity(admin, f"ha eliminato il piano di lettura '{p.get('title')}'", "plans")
     return {"ok": True}
 
 

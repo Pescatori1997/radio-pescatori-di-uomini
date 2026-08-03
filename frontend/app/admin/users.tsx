@@ -13,6 +13,9 @@ const SECTIONS: { key: string; label: string }[] = [
   { key: "podcasts", label: "Podcast" },
   { key: "meditations", label: "Meditazioni" },
   { key: "news", label: "Notizie" },
+  { key: "showcase", label: "Vetrina" },
+  { key: "verses", label: "Versetto del Giorno" },
+  { key: "plans", label: "Piani di Lettura" },
   { key: "merch", label: "Merchandising" },
   { key: "schedule", label: "Palinsesto" },
   { key: "prayers", label: "Preghiere" },
@@ -326,7 +329,7 @@ export default function AdminUsers() {
               <Pressable testID="perms-close" onPress={() => setEditing(null)} hitSlop={10}><Ionicons name="close" size={22} color={ADMIN.muted} /></Pressable>
             </View>
             <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ padding: spacing.lg }}>
-              <Text style={styles.modalHint}>L'utente diventerà Collaboratore e potrà gestire solo le sezioni attive.</Text>
+              <Text style={styles.modalHint}>L&apos;utente diventerà Collaboratore e potrà gestire solo le sezioni attive.</Text>
               {SECTIONS.map((s) => {
                 const on = selPerms.includes(s.key);
                 return (
@@ -375,7 +378,7 @@ export default function AdminUsers() {
               </View>
               {invRole === "collaborator" && (
                 <>
-                  <Text style={[styles.modalHint, { marginTop: spacing.md }]}>Permessi assegnati all'accettazione</Text>
+                  <Text style={[styles.modalHint, { marginTop: spacing.md }]}>Permessi assegnati all&apos;accettazione</Text>
                   {SECTIONS.map((s) => (
                     <View key={s.key} style={styles.permRow}>
                       <Text style={styles.permRowLabel}>{s.label}</Text>

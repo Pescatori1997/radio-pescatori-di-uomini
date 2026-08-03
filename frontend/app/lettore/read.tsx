@@ -17,13 +17,14 @@ const HL_COLORS: Record<string, string> = { yellow: "#FEF3C7", green: "#D1FAE5",
 export default function BibleReader() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const params = useLocalSearchParams<{ book?: string; chapter?: string; highlight?: string; ref?: string }>();
+  const params = useLocalSearchParams<{ book?: string; chapter?: string; highlight?: string; highlightEnd?: string; ref?: string }>();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [fontIdx, setFontIdx] = useState(1);
   const [picker, setPicker] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
-  const highlight = params.highlight ? parseInt(params.highlight as string, 10) : null;
+  const hlStart = params.highlight ? parseInt(params.highlight as string, 10) : null;
+  const hlEnd = params.highlightEnd ? parseInt(params.highlightEnd as string, 10) : hlStart;
   const versePos = useRef<Record<number, number>>({});
   const { user } = useAuth();
   const [bookmarks, setBookmarks] = useState<Record<number, { id: string; color: string }>>({});
@@ -75,15 +76,15 @@ export default function BibleReader() {
     })();
   }, [params.book, params.chapter, params.ref]);
 
-  // Scroll to highlighted verse once laid out.
+  // Scroll to the first highlighted verse once laid out.
   useEffect(() => {
-    if (!data || !highlight) return;
+    if (!data || hlStart == null) return;
     const t = setTimeout(() => {
-      const y = versePos.current[highlight];
+      const y = versePos.current[hlStart];
       if (y != null) scrollRef.current?.scrollTo({ y: Math.max(0, y - 120), animated: true });
     }, 400);
     return () => clearTimeout(t);
-  }, [data, highlight]);
+  }, [data, hlStart]);
 
   const changeFont = () => {
     const next = (fontIdx + 1) % FONT_SIZES.length;
@@ -148,7 +149,7 @@ export default function BibleReader() {
           {data.verses.map((v: any) => {
             const bm = bookmarks[v.verse];
             const note = notes[v.verse];
-            const bg = bm ? HL_COLORS[bm.color] || HL_COLORS.yellow : (highlight === v.verse ? colors.brandTertiary : undefined);
+            const bg = bm ? HL_COLORS[bm.color] || HL_COLORS.yellow : ((hlStart != null && v.verse >= hlStart && v.verse <= (hlEnd ?? hlStart)) ? colors.brandTertiary : undefined);
             return (
               <Pressable key={v.verse} onLongPress={() => onLongPress(v.verse)} delayLongPress={250}
                 onLayout={(e) => { versePos.current[v.verse] = e.nativeEvent.layout.y; }}

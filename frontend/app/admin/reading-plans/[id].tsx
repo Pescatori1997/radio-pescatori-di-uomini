@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { api } from "@/src/api";
 import AdminShell, { ADMIN } from "@/src/components/AdminShell";
-import { AInput, ASwitch } from "@/src/components/adminForm";
+import { AInput, ASwitch, AImagePicker } from "@/src/components/adminForm";
 import PressableScale from "@/src/components/PressableScale";
 import { confirmAsync, alertMessage } from "@/src/utils/confirm";
 import { colors, spacing, radius } from "@/src/theme";
@@ -24,6 +24,7 @@ export default function AdminPlanEditor() {
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
   const [description, setDescription] = useState("");
+  const [cover, setCover] = useState<string | null>(null);
   const [category, setCategory] = useState("");
   const [featured, setFeatured] = useState(false);
   const [status, setStatus] = useState("draft");
@@ -41,6 +42,7 @@ export default function AdminPlanEditor() {
     if (isNew) return;
     api.adminReadingPlan(id!).then((p: any) => {
       setTitle(p.title || ""); setSubtitle(p.subtitle || ""); setDescription(p.description || "");
+      setCover(p.cover || null);
       setCategory(p.category || ""); setFeatured(!!p.featured); setStatus(p.status || "draft");
       setOrder(String(p.order ?? 0));
       setDays((p.days && p.days.length ? p.days : [emptyDay(1)]).map((d: any, i: number) => ({
@@ -85,6 +87,7 @@ export default function AdminPlanEditor() {
 
     const body = {
       title: title.trim(), subtitle: subtitle.trim() || undefined, description: description.trim() || undefined,
+      cover: cover || undefined,
       category: category.trim() || undefined, featured, status, order: parseInt(order, 10) || 0, days: cleanDays,
     };
     setSaving(true);
@@ -108,6 +111,7 @@ export default function AdminPlanEditor() {
     <AdminShell title={isNew ? "Nuovo piano" : "Modifica piano"} activeKey="plans">
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
         <AInput label="Titolo *" value={title} onChangeText={setTitle} placeholder="Es. Incontra Gesù – 7 giorni nei Vangeli" testID="plan-title" />
+        <AImagePicker testID="plan-cover" label="Immagine di copertina" value={cover} onChange={(v: string) => setCover(v)} aspect={[16, 9]} />
         <AInput label="Sottotitolo" value={subtitle} onChangeText={setSubtitle} placeholder="Breve descrizione in una riga" testID="plan-subtitle" />
         <AInput label="Descrizione" value={description} onChangeText={setDescription} multiline placeholder="Descrizione del piano" testID="plan-description" />
         <AInput label="Categoria" value={category} onChangeText={setCategory} placeholder="Es. Vangeli, Speranza" testID="plan-category" />

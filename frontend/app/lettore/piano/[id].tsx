@@ -71,7 +71,7 @@ export default function PlanDetail() {
   };
 
   const openReading = (r: any) => {
-    const hl = r.verse_start ? `&highlight=${r.verse_start}` : "";
+    const hl = r.verse_start ? `&highlight=${r.verse_start}${r.verse_end ? `&highlightEnd=${r.verse_end}` : ""}` : "";
     router.push(`/lettore/read?book=${r.book_nr}&chapter=${r.chapter}${hl}`);
   };
 

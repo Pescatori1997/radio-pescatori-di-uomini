@@ -1,0 +1,31 @@
+{
+  "summary": "Tested Reading Plans updates (Piani di Lettura) — granular 'plans' permission, cover upload, home card, range highlight fix, admin editor cover, users perms. Backend: 9/9 pytest tests pass (/api/admin/reading-plans* now enforces require_perm('plans'): admin OK, collab with 'plans' OK on GET/POST/PUT/DELETE, collab without 'plans' -> 403, collab with only 'plans' -> 403 on /api/admin/verses, collab with only 'verses' -> 200 on /api/admin/verses and 403 on /api/admin/reading-plans; cover base64 data URL persists on POST/PUT and is returned by admin GET and public /api/reading-plans list; enroll/day/unenroll regression OK; public list contains seeded plan_test_range). Frontend: Home has testID 'home-reading-plans' (separate from 'home-open-bible'), taps navigate to /lettore/piani. Range highlight verified via direct URL /lettore/read?book=43&chapter=18&highlight=28&highlightEnd=40 — verses 28..40 all rendered with bg rgb(224,242,254), v27 and v41 not highlighted. Real flow (Home -> Piani -> La Passione di Gesù -> Giorno 1 Giovanni 18:28-40) navigates to correct URL with both highlight & highlightEnd; screenshot confirms full range highlighted. Admin plan editor renders testID 'plan-cover' (AImagePicker). /admin/users invite modal (Collaboratore) shows all new perm rows with testIDs inv-perm-plans / inv-perm-verses / inv-perm-showcase and labels 'Piani di Lettura' / 'Versetto del Giorno' / 'Vetrina'.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_reading_plans_v2.py",
+    "/app/test_reports/pytest/iteration_40_reading_plans.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py lines 5064-5130: /api/admin/reading-plans* correctly moved from require_perm('verses') to require_perm('plans'). PERM_SECTIONS (line 866) includes both 'plans' and 'verses' — collaborators can be granted independent access.",
+    "ReadingPlansCard.tsx (testID home-reading-plans) properly routes to /lettore/piani via router.push — separate from BibleCard's home-open-bible.",
+    "read.tsx (line 27): hlEnd defaults to hlStart when highlightEnd param is missing — backward compatible with single-verse highlights.",
+    "piano/[id].tsx (line 74): openReading correctly appends both highlight and highlightEnd when verse_start/verse_end are present in the reading.",
+    "Public list _plan_public (server.py line 4945) includes cover field so home + /lettore/piani can show artwork per plan."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_reading_plans_v2.py (new)"
+  ],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% (all critical flows)"},
+  "seed_data_creation": "None persistent. Backend tests register temporary listeners + collaborators (Test1234!) which remain in DB (harmless). Test-created plans are deleted at end of each test. UI tests reused existing seeded plans (plan_test_range 'La Passione di Gesù' with Giovanni 18:28-40 was correctly present).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Reading Plans feature validated with granular 'plans' permission. Seeded published plans: plan_f52148d87254 (7 giorni), plan_8b9c8ddabe4e (30 giorni), plan_test_range (La Passione di Gesù, 1 giorno, Giovanni 18:28-40). Cover field on reading_plans is base64 data URL (nullable). Admin token ADMINTESTTOKEN123 works. FE admin login: pescatoridiuomini@outlook.it / AdminTestPwd1!. Test file /app/backend/tests/test_reading_plans_v2.py includes retry loop for 429 rate-limit on /auth/register.",
+  "rca_of_issue": ""
+}
