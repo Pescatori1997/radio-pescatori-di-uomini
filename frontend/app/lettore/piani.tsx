@@ -5,6 +5,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
+import { Image } from "expo-image";
 import { api } from "@/src/api";
 import { useAuth } from "@/src/context/AuthContext";
 import { FishingNet, SeaWaves, SunriseGlow } from "@/src/components/marine";
@@ -56,17 +57,25 @@ export default function ReadingPlans() {
               {mine.map((p, i) => (
                 <Animated.View key={p.id} entering={FadeInDown.delay(i * 40)}>
                   <PressableScale testID={`my-plan-${p.id}`} style={styles.myCard} onPress={() => router.push(`/lettore/piano/${p.id}`)}>
-                    <View style={styles.rowBetween}>
-                      <Text style={styles.myTitle} numberOfLines={2}>{p.title}</Text>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-                        {p.progress?.status === "completed" && <Ionicons name="checkmark-circle" size={20} color="#22C55E" />}
+                    <View style={styles.coverWrap}>
+                      {p.cover ? (
+                        <Image source={{ uri: p.cover }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                      ) : (
+                        <View style={[StyleSheet.absoluteFill, styles.coverEmpty]}><Ionicons name="book" size={40} color="rgba(255,255,255,0.5)" /></View>
+                      )}
+                      <LinearGradient colors={["rgba(10,17,40,0.05)", "rgba(10,17,40,0.85)"]} style={StyleSheet.absoluteFill} />
+                      <View style={styles.coverTopRow}>
+                        {p.progress?.status === "completed" ? <View style={styles.doneBadge}><Ionicons name="checkmark" size={14} color={colors.white} /></View> : <View />}
                         <PressableScale testID={`my-plan-share-${p.id}`} onPress={() => setSharePlan(p)} hitSlop={8} style={styles.shareIconDark}><Ionicons name="share-social" size={16} color={colors.white} /></PressableScale>
                       </View>
+                      <Text style={styles.coverTitle} numberOfLines={2}>{p.title}</Text>
                     </View>
-                    <View style={styles.progressTrack}>
-                      <View style={[styles.progressFill, { width: `${p.progress?.percent || 0}%` }]} />
+                    <View style={styles.myBody}>
+                      <View style={styles.progressTrack}>
+                        <View style={[styles.progressFill, { width: `${p.progress?.percent || 0}%` }]} />
+                      </View>
+                      <Text style={styles.progressText}>{p.progress?.completed_count || 0}/{p.progress?.duration_days || p.duration_days} giorni · {p.progress?.percent || 0}%</Text>
                     </View>
-                    <Text style={styles.progressText}>{p.progress?.completed_count || 0}/{p.progress?.duration_days || p.duration_days} giorni · {p.progress?.percent || 0}%</Text>
                   </PressableScale>
                 </Animated.View>
               ))}
@@ -80,16 +89,26 @@ export default function ReadingPlans() {
           {notEnrolled.map((p, i) => (
             <Animated.View key={p.id} entering={FadeInDown.delay(i * 40)}>
               <PressableScale testID={`plan-${p.id}`} style={styles.card} onPress={() => router.push(`/lettore/piano/${p.id}`)}>
-                <View style={styles.cardIcon}><Ionicons name="book" size={22} color={colors.white} /></View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardTitle}>{p.title}</Text>
+                <View style={styles.coverWrap}>
+                  {p.cover ? (
+                    <Image source={{ uri: p.cover }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                  ) : (
+                    <View style={[StyleSheet.absoluteFill, styles.coverEmpty]}><Ionicons name="book" size={40} color="rgba(255,255,255,0.5)" /></View>
+                  )}
+                  <LinearGradient colors={["rgba(10,17,40,0.05)", "rgba(10,17,40,0.85)"]} style={StyleSheet.absoluteFill} />
+                  <View style={styles.coverTopRow}>
+                    <View />
+                    <PressableScale testID={`plan-share-${p.id}`} onPress={() => setSharePlan(p)} hitSlop={8} style={styles.shareIconDark}><Ionicons name="share-social" size={16} color={colors.white} /></PressableScale>
+                  </View>
+                  <Text style={styles.coverTitle} numberOfLines={2}>{p.title}</Text>
+                </View>
+                <View style={styles.cardBody}>
                   {!!p.subtitle && <Text style={styles.cardSub} numberOfLines={2}>{p.subtitle}</Text>}
                   <View style={styles.metaRow}>
                     <View style={styles.pill}><Ionicons name="calendar-outline" size={12} color={colors.onBrandTertiary} /><Text style={styles.pillText}>{p.duration_days} giorni</Text></View>
                     {!!p.category && <View style={styles.pill}><Text style={styles.pillText}>{p.category}</Text></View>}
                   </View>
                 </View>
-                <PressableScale testID={`plan-share-${p.id}`} onPress={() => setSharePlan(p)} hitSlop={8} style={styles.shareIcon}><Ionicons name="share-social" size={18} color={colors.brandPrimary} /></PressableScale>
               </PressableScale>
             </Animated.View>
           ))}
@@ -109,19 +128,22 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   section: { color: colors.onSurface, fontSize: 16, fontWeight: "800", marginTop: spacing.md, marginBottom: spacing.md },
   empty: { color: colors.muted, fontSize: 14, textAlign: "center", marginTop: spacing.lg },
-  myCard: { backgroundColor: colors.navy, borderRadius: radius.md, padding: spacing.lg, marginBottom: spacing.md },
+  myCard: { backgroundColor: colors.navy, borderRadius: radius.lg, marginBottom: spacing.md, overflow: "hidden" },
+  coverWrap: { width: "100%", aspectRatio: 16 / 9, backgroundColor: colors.navy, justifyContent: "flex-end", padding: spacing.md },
+  coverEmpty: { alignItems: "center", justifyContent: "center", backgroundColor: colors.navySoft },
+  coverTopRow: { position: "absolute", top: spacing.md, left: spacing.md, right: spacing.md, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  coverTitle: { color: colors.white, fontSize: 19, fontWeight: "800", textShadowColor: "rgba(0,0,0,0.5)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6 },
+  doneBadge: { width: 28, height: 28, borderRadius: 14, backgroundColor: "#22C55E", alignItems: "center", justifyContent: "center" },
+  myBody: { padding: spacing.lg, paddingTop: spacing.md },
   rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
-  myTitle: { flex: 1, color: colors.white, fontSize: 15, fontWeight: "800" },
-  shareIconDark: { width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.14)", alignItems: "center", justifyContent: "center" },
-  shareIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center" },
-  progressTrack: { height: 8, borderRadius: 4, backgroundColor: "rgba(255,255,255,0.15)", marginTop: spacing.md, overflow: "hidden" },
+  shareIconDark: { width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(0,0,0,0.35)", alignItems: "center", justifyContent: "center" },
+  progressTrack: { height: 8, borderRadius: 4, backgroundColor: "rgba(255,255,255,0.15)", overflow: "hidden" },
   progressFill: { height: 8, borderRadius: 4, backgroundColor: colors.brandPrimary },
   progressText: { color: colors.brandSecondary, fontSize: 12, fontWeight: "700", marginTop: spacing.sm },
-  card: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.border },
-  cardIcon: { width: 46, height: 46, borderRadius: 12, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
-  cardTitle: { color: colors.onSurface, fontSize: 15, fontWeight: "800" },
-  cardSub: { color: colors.onSurfaceSecondary, fontSize: 12.5, marginTop: 3 },
-  metaRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm, flexWrap: "wrap" },
+  card: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
+  cardBody: { padding: spacing.lg, paddingTop: spacing.md },
+  cardSub: { color: colors.onSurfaceSecondary, fontSize: 13.5, lineHeight: 19 },
+  metaRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.md, flexWrap: "wrap" },
   pill: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.brandTertiary, paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill },
   pillText: { color: colors.onBrandTertiary, fontSize: 11, fontWeight: "700" },
 });
