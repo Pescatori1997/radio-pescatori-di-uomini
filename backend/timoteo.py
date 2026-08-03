@@ -22,7 +22,7 @@ logger = logging.getLogger("timoteo")
 
 # ---- Swappable AI engine (config-driven) ----
 TIMOTEO_PROVIDER = os.environ.get("TIMOTEO_PROVIDER", "openai")
-TIMOTEO_MODEL = os.environ.get("TIMOTEO_MODEL", "gpt-5.5")
+TIMOTEO_MODEL = os.environ.get("TIMOTEO_MODEL", "gpt-5.4-mini")
 
 DEFAULT_BIBLE = os.environ.get("DEFAULT_BIBLE", "riveduta_1927")
 
