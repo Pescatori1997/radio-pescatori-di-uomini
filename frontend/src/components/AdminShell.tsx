@@ -27,6 +27,7 @@ const NAV = [
   { key: "showcase", label: "Vetrina", icon: "star-circle", route: "/admin/showcase", perm: "showcase" },
   { key: "verses", label: "Versetto del Giorno", icon: "book-cross", route: "/admin/verses", perm: "verses" },
   { key: "plans", label: "Piani di Lettura", icon: "book-open-page-variant", route: "/admin/reading-plans", perm: "plans" },
+  { key: "achievements", label: "Traguardi del Cammino", icon: "medal", route: "/admin/achievements", perm: "achievements" },
   { key: "merch", label: "Merchandising", icon: "storefront", route: "/admin/products", perm: "merch" },
   { key: "schedule", label: "Palinsesto", icon: "calendar-month", route: "/admin/schedule", perm: "schedule" },
   { key: "radio", label: "Radio", icon: "radio", route: "/admin/radio", perm: "radio" },

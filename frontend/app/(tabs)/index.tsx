@@ -19,6 +19,7 @@ import VerseOfDayCard from "@/src/components/VerseOfDayCard";
 import CommunityStats from "@/src/components/community/CommunityStats";
 import BibleCard from "@/src/components/BibleCard";
 import ReadingPlansCard from "@/src/components/ReadingPlansCard";
+import BachecaCard from "@/src/components/BachecaCard";
 import ShowcaseCarousel from "@/src/components/showcase/ShowcaseCarousel";
 import { PulsingDot, SoundRings } from "@/src/components/LiveHeroFx";
 import PressableScale from "@/src/components/PressableScale";
@@ -242,6 +243,8 @@ export default function Home() {
       <BibleCard />
 
       <ReadingPlansCard />
+
+      <BachecaCard />
 
       <Pressable testID="prayer-cta" style={styles.prayerCta} onPress={() => router.push("/prayer")}>
         <Ionicons name="heart" size={20} color={colors.brandPrimary} />

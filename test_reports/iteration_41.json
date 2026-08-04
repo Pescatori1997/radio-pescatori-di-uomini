@@ -1,0 +1,39 @@
+{
+  "summary": "Feature 'Traguardi del Cammino' (Fase 1) tested end-to-end. Backend: 10/10 pytest cases pass after fixing one 500 in POST /api/admin/achievements/{id}/assign (and /unassign) — u['id'] used instead of u['user_id']. GET /api/me/achievements: 401 without auth; demo user returns 12 achievements with earned_count=6, plans_bronze/silver earned, plans_gold NOT earned (3<7); earned_at is idempotent across repeated calls. Admin CRUD + reorder + walk-board GET/PATCH persistence all pass. Listener user is correctly rejected (403) on all /admin/achievements* and /admin/walk-board endpoints. Frontend: login via /auth OK, Home 'home-bacheca' card → /traguardi shows armadio (wood cabinet) with all 12 medals grouped by category and '6 traguardi raggiunti su 12'; tap on a medal (testID medal-*) opens the flip overlay with 'Tocca per girare' hint; medal-close X is present; Profilo → 'Traguardi del Cammino' (testID menu-/traguardi) navigates to /traguardi and renders 12 medals.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/admin/achievements/{id}/assign & /unassign", "issue": "Used u['id'] but user documents store id under user_id → 500 KeyError('id'). Fixed by using u.get('user_id') or u.get('id')."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "MedalDetailOverlay (web only)", "issue": "Full-screen backdrop uses <Pressable style={StyleSheet.absoluteFill} onPress={onClose}> covering the whole root; nested Pressable on the medal for toggle may allow click bubbling on RNW so a second tap to flip can also fire the backdrop onClose. Manual note in review says overlay works on native — flagging only for web. Reference: /app/frontend/src/components/bacheca/MedalDetailOverlay.tsx:70-75"}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_achievements.py",
+    "/app/test_reports/pytest/iteration_41_achievements.xml"
+  ],
+  "action_items": [
+    "Consider adding a stopPropagation on medal Pressable (or restructure backdrop) so the flip tap doesn't also dismiss the overlay on React Native Web. Native platforms unaffected.",
+    "Re-verify assign/unassign flow via Admin UI (/app/frontend/app/admin/achievements/[id].tsx) to ensure the successful 200 is reflected in the UI toast/state after the backend fix."
+  ],
+  "critical_code_review_comments": [
+    "server.py assign/unassign endpoints assumed schema key 'id' on users collection but registration and everywhere else uses 'user_id' — introduced a subtle 500. Now guarded with u.get('user_id') or u.get('id').",
+    "MedalDetailOverlay.tsx: layering of full-screen backdrop Pressable behind a nested Pressable can cause tap-through on RNW; add event.stopPropagation or wrap with a non-clickable View to stop bubbling."
+  ],
+  "updated_files": [
+    "/app/backend/server.py (lines ~1673-1692: admin_assign_achievement / admin_unassign_achievement)",
+    "/app/backend/tests/test_achievements.py (new)"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% (all requested flows verified)"},
+  "seed_data_creation": "None. Used pre-existing seeded demo user bacheca_demo@test.it and default achievements/walk_board. Test-created admin achievements are cleaned up in-test (create → assign → unassign → delete).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend admin auth uses email/password login for pescatoridiuomini@outlook.it / AdminTestPwd1! (allowlist admin). Demo user for achievements is bacheca_demo@test.it / Test1234! with pre-seeded 3 completed plans, 12 podcasts in history, 2 verse bookmarks, 1 meditation interaction → earned_count=6/12. GET /api/me/achievements is idempotent: earned_at is stored in user_achievements collection via $setOnInsert.",
+  "rca_of_issue": "POST /api/admin/achievements/{id}/assign returned 500 because the code accessed u['id'] on a users document that uses 'user_id' as the identifier field. Reproduction: 1) login as admin, 2) POST /api/admin/achievements/{aid}/assign body {email: bacheca_demo@test.it} → 500 Internal Server Error, backend traceback KeyError('id'). Mitigation applied: switched to uid = u.get('user_id') or u.get('id') in both assign and unassign handlers. Retested — pytest test_manual_assign_and_unassign now passes."
+}

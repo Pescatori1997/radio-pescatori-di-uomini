@@ -1676,9 +1676,10 @@ async def admin_assign_achievement(aid: str, body: dict, admin=Depends(require_p
     u = await db.users.find_one({"email": email})
     if not u:
         raise HTTPException(status_code=404, detail="Utente non trovato")
+    uid = u.get("user_id") or u.get("id")
     await db.user_achievements.update_one(
-        {"user_id": u["id"], "achievement_id": aid},
-        {"$set": {"user_id": u["id"], "achievement_id": aid, "earned_at": now_utc().isoformat(), "auto": False}},
+        {"user_id": uid, "achievement_id": aid},
+        {"$set": {"user_id": uid, "achievement_id": aid, "earned_at": now_utc().isoformat(), "auto": False}},
         upsert=True)
     return {"ok": True}
 
@@ -1688,7 +1689,8 @@ async def admin_unassign_achievement(aid: str, body: dict, admin=Depends(require
     email = (body.get("email") or "").strip().lower()
     u = await db.users.find_one({"email": email})
     if u:
-        await db.user_achievements.delete_one({"user_id": u["id"], "achievement_id": aid})
+        uid = u.get("user_id") or u.get("id")
+        await db.user_achievements.delete_one({"user_id": uid, "achievement_id": aid})
     return {"ok": True}
 
 
@@ -6312,6 +6314,12 @@ async def startup():
         await seed_reading_plans(db, logger, new_id, now_utc)
     except Exception as e:
         logger.warning("reading plans seed error: %s", e)
+    # Seed default achievements + walk board (idempotent).
+    try:
+        from achievements_seed import seed_achievements
+        await seed_achievements(db, logger, new_id, now_utc)
+    except Exception as e:
+        logger.warning("achievements seed error: %s", e)
     logger.info("Seed complete")
 
 
