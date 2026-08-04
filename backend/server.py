@@ -863,7 +863,7 @@ async def get_history(authorization: Optional[str] = Header(None)):
 ADMIN_EMAILS = [e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()]
 ROLE_ADMIN, ROLE_COLLAB, ROLE_LISTENER = "administrator", "collaborator", "listener"
 # Sections that can be delegated to a collaborator (each maps to an existing admin area).
-PERM_SECTIONS = ["podcasts", "meditations", "news", "showcase", "merch", "schedule", "prayers", "messages", "team", "radio", "verses", "plans", "finance", "agenda"]
+PERM_SECTIONS = ["podcasts", "meditations", "news", "showcase", "merch", "schedule", "prayers", "messages", "team", "radio", "verses", "plans", "achievements", "finance", "agenda"]
 
 # Granular Agenda permissions (configurable per collaborator by the Super Admin).
 AGENDA_PERMS = [
@@ -1530,6 +1530,180 @@ async def admin_showcase_order(body: dict, admin=Depends(require_perm("showcase"
     ids = body.get("ids") or []
     for i, sid in enumerate(ids):
         await db.showcase.update_one({"id": sid}, {"$set": {"order": i}})
+    return {"ok": True}
+
+
+# ---------------- Traguardi del Cammino (Achievements / Walk Board) ----------------
+DEFAULT_BOARD = {
+    "id": "default", "enabled": True, "title": "Traguardi del Cammino",
+    "principle_line1": "NON È UNA GARA.", "principle_line2": "È UN CAMMINO.",
+    "intro_text": "Ogni medaglia non racconta quanto sei migliore degli altri. Racconta semplicemente che hai continuato.",
+    "animation_enabled": True, "empty_slots_mode": "plaque", "continue_text": "Il cammino continua…",
+    "wood": "walnut",
+}
+
+
+async def _user_metric_counts(uid: str) -> dict:
+    plans = await db.plan_enrollments.count_documents({"user_id": uid, "completed_at": {"$ne": None}})
+    podcasts = await db.history.count_documents({"user_id": uid})
+    verses = await db.bible_bookmarks.count_documents({"user_id": uid})
+    mids = set()
+    for coll in ("meditation_likes", "meditation_prayers"):
+        for r in await db[coll].find({"uid": uid}, {"_id": 0, "mid": 1}).to_list(2000):
+            if r.get("mid"):
+                mids.add(r["mid"])
+    for r in await db.meditation_comments.find({"$or": [{"user_id": uid}, {"uid": uid}]}, {"_id": 0, "mid": 1}).to_list(2000):
+        if r.get("mid"):
+            mids.add(r["mid"])
+    return {"plans": plans, "podcasts": podcasts, "verses": verses, "meditations": len(mids), "manual": 0}
+
+
+@api_router.get("/me/achievements")
+async def me_achievements(authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    uid = user["user_id"]
+    settings = await db.walk_board.find_one({"id": "default"}, {"_id": 0}) or DEFAULT_BOARD
+    defs = await db.achievements.find({"active": True}, {"_id": 0}).sort([("order", 1), ("category", 1), ("threshold", 1)]).to_list(300)
+    counts = await _user_metric_counts(uid)
+    manual = {r["achievement_id"]: r for r in await db.user_achievements.find({"user_id": uid}, {"_id": 0}).to_list(500)}
+    out = []
+    for a in defs:
+        metric = a.get("metric", "manual")
+        cnt = counts.get(metric, 0)
+        earned, earned_at = False, None
+        if metric == "manual":
+            earned = a["id"] in manual
+            earned_at = manual.get(a["id"], {}).get("earned_at")
+        else:
+            earned = cnt >= (a.get("threshold") or 1)
+            if earned:
+                rec = manual.get(a["id"])
+                if rec:
+                    earned_at = rec.get("earned_at")
+                else:
+                    earned_at = now_utc().isoformat()
+                    await db.user_achievements.update_one(
+                        {"user_id": uid, "achievement_id": a["id"]},
+                        {"$setOnInsert": {"user_id": uid, "achievement_id": a["id"], "earned_at": earned_at, "auto": True}},
+                        upsert=True)
+        a2 = dict(a)
+        a2["earned"] = earned
+        a2["earned_at"] = earned_at
+        a2["count"] = cnt
+        a2["progress"] = (100 if earned else 0) if metric == "manual" else min(100, int(cnt * 100 / (a.get("threshold") or 1)))
+        out.append(a2)
+    return {"settings": settings, "achievements": out, "counts": counts, "earned_count": sum(1 for x in out if x["earned"])}
+
+
+class AchievementIn(BaseModel):
+    category: str = "Generale"
+    tier: str = "bronze"
+    title: str
+    description: Optional[str] = ""
+    metric: str = "manual"
+    threshold: int = 1
+    back_label: Optional[str] = ""
+    emoji: Optional[str] = "🎖️"
+    image: Optional[str] = None
+    active: Optional[bool] = True
+    order: Optional[int] = None
+
+
+class AchievementEdit(BaseModel):
+    category: Optional[str] = None
+    tier: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    metric: Optional[str] = None
+    threshold: Optional[int] = None
+    back_label: Optional[str] = None
+    emoji: Optional[str] = None
+    image: Optional[str] = None
+    active: Optional[bool] = None
+    order: Optional[int] = None
+
+
+@api_router.get("/admin/achievements")
+async def admin_achievements(admin=Depends(require_perm("achievements"))):
+    return await db.achievements.find({}, {"_id": 0}).sort([("order", 1), ("category", 1)]).to_list(500)
+
+
+@api_router.get("/admin/achievements/{aid}")
+async def admin_achievement_item(aid: str, admin=Depends(require_perm("achievements"))):
+    doc = await db.achievements.find_one({"id": aid}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Non trovato")
+    return doc
+
+
+@api_router.post("/admin/achievements", status_code=201)
+async def admin_create_achievement(body: AchievementIn, admin=Depends(require_perm("achievements"))):
+    doc = body.model_dump()
+    doc["id"] = new_id("ach")
+    doc["created_at"] = now_utc().isoformat()
+    if doc.get("order") is None:
+        doc["order"] = await db.achievements.count_documents({})
+    await db.achievements.insert_one(dict(doc))
+    await log_activity(admin, f"ha creato il traguardo \"{doc.get('title', '')}\"", "achievements", {"id": doc["id"]})
+    return {"ok": True, "id": doc["id"]}
+
+
+@api_router.patch("/admin/achievements/{aid}")
+async def admin_edit_achievement(aid: str, body: AchievementEdit, admin=Depends(require_perm("achievements"))):
+    updates = body.model_dump(exclude_unset=True)
+    if updates:
+        await db.achievements.update_one({"id": aid}, {"$set": updates})
+    return {"ok": True}
+
+
+@api_router.delete("/admin/achievements/{aid}")
+async def admin_delete_achievement(aid: str, admin=Depends(require_perm("achievements"))):
+    await db.achievements.delete_one({"id": aid})
+    await db.user_achievements.delete_many({"achievement_id": aid})
+    return {"ok": True}
+
+
+@api_router.post("/admin/achievements/order")
+async def admin_achievements_order(body: dict, admin=Depends(require_perm("achievements"))):
+    for i, aid in enumerate(body.get("ids") or []):
+        await db.achievements.update_one({"id": aid}, {"$set": {"order": i}})
+    return {"ok": True}
+
+
+@api_router.post("/admin/achievements/{aid}/assign")
+async def admin_assign_achievement(aid: str, body: dict, admin=Depends(require_perm("achievements"))):
+    email = (body.get("email") or "").strip().lower()
+    u = await db.users.find_one({"email": email})
+    if not u:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    await db.user_achievements.update_one(
+        {"user_id": u["id"], "achievement_id": aid},
+        {"$set": {"user_id": u["id"], "achievement_id": aid, "earned_at": now_utc().isoformat(), "auto": False}},
+        upsert=True)
+    return {"ok": True}
+
+
+@api_router.post("/admin/achievements/{aid}/unassign")
+async def admin_unassign_achievement(aid: str, body: dict, admin=Depends(require_perm("achievements"))):
+    email = (body.get("email") or "").strip().lower()
+    u = await db.users.find_one({"email": email})
+    if u:
+        await db.user_achievements.delete_one({"user_id": u["id"], "achievement_id": aid})
+    return {"ok": True}
+
+
+@api_router.get("/admin/walk-board")
+async def admin_get_walk_board(admin=Depends(require_perm("achievements"))):
+    return await db.walk_board.find_one({"id": "default"}, {"_id": 0}) or DEFAULT_BOARD
+
+
+@api_router.patch("/admin/walk-board")
+async def admin_edit_walk_board(body: dict, admin=Depends(require_perm("achievements"))):
+    allowed = {"enabled", "title", "principle_line1", "principle_line2", "intro_text", "animation_enabled", "empty_slots_mode", "continue_text", "wood"}
+    updates = {k: v for k, v in body.items() if k in allowed}
+    updates["id"] = "default"
+    updates["updated_at"] = now_utc().isoformat()
+    await db.walk_board.update_one({"id": "default"}, {"$set": updates}, upsert=True)
     return {"ok": True}
 
 
