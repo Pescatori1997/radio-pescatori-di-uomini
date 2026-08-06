@@ -79,6 +79,28 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Optimized content images (/api/img/...) -> cache-first. The URL carries a
+  // content hash (?v=...), so a changed image always yields a NEW URL; serving
+  // the cached bytes is always correct and never stale. This restores fast
+  // repeat opens even though Cloudflare strips the Cache-Control header.
+  if (url.pathname.startsWith("/api/img/")) {
+    event.respondWith(
+      (async () => {
+        const cache = await caches.open(ASSETS);
+        const cached = await cache.match(req);
+        if (cached) return cached;
+        try {
+          const res = await fetch(req);
+          if (res && res.status === 200) cache.put(req, res.clone());
+          return res;
+        } catch (e) {
+          return cached || Response.error();
+        }
+      })()
+    );
+    return;
+  }
+
   // Static assets -> stale-while-revalidate.
   if (isStaticAsset(url)) {
     event.respondWith(

@@ -17,10 +17,6 @@ data-URI or an https URL are interchangeable — nothing changes visually.
 
 import base64
 import hashlib
-import contextvars
-
-# Per-request public base URL (scheme://host), set by a middleware in server.py.
-req_base: "contextvars.ContextVar[str]" = contextvars.ContextVar("req_base", default="")
 
 # Whitelisted collections -> scalar image fields to lighten (also acts as the
 # access whitelist for the /img endpoint).

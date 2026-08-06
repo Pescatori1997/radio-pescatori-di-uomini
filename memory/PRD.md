@@ -294,3 +294,14 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - **Admin** (`/admin/achievements`, perm `achievements`): impostazioni bacheca (titolo, principio, intro, testo slot vuoti, legno noce/rovere/mogano/ebano, toggle animazione/attiva) + lista medaglie con **reorder** (frecce), toggle attivo, **duplica**, elimina; editor `[id]` con tier/metric/soglia/emoji/descrizione/etichetta retro/immagine custom/attivo + **assegna/revoca** manuale per email. Voce sidebar aggiunta in AdminShell.
 - Backend (già scaffolded in fork precedente, ora testato): `GET /api/me/achievements`, admin CRUD `/api/admin/achievements(+/{id}/order/assign/unassign)`, `GET/PATCH /api/admin/walk-board`.
 - Verificato screenshot: armadio, medaglie tier, lucchetti+progresso, overlay flip 3D fronte/retro. Test backend/frontend via testing_agent in corso.
+
+## Performance (2026-06 — ottimizzazione immagini / PWA lenta)
+- Problema segnalato: PWA lenta su tutte le schermate. Causa: immagini salvate come base64 INLINE nei documenti e restituite dentro gli ELENCHI (payload da MB).
+- Soluzione (nessuna migrazione dati, nessun cambio visivo):
+  - Nuovo endpoint `GET /api/img/{coll}/{id}/{field}?v=<hash>[&i=<idx>]` (`backend/imageopt.py` + `server.py`) che decodifica il base64 e serve i byte reali con `Cache-Control: public, max-age=31536000, immutable`.
+  - Le LISTE/DETAIL pubbliche (podcasts, news, programs, crew, showcase, meditations, contents, reading-plans, favorites, history) ora restituiscono URL RELATIVI `/api/img/...?v=<hash>` al posto del base64. Il `?v=` è l'hash del contenuto → cache-busting automatico quando l'admin modifica l'immagine.
+  - Gli endpoint ADMIN NON toccati: gli editor ricevono ancora il base64 completo per modifica/salvataggio.
+  - Frontend `api.ts` → `absolutizeImages()` antepone `EXPO_PUBLIC_BACKEND_URL` agli URL `/api/img/...` (funziona su web same-origin e nativo). BachecaCard Home ora fetch una sola volta (useEffect).
+  - Service Worker (`public/sw.js`): caching cache-first per `/api/img/...` (sicuro grazie all'URL con hash) → aperture successive rapide anche se Cloudflare rimuove gli header di cache.
+- Testato: 24/24 pytest backend (`iteration_42_image_opt.xml`) + frontend (Notizie/Team con immagini base64 renderizzate correttamente). Regressione admin (base64 intatto) e Traguardi del Cammino OK.
+- Nota infra: sull'ingress pubblico Cloudflare riscrive Cache-Control a no-store; il caching cross-sessione è affidato al Service Worker della PWA.
