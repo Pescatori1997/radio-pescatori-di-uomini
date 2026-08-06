@@ -1,6 +1,6 @@
-import React, { useCallback, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { useRouter, useFocusEffect } from "expo-router";
+import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "@/src/context/AuthContext";
@@ -19,14 +19,14 @@ export default function BachecaCard() {
   const [earned, setEarned] = useState<number | null>(null);
   const [total, setTotal] = useState<number | null>(null);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (!user) { setEarned(null); return; }
-      api.myAchievements()
-        .then((d: any) => { setEarned(d.earned_count ?? 0); setTotal((d.achievements || []).length); })
-        .catch(() => {});
-    }, [user?.user_id]) // eslint-disable-line react-hooks/exhaustive-deps
-  );
+  // Fetch once per mount (not on every tab focus) to avoid repeated network
+  // calls on the Home feed — the count doesn't need to be perfectly live here.
+  useEffect(() => {
+    if (!user) { setEarned(null); return; }
+    api.myAchievements()
+      .then((d: any) => { setEarned(d.earned_count ?? 0); setTotal((d.achievements || []).length); })
+      .catch(() => {});
+  }, [user?.user_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <PressableScale testID="home-bacheca" style={styles.wrap} onPress={() => router.push("/traguardi")}>
