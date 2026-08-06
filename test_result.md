@@ -725,3 +725,17 @@ frontend:
 agent_communication:
     -agent: "main"
     -message: "TEST OTTIMIZZAZIONE IMMAGINI (cross-cutting). Dati reali nel pod: 1 news (news_572a9652d8a3) e 1 meditation (med_50209f73871c) hanno immagini base64. VERIFICARE: (1) GET /api/news, /api/podcasts, /api/meditations, /api/showcase, /api/crew, /api/programs, /api/reading-plans, /api/contents -> i campi immagine base64 devono diventare '/api/img/...?v=...' (relativi); i campi con URL esterni (http/https, es. artwork di default) restano invariati. (2) GET /api/img/news/news_572a9652d8a3/image?v=... -> 200 image/jpeg con header Cache-Control 'public, max-age=31536000, immutable'; senza ?v funziona comunque; collection/field non whitelisted -> 404; id inesistente -> 404. (3) Cache-busting: modificando il base64 di un doc, il ?v= cambia. (4) REGRESSIONE ADMIN CRITICA: gli endpoint admin devono ancora restituire il BASE64 COMPLETO (non URL) così l'editor puo' mostrarlo e ri-salvarlo senza corrompere il campo — verificare GET admin podcasts/news/crew/meditations/reading-plans/contents item usati dagli editor (login admin pescatoridiuomini@outlook.it / AdminTestPwd1!). (5) REGRESSIONE Traguardi del Cammino: /api/me/achievements ancora ok (utente bacheca_demo@test.it / Test1234!, earned_count=6). FRONTEND: login via Welcome->Accedi->/auth (placeholder Email/Password, bottone Accedi). Verificare che le immagini si vedano su: Home (vetrina/palinsesto), Notizie, Podcast, Meditazioni, Team (equipaggio). NON ritestare Agenda/Timoteo/radio."
+
+
+## --- FIX: tasto indietro non funziona aprendo /prayer-board da notifica ---
+frontend:
+  - task: "Back arrow che dead-end quando la schermata e' aperta da una push/PWA notification (nessuna cronologia). Sostituito router.back() con goBackOrHome() (canGoBack ? back : replace('/')) su prayer-board, bibbia, equipaggio/[id], traguardi."
+    implemented: true
+    working: true
+    file: "frontend/app/prayer-board.tsx, frontend/app/bibbia.tsx, frontend/app/equipaggio/[id].tsx, frontend/app/traguardi.tsx (helper esistente frontend/src/utils/nav.ts)"
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Causa: la notifica '🙏 Nuova richiesta di preghiera' (server.py ~1801) apre action_url='/prayer-board'; il back usava router.back() senza cronologia -> non faceva nulla (soprattutto su PWA dove il SW naviga direttamente all'URL). Fix: goBackOrHome() (gia' usato con successo da podcast/[id] e news/[id], anch'essi target di notifiche). Verificato via screenshot web: da Home -> prayer-board -> tasto indietro -> torna a Home (on_home=True, board-back assente). Il ramo senza-cronologia e' garantito da canGoBack()===false -> replace('/')."

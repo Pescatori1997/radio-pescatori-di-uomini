@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from "react-nat
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
+import { goBackOrHome } from "@/src/utils/nav";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { api } from "@/src/api";
@@ -25,7 +26,6 @@ function Section({ icon, title, children, delay }: any) {
 
 export default function CrewProfile() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [m, setM] = useState<any>(null);
 
@@ -57,7 +57,7 @@ export default function CrewProfile() {
               </View>
             </>
           )}
-          <PressableScale testID="crew-profile-back" onPress={() => router.back()} style={[styles.backBtn, { top: insets.top + spacing.sm }]}>
+          <PressableScale testID="crew-profile-back" onPress={() => goBackOrHome()} style={[styles.backBtn, { top: insets.top + spacing.sm }]}>
             <Ionicons name="arrow-back" size={22} color={colors.white} />
           </PressableScale>
         </View>

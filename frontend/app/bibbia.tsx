@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from "react-nat
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { goBackOrHome } from "@/src/utils/nav";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { api, verseMeditationAudioUrl } from "@/src/api";
@@ -81,7 +82,7 @@ export default function Bibbia() {
           </>
         )}
         <View style={styles.topBar}>
-          <PressableScale testID="bibbia-back" onPress={() => router.back()} style={styles.iconBtn}>
+          <PressableScale testID="bibbia-back" onPress={() => goBackOrHome()} style={styles.iconBtn}>
             <Ionicons name="arrow-back" size={22} color={colors.white} />
           </PressableScale>
           <Text style={styles.topTitle}>Bibbia</Text>

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Pressable } from
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
+import { goBackOrHome } from "@/src/utils/nav";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/src/context/AuthContext";
 import { api } from "@/src/api";
@@ -35,7 +36,7 @@ export default function Traguardi() {
       <View style={[styles.hero, { paddingTop: insets.top + spacing.sm }]}>
         <LinearGradient colors={["#0B2A4A", "#0A1B3A", "#0A1128"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
         <View style={styles.topBar}>
-          <PressableScale testID="traguardi-back" onPress={() => router.back()} style={styles.iconBtn}><Ionicons name="arrow-back" size={22} color={colors.white} /></PressableScale>
+          <PressableScale testID="traguardi-back" onPress={() => goBackOrHome()} style={styles.iconBtn}><Ionicons name="arrow-back" size={22} color={colors.white} /></PressableScale>
           <Text style={styles.topTitle} numberOfLines={1}>{title}</Text>
           <View style={styles.iconBtn} />
         </View>

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl }
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
+import { goBackOrHome } from "@/src/utils/nav";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { api } from "@/src/api";
@@ -48,7 +49,7 @@ export default function PrayerBoard() {
         <LinearGradient colors={["#0B2A4A", "#0A1B3A", "#0A1128"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
         {w > 0 && (<><SunriseGlow width={w} height={150} /><FishingNet width={w} height={150} gap={28} opacity={0.06} /><SeaWaves width={w} height={54} /></>)}
         <View style={styles.topBar}>
-          <PressableScale testID="board-back" onPress={() => router.back()} style={styles.iconBtn}><Ionicons name="arrow-back" size={22} color={colors.white} /></PressableScale>
+          <PressableScale testID="board-back" onPress={() => goBackOrHome()} style={styles.iconBtn}><Ionicons name="arrow-back" size={22} color={colors.white} /></PressableScale>
           <Text style={styles.topTitle}>Bacheca di Preghiera</Text>
           <PressableScale testID="board-add" onPress={() => router.push("/prayer")} style={styles.iconBtn}><Ionicons name="add" size={22} color={colors.white} /></PressableScale>
         </View>
