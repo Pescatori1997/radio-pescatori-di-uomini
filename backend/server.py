@@ -23,6 +23,7 @@ from datetime import datetime, timezone, timedelta
 from verses_data import VERSES_SEED
 import timoteo
 import analytics
+import imageopt
 try:
     from zoneinfo import ZoneInfo
     ROME_TZ = ZoneInfo("Europe/Rome")
@@ -571,13 +572,13 @@ async def get_podcasts(search: Optional[str] = None, category: Optional[str] = N
             {"subtitle": {"$regex": re.escape(search), "$options": "i"}},
         ]
     docs = await db.podcasts.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
-    return docs
+    return imageopt.lighten_list("podcasts", docs)
 
 
 @api_router.get("/podcasts/featured")
 async def featured_podcasts():
     docs = await db.podcasts.find(_pub_filter({"featured": True}), {"_id": 0}).sort("featured_order", 1).to_list(50)
-    return docs
+    return imageopt.lighten_list("podcasts", docs)
 
 
 @api_router.get("/podcasts/categories")
@@ -591,7 +592,7 @@ async def get_podcast(podcast_id: str):
     doc = await db.podcasts.find_one({"id": podcast_id}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Podcast non trovato")
-    return doc
+    return imageopt.lighten("podcasts", doc)
 
 
 @api_router.get("/news")
@@ -599,7 +600,7 @@ async def get_news():
     docs = await db.news.find(_pub_filter(), {"_id": 0}).sort("date", -1).to_list(500)
     for d in docs:
         d["reading_time"] = _reading_time(d.get("body", ""))
-    return docs
+    return imageopt.lighten_list("news", docs)
 
 
 @api_router.get("/news/featured")
@@ -607,7 +608,7 @@ async def featured_news():
     docs = await db.news.find(_pub_filter({"featured": True}), {"_id": 0}).sort("date", -1).to_list(50)
     for d in docs:
         d["reading_time"] = _reading_time(d.get("body", ""))
-    return docs
+    return imageopt.lighten_list("news", docs)
 
 
 @api_router.get("/news/categories")
@@ -622,7 +623,7 @@ async def get_news_item(news_id: str):
     if not doc:
         raise HTTPException(status_code=404, detail="Notizia non trovata")
     doc["reading_time"] = _reading_time(doc.get("body", ""))
-    return doc
+    return imageopt.lighten("news", doc)
 
 
 @api_router.get("/programs")
@@ -630,7 +631,7 @@ async def get_programs():
     docs = await db.programs.find({}, {"_id": 0}).to_list(500)
     progs = [_normalize_program(d) for d in docs]
     progs.sort(key=lambda p: (p.get("start_time") or "99:99"))
-    return progs
+    return imageopt.lighten_list("programs", progs)
 
 
 @api_router.get("/programs/current")
@@ -639,7 +640,7 @@ async def get_current_program():
     for d in docs:
         p = _normalize_program(d)
         if _is_on_air(p):
-            return p
+            return imageopt.lighten("programs", p)
     return None
 
 
@@ -652,7 +653,7 @@ async def get_programs_by_day(weekday: str):
         if p.get("active", True) and weekday in (p.get("weekdays") or []):
             out.append(p)
     out.sort(key=lambda p: (p.get("start_time") or "99:99"))
-    return out
+    return imageopt.lighten_list("programs", out)
 
 
 @api_router.get("/collaborators")
@@ -679,7 +680,7 @@ class ApplicationIn(BaseModel):
 @api_router.get("/crew")
 async def get_crew():
     docs = await db.crew.find({"published": True}, {"_id": 0}).sort("order", 1).to_list(200)
-    return docs
+    return imageopt.lighten_list("crew", docs)
 
 
 @api_router.get("/crew/{member_id}")
@@ -687,7 +688,7 @@ async def get_crew_member(member_id: str):
     doc = await db.crew.find_one({"id": member_id}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Membro non trovato")
-    return doc
+    return imageopt.lighten("crew", doc)
 
 
 @api_router.post("/crew/applications")
@@ -818,7 +819,7 @@ async def get_favorites(authorization: Optional[str] = Header(None)):
     favs = await db.favorites.find({"user_id": user["user_id"]}, {"_id": 0}).to_list(200)
     ids = [f["podcast_id"] for f in favs]
     docs = await db.podcasts.find({"id": {"$in": ids}}, {"_id": 0}).to_list(200)
-    return docs
+    return imageopt.lighten_list("podcasts", docs)
 
 
 @api_router.post("/me/favorites/{podcast_id}")
@@ -856,7 +857,7 @@ async def get_history(authorization: Optional[str] = Header(None)):
     docs = await db.podcasts.find({"id": {"$in": ids}}, {"_id": 0}).to_list(50)
     order = {pid: i for i, pid in enumerate(ids)}
     docs.sort(key=lambda d: order.get(d["id"], 999))
-    return docs
+    return imageopt.lighten_list("podcasts", docs)
 
 
 # ---------------- Admin (RBAC) ----------------
@@ -1454,7 +1455,7 @@ async def get_showcase():
     hidden here."""
     docs = await db.showcase.find({"active": True}, {"_id": 0}).sort([("order", 1), ("created_at", 1)]).to_list(200)
     today = now_utc().date()
-    return [d for d in docs if _showcase_visible(d, today)]
+    return imageopt.lighten_list("showcase", [d for d in docs if _showcase_visible(d, today)])
 
 
 class ShowcaseIn(BaseModel):
@@ -3998,7 +3999,7 @@ async def get_meditations(search: Optional[str] = None, category: Optional[str] 
     if search:
         query["title"] = {"$regex": re.escape(search), "$options": "i"}
     docs = await db.meditations.find(query, {"_id": 0}).sort("publish_date", -1).to_list(300)
-    return [_decorate_meditation(d) for d in docs]
+    return imageopt.lighten_list("meditations", [_decorate_meditation(d) for d in docs])
 
 
 @api_router.get("/meditations/categories")
@@ -4012,7 +4013,7 @@ async def get_meditation(mid: str):
     doc = await db.meditations.find_one({"id": mid}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Meditazione non trovata")
-    return _decorate_meditation(doc)
+    return imageopt.lighten("meditations", _decorate_meditation(doc))
 
 
 # ---------------- Meditation interactions (like / praying / comments) ----------------
@@ -4275,7 +4276,7 @@ async def get_contents(section: str, search: Optional[str] = None,
     if search:
         query["title"] = {"$regex": re.escape(search), "$options": "i"}
     docs = await db.contents.find(query, {"_id": 0}).sort([("order", 1), ("publish_date", -1)]).to_list(300)
-    return [_decorate_meditation(d) for d in docs]
+    return imageopt.lighten_list("contents", [_decorate_meditation(d) for d in docs])
 
 
 @api_router.get("/contents/{cid}")
@@ -4283,7 +4284,7 @@ async def get_content(cid: str):
     doc = await db.contents.find_one({"id": cid}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Contenuto non trovato")
-    return _decorate_meditation(doc)
+    return imageopt.lighten("contents", _decorate_meditation(doc))
 
 
 @api_router.get("/admin/contents")
@@ -5132,7 +5133,7 @@ def _plan_public(p: dict) -> dict:
 @api_router.get("/reading-plans")
 async def list_reading_plans():
     plans = await db.reading_plans.find({"status": "published"}, {"_id": 0}).sort([("order", 1), ("created_at", 1)]).to_list(200)
-    return [_plan_public(p) for p in plans]
+    return imageopt.lighten_list("reading_plans", [_plan_public(p) for p in plans])
 
 
 @api_router.get("/reading-plans/{pid}")
@@ -5151,7 +5152,7 @@ async def get_reading_plan(pid: str, authorization: Optional[str] = Header(None)
     except Exception:
         pass
     p["enrollment"] = enrollment
-    return p
+    return imageopt.lighten("reading_plans", p)
 
 
 def _progress(enrollment: dict, duration: int) -> dict:
@@ -5177,7 +5178,7 @@ async def my_reading_plans(authorization: Optional[str] = Header(None)):
         duration = p.get("duration_days") or 0
         out.append({**_plan_public(p), "progress": _progress(e, duration), "started_at": e.get("started_at")})
     out.sort(key=lambda x: x.get("started_at") or "", reverse=True)
-    return out
+    return imageopt.lighten_list("reading_plans", out)
 
 
 @api_router.post("/me/reading-plans/{pid}/enroll")
@@ -6000,6 +6001,26 @@ async def agenda_collaborators(user=Depends(require_agenda("view"))):
     ).to_list(500)
     return [{"user_id": d["user_id"], "name": d.get("name") or d.get("email"),
              "email": d.get("email"), "role": d.get("role"), "picture": d.get("picture")} for d in docs]
+
+
+# ---------------- Optimized image serving (lightweight lists + cacheable images) ----------------
+@api_router.get("/img/{coll}/{doc_id}/{field}")
+async def serve_image(coll: str, doc_id: str, field: str, i: Optional[int] = None, v: Optional[str] = None):
+    """Serve an inline base64 image as real bytes with long-lived, content-hashed
+    caching. The ?v= (content hash) makes the URL change when the admin edits the
+    image, so caches refresh automatically."""
+    if not imageopt.field_allowed(coll, field):
+        raise HTTPException(status_code=404, detail="Not found")
+    doc = await db[coll].find_one({"id": doc_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Not found")
+    val = imageopt.resolve_image(doc, coll, field, i)
+    if not imageopt.is_data_uri(val):
+        raise HTTPException(status_code=404, detail="Not found")
+    mime, data = imageopt.decode_data_uri(val)
+    return Response(content=data, media_type=mime, headers={
+        "Cache-Control": "public, max-age=31536000, immutable",
+    })
 
 
 app.include_router(api_router)

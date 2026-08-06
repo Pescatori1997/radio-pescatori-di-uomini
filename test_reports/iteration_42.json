@@ -1,0 +1,38 @@
+{
+  "summary": "Image payload optimization (iteration 42) tested end-to-end. Backend: 24/24 pytest OK. Public list endpoints (/api/news, /api/podcasts, /api/meditations, /api/crew, /api/programs, /api/reading-plans, /api/contents?section=..., /api/showcase) now return relative image URLs '/api/img/{coll}/{id}/{field}?v=<hash>' instead of inline base64. External http(s) URLs are preserved. GET /api/img/news/news_572a9652d8a3/image?v=... returns HTTP 200, Content-Type image/jpeg, body ~21.9KB. It works even without ?v=. Backend sets Cache-Control 'public, max-age=31536000, immutable' (verified via localhost:8001) but Cloudflare/ingress rewrites it to 'no-store, no-cache, must-revalidate' on the public URL — see rca_of_issue. 404 verified for unknown collection, unknown doc id and non-whitelisted field. Cache-bust confirmed: mutating the stored base64 in Mongo changed the ?v= hash returned by the list endpoint; after restore the original ?v= comes back. Admin regression: /api/admin/news list still returns raw data:image/... base64 for news_572a9652d8a3 (editors safe). /api/admin/meditations/{id}, /api/admin/podcasts, /api/admin/crew, /api/admin/reading-plans, /api/admin/contents?section=predicazioni all serve raw base64 (never /api/img/…). Achievements regression: /api/me/achievements returns earned_count=6 for bacheca_demo@test.it. Frontend (mobile viewport 375x667): login via /auth OK, Notizie renders 'Nuova missione in Africa orientale' with the img sourced from https://…/api/img/news/news_572a9652d8a3/image?v=1e3e294d03 (network 200 observed). No base64 img tags in the DOM. External Unsplash URLs still render. Equipaggio card image renders. Meditazioni is a full-screen reel experience (no thumbnails on that screen — expected). No red screens / no page errors.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/img/{coll}/{id}/{field}", "issue": "Backend correctly emits 'Cache-Control: public, max-age=31536000, immutable' but the public ingress (Cloudflare) rewrites the header to 'no-store, no-cache, must-revalidate'. The URL-hash cache-bust still works, and browsers can still cache in-memory across a session, but disk/service-worker persistence is defeated → the perceived speed win on cold navigations may be smaller than expected. Not a code bug; infra config."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_image_optimization.py",
+    "/app/test_reports/pytest/iteration_42_image_opt.xml"
+  ],
+  "action_items": [
+    "OPTIONAL (infra, not code): if long-lived caching is a hard requirement, ask ops to allow /api/img/* to pass through the ingress Cache-Control instead of overriding to no-store. Everything else works today (URL hash cache-busting + browser session cache).",
+    "OPTIONAL: /podcasts direct URL returns 'Unmatched Route' (only reachable via the bottom-tab). Not related to this iteration but noticed while browsing — main agent may want to register that route in Expo Router for shareable deep links."
+  ],
+  "critical_code_review_comments": [
+    "imageopt.lighten uses a shallow dict copy per doc; presenter list is deep-copied per element via {**p, image: ...} — good, no accidental Mongo mutation.",
+    "field_allowed correctly whitelists collections AND fields, so /api/img cannot be abused to leak arbitrary document fields.",
+    "server.py serve_image swallows Mongo query errors implicitly via find_one; safe. The endpoint intentionally has no auth (image bytes are already public via lists) — fine.",
+    "absolutizeImages in api.ts recurses ALL responses (including admin) — but the backend does NOT lighten admin routes, so admin editors still receive raw base64 which absolutizeImages leaves untouched (data URIs don't start with /api/img/). Confirmed OK."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_image_optimization.py (new)"
+  ],
+  "success_rate": {"backend": "100% (24/24)", "frontend": "100% (news lightening + rendering verified, admin regression not applicable to public UI)"},
+  "seed_data_creation": "None. Used existing seed docs (news_572a9652d8a3, med_50209f73871c) and demo/admin accounts. The cache-bust test mutates news_572a9652d8a3.image in Mongo but restores it in the same test.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Image optimization is live: public lists/details return '/api/img/{coll}/{id}/{field}?v=<hash>' for previously-inline base64 fields; the frontend's absolutizeImages() in /app/frontend/src/api.ts prepends EXPO_PUBLIC_BACKEND_URL. Admin endpoints are intentionally NOT lightened so editors keep receiving raw base64 (verified for news, meditations, podcasts, crew, reading-plans, contents). Cache-Control immutable header is set by the backend but stripped by Cloudflare on the public URL. Test file: /app/backend/tests/test_image_optimization.py. Achievements regression is a single-call sanity check.",
+  "rca_of_issue": "Cache-Control override: `curl -D - http://localhost:8001/api/img/news/news_572a9652d8a3/image?v=abc` returns 'cache-control: public, max-age=31536000, immutable' as coded in server.py:6021. `curl -D - https://evangelic-stream.preview.emergentagent.com/api/img/...` returns 'cache-control: no-store, no-cache, must-revalidate' with server=cloudflare — so the ingress/CDN in front of the pod is enforcing no-store globally. The cache-bust hash in the URL still works (the browser treats each ?v= as a distinct URL) and admins editing an image will immediately see the new content on the next list fetch, but persistent disk/SW caching is prevented by the ingress. Mitigation options: (1) leave as-is — session-memory cache still speeds up repeated views; (2) ask infra to whitelist /api/img/* to preserve the app's Cache-Control; (3) serve the images from a separate subdomain not covered by the no-store rule."
+}

@@ -697,3 +697,31 @@ frontend:
 agent_communication:
     -agent: "main"
     -message: "TEST Traguardi del Cammino (feature nuova). Utente demo con progressi seedati: bacheca_demo@test.it / Test1234! (3 piani completati, 12 podcast, 2 versetti, 1 meditazione -> 6 medaglie earned). Admin: pescatoridiuomini@outlook.it / AdminTestPwd1!. Login pubblico via Welcome->Accedi (/auth, campi placeholder Email/Password, bottone Accedi). BACKEND (auth Bearer): (1) GET /api/me/achievements SENZA auth -> 401 (richiede auth). (2) Con auth demo -> settings + achievements[12] con earned/count/progress/threshold/back_label + earned_count=6; verifica che plans_bronze e plans_silver siano earned (3>=1, 3>=3) e plans_gold NO (3<7). (3) Idempotenza storico: richiama 2 volte, earned_at NON cambia per le medaglie già ottenute. (4) Admin CRUD: GET /api/admin/achievements (>=12), POST /api/admin/achievements (201, {title,tier,metric,threshold,category}) -> id, PATCH /api/admin/achievements/{id} {threshold:2}, POST /api/admin/achievements/order {ids:[...]}, POST /api/admin/achievements/{id}/assign {email:bacheca_demo@test.it} poi GET /me/achievements di quell'utente mostra la medaglia earned (auto=false), unassign la rimuove, DELETE /api/admin/achievements/{id}. (5) GET/PATCH /api/admin/walk-board {wood:'oak', title:'X'} persiste. (6) Permessi: utente NON admin -> 403 su tutti gli /admin/achievements*. FRONTEND (solo se testabile via UI pubblica, admin è dietro gate Google ma email-login admin funziona via /auth): da Home la card testID 'home-bacheca' porta a /traguardi; l'armadio mostra le medaglie; tap su una medaglia apre overlay con flip 3D (testo 'Tocca per girare' gira fronte/retro); X chiude (testID 'medal-close'); voce Profilo 'Traguardi del Cammino' (menu-/traguardi) porta alla stessa bacheca. NON ritestare feature già passate (Agenda, Timoteo, radio, piani di lettura)."
+
+
+## --- OTTIMIZZAZIONE IMMAGINI / PERFORMANCE (payload liste) ---
+backend:
+  - task: "Immagini base64 non piu' inline nelle LISTE pubbliche: nuovo endpoint GET /api/img/{coll}/{id}/{field}?v=hash[&i=idx] che decodifica e serve i byte con Cache-Control immutable 1 anno; le liste/detail pubbliche restituiscono URL relativi /api/img/... con versione = hash del contenuto (cache-busting automatico alla modifica admin). Admin endpoints NON toccati (conservano base64 per l'editing)."
+    implemented: true
+    working: "NA"
+    file: "backend/imageopt.py, backend/server.py (endpoint /img prima di include_router; lighten applicato a podcasts/news/programs/crew/showcase/meditations/contents/reading-plans/favorites/history)"
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Verificato via curl: /api/podcasts e /api/news ora ritornano artwork/image come '/api/img/...?v=hash' (relativo). GET dell'URL serve i byte reali (news image -> 21962 bytes image/jpeg, Cache-Control public max-age=31536000 immutable). Cambiando il contenuto base64 il ?v= cambia (0b7f... -> deb3...). URL relativi: il frontend (api.ts absolutizeImages) antepone EXPO_PUBLIC_BACKEND_URL -> funziona su web (same-origin) e nativo. Nessuna migrazione dati (il base64 resta in DB). Screenshot web: la notizia in evidenza con immagine base64 si vede correttamente. NOTA: gli endpoint ADMIN (/admin/podcasts, /admin/news, /admin/crew, ecc. e i detail usati dagli editor) NON sono stati modificati, quindi gli editor continuano a ricevere il base64 completo per la modifica/salvataggio."
+frontend:
+  - task: "api.ts absolutizeImages: riscrive ricorsivamente le stringhe '/api/img/...' in URL assoluti con BASE, così <Image> le carica su web e nativo senza cambi visivi"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/api.ts (funzione absolutizeImages in request())"
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Screenshot Notizie web: immagine 'Nuova missione in Africa orientale' (base64 in DB) renderizzata correttamente tramite URL ottimizzato. BachecaCard Home passato da useFocusEffect a useEffect (fetch una volta) per ridurre richieste ripetute su Home."
+agent_communication:
+    -agent: "main"
+    -message: "TEST OTTIMIZZAZIONE IMMAGINI (cross-cutting). Dati reali nel pod: 1 news (news_572a9652d8a3) e 1 meditation (med_50209f73871c) hanno immagini base64. VERIFICARE: (1) GET /api/news, /api/podcasts, /api/meditations, /api/showcase, /api/crew, /api/programs, /api/reading-plans, /api/contents -> i campi immagine base64 devono diventare '/api/img/...?v=...' (relativi); i campi con URL esterni (http/https, es. artwork di default) restano invariati. (2) GET /api/img/news/news_572a9652d8a3/image?v=... -> 200 image/jpeg con header Cache-Control 'public, max-age=31536000, immutable'; senza ?v funziona comunque; collection/field non whitelisted -> 404; id inesistente -> 404. (3) Cache-busting: modificando il base64 di un doc, il ?v= cambia. (4) REGRESSIONE ADMIN CRITICA: gli endpoint admin devono ancora restituire il BASE64 COMPLETO (non URL) così l'editor puo' mostrarlo e ri-salvarlo senza corrompere il campo — verificare GET admin podcasts/news/crew/meditations/reading-plans/contents item usati dagli editor (login admin pescatoridiuomini@outlook.it / AdminTestPwd1!). (5) REGRESSIONE Traguardi del Cammino: /api/me/achievements ancora ok (utente bacheca_demo@test.it / Test1234!, earned_count=6). FRONTEND: login via Welcome->Accedi->/auth (placeholder Email/Password, bottone Accedi). Verificare che le immagini si vedano su: Home (vetrina/palinsesto), Notizie, Podcast, Meditazioni, Team (equipaggio). NON ritestare Agenda/Timoteo/radio."

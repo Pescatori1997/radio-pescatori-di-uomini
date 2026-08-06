@@ -133,6 +133,25 @@ async function authHeaders(): Promise<Record<string, string>> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+// The backend returns lightweight, relative image URLs ("/api/img/...") inside
+// list/detail responses (base64 is no longer inlined → much smaller & faster).
+// Prepend the known backend base so <Image> works on web (same-origin) and
+// native alike. Recurses through objects/arrays; only rewrites matching strings.
+function absolutizeImages(node: any): any {
+  if (typeof node === "string") {
+    return node.startsWith("/api/img/") ? `${BASE}${node}` : node;
+  }
+  if (Array.isArray(node)) {
+    for (let i = 0; i < node.length; i++) node[i] = absolutizeImages(node[i]);
+    return node;
+  }
+  if (node && typeof node === "object") {
+    for (const k in node) node[k] = absolutizeImages(node[k]);
+    return node;
+  }
+  return node;
+}
+
 async function request(path: string, options: RequestInit = {}, auth = false) {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -148,7 +167,7 @@ async function request(path: string, options: RequestInit = {}, auth = false) {
     } catch {}
     throw new Error(detail || `Errore ${res.status}`);
   }
-  return res.json();
+  return absolutizeImages(await res.json());
 }
 
 export const api = {
