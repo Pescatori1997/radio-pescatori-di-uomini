@@ -305,3 +305,7 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
   - Service Worker (`public/sw.js`): caching cache-first per `/api/img/...` (sicuro grazie all'URL con hash) → aperture successive rapide anche se Cloudflare rimuove gli header di cache.
 - Testato: 24/24 pytest backend (`iteration_42_image_opt.xml`) + frontend (Notizie/Team con immagini base64 renderizzate correttamente). Regressione admin (base64 intatto) e Traguardi del Cammino OK.
 - Nota infra: sull'ingress pubblico Cloudflare riscrive Cache-Control a no-store; il caching cross-sessione è affidato al Service Worker della PWA.
+
+## Timoteo — immagine + FAB trascinabile (2026-06)
+- Cambiata l'immagine dell'assistente Timoteo: dalla lampada SVG all'illustrazione ufficiale del pescatore ("IL TIMOTEO"), ritagliata su cerchio pulito (assets/images/timoteo.png). Usata nel pulsante flottante e nell'header del pannello.
+- Il pulsante flottante (cerchio) è ora trascinabile liberamente su tutte le schermate (PanResponder + RNAnimated.ValueXY), con vincolo ai bordi (safe-area) e posizione memorizzata (AsyncStorage `timoteo_fab_pos_v1`). Tap = apre Timoteo, trascinamento = sposta. Risolve il problema del cerchio che copriva alcune funzioni.

@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, Pressable, ScrollView, TextInput, ActivityIndicator,
-  KeyboardAvoidingView, Platform, StyleSheet,
+  KeyboardAvoidingView, Platform, StyleSheet, Dimensions,
+  Animated as RNAnimated, PanResponder,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
+import { Image } from "expo-image";
 import { useRouter, useSegments } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { SlideInDown, SlideOutDown } from "react-native-reanimated";
@@ -12,9 +13,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api } from "@/src/api";
 import { useAuth } from "@/src/context/AuthContext";
 import { usePlayer } from "@/src/context/PlayerContext";
-import TimoteoLamp from "./TimoteoLamp";
 import { buildGreeting, getGreetingPrefs } from "./greeting";
 import { colors, spacing, radius } from "@/src/theme";
+
+const TIMOTEO_IMG = require("@/assets/images/timoteo.png");
+const FAB_SIZE = 60;
+const POS_KEY = "timoteo_fab_pos_v1";
 
 type Action = { type: "radio_live" | "open" | "screen"; label: string; path?: string; screen?: string };
 type Msg = { role: "user" | "assistant"; content: string; actions?: Action[]; welcome?: boolean; streaming?: boolean };
@@ -76,6 +80,66 @@ export default function Timoteo() {
   const [restored, setRestored] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const abortRef = useRef<null | (() => void)>(null);
+
+  // --- Draggable floating button (free positioning, persisted) ---
+  const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
+  const [fabReady, setFabReady] = useState(false);
+  const pan = useRef(new RNAnimated.ValueXY({ x: SCREEN_W - FAB_SIZE - 16, y: SCREEN_H - FAB_SIZE - 160 })).current;
+  // Track the live value so release can clamp/persist and distinguish tap vs drag.
+  const cur = useRef({ x: SCREEN_W - FAB_SIZE - 16, y: SCREEN_H - FAB_SIZE - 160 });
+  const boundsRef = useRef({ minX: 8, maxX: SCREEN_W - FAB_SIZE - 8, minY: 8, maxY: SCREEN_H - FAB_SIZE - 8 });
+
+  useEffect(() => {
+    const id = pan.addListener((v) => { cur.current = v; });
+    return () => pan.removeListener(id);
+  }, [pan]);
+
+  useEffect(() => {
+    boundsRef.current = {
+      minX: 8, maxX: SCREEN_W - FAB_SIZE - 8,
+      minY: insets.top + 8, maxY: SCREEN_H - FAB_SIZE - insets.bottom - 8,
+    };
+    (async () => {
+      const { minX, maxX, minY, maxY } = boundsRef.current;
+      let x = SCREEN_W - FAB_SIZE - 16;
+      let y = SCREEN_H - FAB_SIZE - (insets.bottom + 58 + 24) - (track ? 70 : 0);
+      try {
+        const saved = await AsyncStorage.getItem(POS_KEY);
+        if (saved) { const p = JSON.parse(saved); if (typeof p.x === "number") x = p.x; if (typeof p.y === "number") y = p.y; }
+      } catch { /* ignore */ }
+      x = Math.min(Math.max(x, minX), maxX);
+      y = Math.min(Math.max(y, minY), maxY);
+      pan.setValue({ x, y });
+      cur.current = { x, y };
+      setFabReady(true);
+    })();
+  }, [insets.top, insets.bottom]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 3 || Math.abs(g.dy) > 3,
+      onPanResponderGrant: () => {
+        pan.setOffset({ x: cur.current.x, y: cur.current.y });
+        pan.setValue({ x: 0, y: 0 });
+      },
+      onPanResponderMove: RNAnimated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
+      onPanResponderRelease: (_e, g) => {
+        pan.flattenOffset();
+        // Small movement = a tap → open Timoteo.
+        if (Math.abs(g.dx) < 6 && Math.abs(g.dy) < 6) {
+          setOpen(true);
+          return;
+        }
+        const { minX, maxX, minY, maxY } = boundsRef.current;
+        const x = Math.min(Math.max(cur.current.x, minX), maxX);
+        const y = Math.min(Math.max(cur.current.y, minY), maxY);
+        RNAnimated.spring(pan, { toValue: { x, y }, useNativeDriver: false, friction: 7, tension: 80 }).start();
+        cur.current = { x, y };
+        AsyncStorage.setItem(POS_KEY, JSON.stringify({ x, y })).catch(() => {});
+      },
+    })
+  ).current;
 
   const root = (segments[0] as string) || "";
   const hidden = HIDDEN_ROOTS.includes(root);
@@ -199,24 +263,20 @@ export default function Timoteo() {
 
   if (hidden) return null;
 
-  const isTab = root === "(tabs)";
-  const fabBottom = isTab ? insets.bottom + 58 + (track ? 70 : 0) + 12 : insets.bottom + 16;
   const showSuggestions = messages.length <= 1;
   const lastMsg = messages[messages.length - 1];
   const streamingNow = !!(lastMsg && lastMsg.role === "assistant" && lastMsg.streaming);
 
   return (
     <>
-      <Pressable
+      <RNAnimated.View
         testID="timoteo-fab"
-        onPress={() => setOpen(true)}
-        style={[styles.fab, { bottom: fabBottom }]}
-        accessibilityLabel="Apri Timoteo, la guida"
+        accessibilityLabel="Apri Timoteo, la guida. Trascina per spostarlo."
+        style={[styles.fab, { opacity: fabReady ? 1 : 0, transform: pan.getTranslateTransform() }]}
+        {...panResponder.panHandlers}
       >
-        <LinearGradient colors={["#0B2A4A", "#0EA5E9"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.fabGrad}>
-          <TimoteoLamp size={30} />
-        </LinearGradient>
-      </Pressable>
+        <Image source={TIMOTEO_IMG} style={styles.fabImg} contentFit="cover" pointerEvents="none" />
+      </RNAnimated.View>
 
       {open && (
         <View style={styles.overlayRoot} pointerEvents="box-none">
@@ -235,9 +295,7 @@ export default function Timoteo() {
               <View style={styles.header}>
                 <View style={styles.headerLeft}>
                   <View style={styles.headerLamp}>
-                    <LinearGradient colors={["#0B2A4A", "#0EA5E9"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerLampGrad}>
-                      <TimoteoLamp size={20} />
-                    </LinearGradient>
+                    <Image source={TIMOTEO_IMG} style={styles.headerImg} contentFit="cover" />
                   </View>
                   <View>
                     <Text style={styles.headerTitle}>Timoteo</Text>
@@ -332,10 +390,11 @@ export default function Timoteo() {
 
 const styles = StyleSheet.create({
   fab: {
-    position: "absolute", right: 16, width: 56, height: 56, borderRadius: 28,
-    shadowColor: colors.navy, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.28, shadowRadius: 10, elevation: 8, zIndex: 50,
+    position: "absolute", top: 0, left: 0, width: FAB_SIZE, height: FAB_SIZE, borderRadius: FAB_SIZE / 2,
+    backgroundColor: "#0B2A4A", overflow: "hidden", borderWidth: 2, borderColor: "rgba(255,255,255,0.9)",
+    shadowColor: colors.navy, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 8, zIndex: 50,
   },
-  fabGrad: { flex: 1, borderRadius: 28, alignItems: "center", justifyContent: "center" },
+  fabImg: { width: "100%", height: "100%" },
 
   overlayRoot: { ...StyleSheet.absoluteFillObject, justifyContent: "flex-end", zIndex: 100, elevation: 100 },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(10,17,40,0.45)" },
@@ -352,8 +411,9 @@ const styles = StyleSheet.create({
   headerLeft: { flexDirection: "row", alignItems: "center", gap: spacing.md, flex: 1 },
   headerActions: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   resetBtn: { padding: 2 },
-  headerLamp: { width: 40, height: 40, borderRadius: 20, overflow: "hidden" },
+  headerLamp: { width: 40, height: 40, borderRadius: 20, overflow: "hidden", backgroundColor: "#0B2A4A" },
   headerLampGrad: { flex: 1, alignItems: "center", justifyContent: "center" },
+  headerImg: { width: "100%", height: "100%" },
   headerTitle: { fontSize: 17, fontWeight: "800", color: colors.onSurface },
   headerSub: { fontSize: 12, color: colors.muted, marginTop: 1 },
 

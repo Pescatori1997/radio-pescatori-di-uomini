@@ -739,3 +739,17 @@ frontend:
         -working: true
         -agent: "main"
         -comment: "Causa: la notifica '🙏 Nuova richiesta di preghiera' (server.py ~1801) apre action_url='/prayer-board'; il back usava router.back() senza cronologia -> non faceva nulla (soprattutto su PWA dove il SW naviga direttamente all'URL). Fix: goBackOrHome() (gia' usato con successo da podcast/[id] e news/[id], anch'essi target di notifiche). Verificato via screenshot web: da Home -> prayer-board -> tasto indietro -> torna a Home (on_home=True, board-back assente). Il ramo senza-cronologia e' garantito da canGoBack()===false -> replace('/')."
+
+
+## --- Timoteo: nuova immagine + pulsante flottante trascinabile ---
+frontend:
+  - task: "Cambiata l'immagine di Timoteo (da lampada SVG all'illustrazione del pescatore 'IL TIMOTEO', ritagliata su cerchio) nel FAB e nell'header. Reso il FAB (cerchio) trascinabile liberamente con PanResponder, clamp ai bordi (safe-area), posizione persistita in AsyncStorage; tap (spostamento <6px) apre Timoteo, drag lo sposta."
+    implemented: true
+    working: true
+    file: "frontend/src/components/timoteo/Timoteo.tsx, frontend/assets/images/timoteo.png"
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Immagine caricata dall'utente ritagliata con PIL (rimosso bordo bianco) -> assets/images/timoteo.png 400x400. FAB ora RNAnimated.View + PanResponder (RNGH Gesture non rispondeva su web). Verificato via screenshot web/PWA: nuovo avatar nel FAB e nell'header; drag sposta il cerchio da (314,702) a (94,222) e resta nei limiti; tap (senza movimento) apre il pannello Timoteo (timoteo-input presente). Posizione salvata in AsyncStorage key timoteo_fab_pos_v1. Motivo richiesta: il cerchio a volte copriva funzioni -> ora spostabile."
