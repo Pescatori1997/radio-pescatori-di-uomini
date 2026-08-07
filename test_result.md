@@ -809,3 +809,17 @@ frontend:
         -working: true
         -agent: "main"
         -comment: "Screenshot mobile: linguetta 'TIMOTEO' agganciata a sinistra (top insets+120, sotto l'eventuale freccia indietro), non copre i contenuti; tap apre il pannello (timoteo-input presente). Nessun drag => nessun conflitto con lo scorrimento. testID invariato 'timoteo-fab'."
+
+
+## --- Timoteo: pallina piccola trascinabile (fix definitivo scroll conflict) ---
+frontend:
+  - task: "Ripristinata la pallina trascinabile ma piu' piccola (48px) e con drag affidabile su tutte le pagine. Fix conflitto scroll su web/PWA con touch-action:none + userSelect:none inline (web). Config PanResponder ripristinata a quella funzionante (RNAnimated.event + listener per movedRef, pointerEvents none sull'immagine)."
+    implemented: true
+    working: true
+    file: "frontend/src/components/timoteo/Timoteo.tsx"
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Rimossa la linguetta (testo rotante sbordava). Pallina 48px: drag verificato via mouse (da 328,718 a 158,288 MOVED=True), tap apre (timoteo-input presente), posizione persistita (POS_KEY v2). Su web aggiunto touch-action:none/userSelect:none inline così su mobile/PWA la pagina non scorre durante il drag. Fix di un ReferenceError 'track' (riaggiunto al destructure usePlayer)."
