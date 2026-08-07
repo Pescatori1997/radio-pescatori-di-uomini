@@ -18,6 +18,7 @@ import { WeatherProvider } from "@/src/weather/WeatherContext";
 import { SettingsProvider } from "@/src/context/SettingsContext";
 import InstallPrompt from "@/src/components/InstallPrompt";
 import Timoteo from "@/src/components/timoteo/Timoteo";
+import DesktopFrame from "@/src/components/DesktopFrame";
 
 LogBox.ignoreAllLogs(true);
 SplashScreen.preventAutoHideAsync();
@@ -134,6 +135,7 @@ export default function RootLayout() {
             <AuthGate />
             <PushListeners />
             <InstallPrompt />
+            <DesktopFrame>
             <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#FFFFFF" } }}>
               <Stack.Screen name="welcome" />
               <Stack.Screen name="auth" />
@@ -166,6 +168,7 @@ export default function RootLayout() {
               <Stack.Screen name="admin" />
             </Stack>
             <Timoteo />
+            </DesktopFrame>
             </WeatherProvider>
           </PlayerProvider>
           </SettingsProvider>

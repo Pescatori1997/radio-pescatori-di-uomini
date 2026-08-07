@@ -315,3 +315,6 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Backend: `section_visibility` (mappa) in GeneralSettings; default `SECTION_DEFAULTS` (tutto ON tranne **merch OFF**) unito nelle risposte `/settings` e `/admin/settings`; PUT persiste. Chiavi: podcast, meditazioni, news, palinsesto, meteo, community, vetrina, team, verse, bibbia, piani, traguardi, prayer, donate, about, contact, merch.
 - Frontend: `SettingsProvider` (una sola fetch `/settings` all'avvio → nessun peso extra) espone `sectionVisible(key)`. Usato in `(tabs)/_layout`, Home `index`, `profilo`. **Merchandising nascosto di default** come richiesto.
 - I cambi si applicano alla riapertura dell'app (il provider carica all'avvio).
+
+## Layout desktop (2026-06)
+- Fix effetto "stirato" su desktop: `DesktopFrame` (web-only) centra l'app in una colonna da max 640px con cornice/letterbox navy ai lati quando la finestra supera 640px. Mobile e native invariati. Il FAB Timoteo e la barra tab restano allineati alla colonna. Scelta utente: opzione A, larghezza media ~640px.

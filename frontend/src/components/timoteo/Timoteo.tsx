@@ -15,6 +15,7 @@ import { useAuth } from "@/src/context/AuthContext";
 import { usePlayer } from "@/src/context/PlayerContext";
 import { buildGreeting, getGreetingPrefs } from "./greeting";
 import { colors, spacing, radius } from "@/src/theme";
+import { MAX_CONTENT_WIDTH } from "@/src/components/DesktopFrame";
 
 const TIMOTEO_IMG = require("@/assets/images/timoteo.png");
 const FAB_SIZE = 60;
@@ -82,7 +83,11 @@ export default function Timoteo() {
   const abortRef = useRef<null | (() => void)>(null);
 
   // --- Draggable floating button (free positioning, persisted) ---
-  const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
+  // On desktop web the app is centered in a max-width column; the FAB lives
+  // inside that column, so clamp its horizontal space to the column width.
+  const _win = Dimensions.get("window");
+  const SCREEN_W = Platform.OS === "web" ? Math.min(_win.width, MAX_CONTENT_WIDTH) : _win.width;
+  const SCREEN_H = _win.height;
   const [fabReady, setFabReady] = useState(false);
   const pan = useRef(new RNAnimated.ValueXY({ x: SCREEN_W - FAB_SIZE - 16, y: SCREEN_H - FAB_SIZE - 160 })).current;
   // Track the live value so release can clamp/persist and distinguish tap vs drag.

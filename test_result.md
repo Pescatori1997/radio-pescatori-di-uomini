@@ -781,3 +781,17 @@ frontend:
 agent_communication:
     -agent: "main"
     -message: "Feature completata e verificata (backend curl + frontend screenshot). Non richiede retest urgente; se testing_agent gira, verificare: (1) GET /settings ha section_visibility con merch=false; (2) PUT /admin/settings persiste toggle (admin pescatoridiuomini@outlook.it/AdminTestPwd1!); (3) Merch assente dal menu Profilo; (4) spegnendo 'podcast' il tab Podcast sparisce dalla barra in basso e la sezione Home 'Ultimi Podcast' non appare (richiede riapertura app perche' il provider carica una volta)."
+
+
+## --- Layout desktop: colonna centrata (fix "stirato" su web) ---
+frontend:
+  - task: "DesktopFrame: su web wide (>640px) l'app e' centrata in una colonna max 640px con letterbox navy ai lati; mobile/native invariato. Struttura wrapper stabile (no remount al resize). Timoteo FAB usa min(window,640) come spazio orizzontale per restare nella colonna."
+    implemented: true
+    working: true
+    file: "frontend/src/components/DesktopFrame.tsx, app/_layout.tsx, src/components/timoteo/Timoteo.tsx"
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Screenshot desktop 1280px: app centrata in colonna ~640 con sfondo navy ai lati; hero, meteo, community, sezioni, tab bar e FAB Timoteo tutti allineati alla colonna. Mobile 390px invariato (le wide styles si attivano solo se width>640 su web). Solo presentazione web, backend intatto."
