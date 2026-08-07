@@ -13,7 +13,7 @@ import { colors, spacing, radius } from "@/src/theme";
  * leads to the personal medal cabinet. Shows the earned count for logged-in
  * users, a gentle invite otherwise. Kept small to blend with the Home feed.
  */
-export default function BachecaCard() {
+export default function BachecaCard({ inGrid = false }: { inGrid?: boolean }) {
   const router = useRouter();
   const { user } = useAuth();
   const [earned, setEarned] = useState<number | null>(null);
@@ -29,8 +29,8 @@ export default function BachecaCard() {
   }, [user?.user_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <PressableScale testID="home-bacheca" style={styles.wrap} onPress={() => router.push("/traguardi")}>
-      <View style={styles.card}>
+    <PressableScale testID="home-bacheca" style={[styles.wrap, inGrid && styles.wrapGrid]} onPress={() => router.push("/traguardi")}>
+      <View style={[styles.card, inGrid && styles.cardGrid]}>
         <LinearGradient colors={["#4E2F1B", "#301C10", "#1C0F09"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
         <View style={styles.medalBadge}>
           <LinearGradient colors={["#FCE49A", "#E0B23C"]} start={{ x: 0.2, y: 0 }} end={{ x: 0.8, y: 1 }} style={styles.medalRing}>
@@ -57,6 +57,8 @@ export default function BachecaCard() {
 
 const styles = StyleSheet.create({
   wrap: { marginHorizontal: spacing.lg, marginTop: spacing.md, borderRadius: radius.lg, shadowColor: "#301C10", shadowOpacity: 0.3, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 6 },
+  wrapGrid: { flex: 1, marginHorizontal: 0, marginTop: 0 },
+  cardGrid: { flex: 1 },
   card: { flexDirection: "row", alignItems: "center", gap: spacing.md, borderRadius: radius.lg, overflow: "hidden", padding: spacing.lg, borderWidth: 1, borderColor: "rgba(224,178,60,0.3)" },
   medalBadge: { width: 52, height: 52, alignItems: "center", justifyContent: "center" },
   medalRing: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center", borderWidth: 3, borderColor: "#A9801E" },

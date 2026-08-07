@@ -24,7 +24,7 @@ const LOGO = require("@/assets/images/logo.png");
  * feature of the app. Coordinated with the "Pescatori di Uomini" marine theme:
  * sea waves, transparent fishing net, radio logo watermark and an open Bible.
  */
-export default function BibleCard() {
+export default function BibleCard({ inGrid = false }: { inGrid?: boolean }) {
   const router = useRouter();
   const [size, setSize] = useState({ w: 0, h: 0 });
 
@@ -36,9 +36,9 @@ export default function BibleCard() {
   const borderStyle = useAnimatedStyle(() => ({ opacity: interpolate(glow.value, [0, 1], [0.2, 0.6]) }));
 
   return (
-    <Animated.View entering={FadeInDown.duration(500)} style={styles.wrap}>
+    <Animated.View entering={FadeInDown.duration(500)} style={[styles.wrap, inGrid && styles.wrapGrid]}>
       <View
-        style={styles.card}
+        style={[styles.card, inGrid && styles.cardGrid]}
         onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
       >
         <LinearGradient
@@ -95,6 +95,8 @@ const styles = StyleSheet.create({
     elevation: 9,
   },
   card: { borderRadius: radius.lg, overflow: "hidden", minHeight: 180 },
+  wrapGrid: { flex: 1, marginHorizontal: 0, marginTop: 0 },
+  cardGrid: { flex: 1 },
   glowBorder: { borderRadius: radius.lg, borderWidth: 1.5, borderColor: colors.brandSecondary },
   watermark: { position: "absolute", right: -18, bottom: -12, width: 130, height: 130, opacity: 0.09 },
   content: { padding: spacing.xl },

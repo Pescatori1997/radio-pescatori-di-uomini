@@ -64,6 +64,11 @@ const QUICK: { icon: string; label: string; prompt: string }[] = [
 ];
 
 const HIDDEN_ROOTS = ["welcome", "auth", "login", "invite", "reset-password", "admin", "player"];
+// While the user is reading (Bible reader, CMS articles, news) the bubble fades
+// to a discreet, semi-transparent state so it never covers the text.
+const READING_ROOTS = ["lettore", "c", "news"];
+const FAB_DIM = 0.35;
+const FAB_FULL = 1;
 
 const STORAGE_KEY = "timoteo_chat_v1";
 
@@ -87,6 +92,10 @@ export default function Timoteo() {
   const SCREEN_W = Platform.OS === "web" ? Math.min(_win.width, MAX_CONTENT_WIDTH) : _win.width;
   const SCREEN_H = _win.height;
   const [fabReady, setFabReady] = useState(false);
+  // Animated opacity so the bubble can smoothly dim while reading and brighten
+  // on touch. Kept on the JS driver to match the pan transform (also JS-driven).
+  const fabOpacity = useRef(new RNAnimated.Value(0)).current;
+  const readingModeRef = useRef(false);
   const startPos = { x: SCREEN_W - FAB_SIZE - 14, y: SCREEN_H - FAB_SIZE - 150 };
   const pan = useRef(new RNAnimated.ValueXY(startPos)).current;
   const cur = useRef({ ...startPos });
@@ -129,6 +138,7 @@ export default function Timoteo() {
       onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 3 || Math.abs(g.dy) > 3,
       onPanResponderGrant: () => {
         movedRef.current = false;
+        RNAnimated.timing(fabOpacity, { toValue: FAB_FULL, duration: 140, useNativeDriver: false }).start();
         pan.setOffset({ x: cur.current.x, y: cur.current.y });
         pan.setValue({ x: 0, y: 0 });
       },
@@ -138,22 +148,40 @@ export default function Timoteo() {
       }),
       onPanResponderRelease: (_e, g) => {
         pan.flattenOffset();
+        const settle = () => RNAnimated.timing(fabOpacity, {
+          toValue: readingModeRef.current ? FAB_DIM : FAB_FULL, duration: 220, useNativeDriver: false,
+        }).start();
         if (!movedRef.current && Math.abs(g.dx) < 6 && Math.abs(g.dy) < 6) {
           setOpen(true);
+          settle();
           return;
         }
         const { minX, maxX, minY, maxY } = boundsRef.current;
-        const x = Math.min(Math.max(cur.current.x, minX), maxX);
         const y = Math.min(Math.max(cur.current.y, minY), maxY);
+        // Snap horizontally to the nearest edge (left/right) on release.
+        const center = Math.min(Math.max(cur.current.x, minX), maxX) + FAB_SIZE / 2;
+        const x = center < SCREEN_W / 2 ? minX : maxX;
         RNAnimated.spring(pan, { toValue: { x, y }, useNativeDriver: false, friction: 7, tension: 80 }).start();
         cur.current = { x, y };
         AsyncStorage.setItem(POS_KEY, JSON.stringify({ x, y })).catch(() => {});
+        settle();
       },
     })
   ).current;
 
   const root = (segments[0] as string) || "";
   const hidden = HIDDEN_ROOTS.includes(root);
+  const readingMode = READING_ROOTS.includes(root);
+
+  // Fade the bubble to its resting opacity whenever it becomes ready or the
+  // reading context changes (dim while reading, full elsewhere).
+  useEffect(() => {
+    readingModeRef.current = readingMode;
+    if (!fabReady) return;
+    RNAnimated.timing(fabOpacity, {
+      toValue: readingMode ? FAB_DIM : FAB_FULL, duration: 260, useNativeDriver: false,
+    }).start();
+  }, [fabReady, readingMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Restore the previous conversation once at mount so it survives closing the
   // panel, navigating away, and even fully reopening the app.
@@ -284,7 +312,7 @@ export default function Timoteo() {
       <RNAnimated.View
         testID="timoteo-fab"
         accessibilityLabel="Apri Timoteo. Trascina per spostarlo."
-        style={[styles.fab, webNoScroll, { opacity: fabReady ? 1 : 0, transform: pan.getTranslateTransform() }]}
+        style={[styles.fab, webNoScroll, { opacity: fabOpacity, transform: pan.getTranslateTransform() }]}
         {...panResponder.panHandlers}
       >
         <Image source={TIMOTEO_IMG} style={styles.fabImg} contentFit="cover" pointerEvents="none" />

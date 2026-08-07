@@ -321,3 +321,9 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 
 ## Timoteo: pallina piccola trascinabile (2026-06)
 - Il pulsante flottante trascinabile causava conflitto con lo scroll (la pagina scorreva invece di spostare il cerchio). Sostituito con una LINGUETTA fissa sul bordo sinistro (avatar Timoteo + testo verticale "TIMOTEO") che al tocco apre l'assistente. Rimossa la logica di drag (PanResponder). Non copre i contenuti e non interferisce con lo scorrimento.
+
+## 4 migliorie UX (2026-06)
+- Visibilità sezioni in tempo reale: dopo il salvataggio in Admin Impostazioni viene chiamato `refresh()` di `SettingsContext` -> tab/Home/Profilo si aggiornano senza riavvio.
+- Home a 2 colonne su desktop: `BibleCard`, `ReadingPlansCard`, `BachecaCard` accettano prop `inGrid`; su web >640px vengono disposte in griglia 2 colonne (celle 50%) per non sembrare stirate. Mobile invariato.
+- Bolla Timoteo semi-trasparente durante la lettura: opacità animata a 0.35 nei root `lettore`, `c` (articoli CMS), `news`; torna piena al tocco/drag.
+- Edge-snapping: al rilascio la bolla scivola (spring) al bordo laterale piu vicino (sinistra/destra).

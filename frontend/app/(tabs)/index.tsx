@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, RefreshControl, Linking } from "react-native";
+import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, RefreshControl, Linking, useWindowDimensions, Platform } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -25,6 +25,7 @@ import ShowcaseCarousel from "@/src/components/showcase/ShowcaseCarousel";
 import { PulsingDot, SoundRings } from "@/src/components/LiveHeroFx";
 import PressableScale from "@/src/components/PressableScale";
 import Logo from "@/src/components/Logo";
+import { MAX_CONTENT_WIDTH } from "@/src/components/DesktopFrame";
 import { colors, spacing, radius } from "@/src/theme";
 
 const STUDIO = require("@/assets/images/studio.png");
@@ -34,6 +35,10 @@ export default function Home() {
   const router = useRouter();
   const { playLive, playTrack, track, isPlaying, liveInfo } = usePlayer();
   const { sectionVisible } = useSettings();
+  const { width } = useWindowDimensions();
+  // On desktop web the app is a centered ~640px column; laying the feature
+  // cards out in two columns keeps them from looking stretched/elongated.
+  const twoCol = Platform.OS === "web" && width > MAX_CONTENT_WIDTH;
   const [podcasts, setPodcasts] = useState<any[]>([]);
   const [programs, setPrograms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -252,11 +257,21 @@ export default function Home() {
 
       {sectionVisible("verse") && <VerseOfDayCard />}
 
-      {sectionVisible("bibbia") && <BibleCard />}
-
-      {sectionVisible("piani") && <ReadingPlansCard />}
-
-      {sectionVisible("traguardi") && <BachecaCard />}
+      {(() => {
+        const cards: React.ReactNode[] = [];
+        if (sectionVisible("bibbia")) cards.push(<BibleCard key="bibbia" inGrid={twoCol} />);
+        if (sectionVisible("piani")) cards.push(<ReadingPlansCard key="piani" inGrid={twoCol} />);
+        if (sectionVisible("traguardi")) cards.push(<BachecaCard key="traguardi" inGrid={twoCol} />);
+        if (!cards.length) return null;
+        if (!twoCol) return <>{cards}</>;
+        return (
+          <View style={styles.cardGrid}>
+            {cards.map((c, i) => (
+              <View key={i} style={styles.cardCell}>{c}</View>
+            ))}
+          </View>
+        );
+      })()}
 
       {sectionVisible("prayer") && (
       <>
@@ -293,6 +308,8 @@ function SectionHeader({ title, onPress }: { title: string; onPress: () => void 
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
+  cardGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: spacing.sm, marginTop: spacing.lg },
+  cardCell: { width: "50%", padding: spacing.sm },
   hero: { padding: spacing.xl, paddingBottom: spacing.xl, overflow: "hidden" },
   heroGlow: { position: "absolute", top: 40, alignSelf: "center", width: 320, height: 320, borderRadius: 160, backgroundColor: colors.brandPrimary },
   brandRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },

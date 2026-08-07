@@ -13,7 +13,7 @@ import { colors, spacing, radius } from "@/src/theme";
  * from the Bible reader card so users can jump straight to the plans list.
  * Shows a small preview (cover + count) of the available plans when present.
  */
-export default function ReadingPlansCard() {
+export default function ReadingPlansCard({ inGrid = false }: { inGrid?: boolean }) {
   const router = useRouter();
   const [plans, setPlans] = useState<any[]>([]);
 
@@ -24,8 +24,8 @@ export default function ReadingPlansCard() {
   const featured = plans.find((p) => p.cover) || plans[0];
 
   return (
-    <PressableScale testID="home-reading-plans" style={styles.wrap} onPress={() => router.push("/lettore/piani")}>
-      <View style={styles.card}>
+    <PressableScale testID="home-reading-plans" style={[styles.wrap, inGrid && styles.wrapGrid]} onPress={() => router.push("/lettore/piani")}>
+      <View style={[styles.card, inGrid && styles.cardGrid]}>
         <LinearGradient colors={["#123A2E", "#0E2C34", "#0A1128"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
         <View style={styles.row}>
           {featured?.cover ? (
@@ -57,6 +57,8 @@ export default function ReadingPlansCard() {
 
 const styles = StyleSheet.create({
   wrap: { marginHorizontal: spacing.lg, marginTop: spacing.lg, borderRadius: radius.lg, shadowColor: colors.navy, shadowOpacity: 0.25, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 6 },
+  wrapGrid: { flex: 1, marginHorizontal: 0, marginTop: 0 },
+  cardGrid: { flex: 1 },
   card: { borderRadius: radius.lg, overflow: "hidden", padding: spacing.lg, borderWidth: 1, borderColor: "rgba(52,211,153,0.25)" },
   row: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   cover: { width: 68, height: 68, borderRadius: radius.md, backgroundColor: colors.navy },

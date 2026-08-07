@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from "react-nat
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import { api } from "@/src/api";
+import { useSettings } from "@/src/context/SettingsContext";
 import AdminShell from "@/src/components/AdminShell";
 import PressableScale from "@/src/components/PressableScale";
 import { AInput, ASwitch } from "@/src/components/adminForm";
@@ -30,6 +31,7 @@ const SECTIONS: { key: string; label: string }[] = [
 ];
 
 export default function AdminSettings() {
+  const { refresh } = useSettings();
   const [f, setF] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -57,7 +59,7 @@ export default function AdminSettings() {
 
   const save = async () => {
     setBusy(true); setMsg("");
-    try { await api.adminUpdateSettings(f); setMsg("Impostazioni salvate"); }
+    try { await api.adminUpdateSettings(f); refresh(); setMsg("Impostazioni salvate"); }
     catch (e: any) { setMsg(e.message || "Errore"); } finally { setBusy(false); }
   };
 
