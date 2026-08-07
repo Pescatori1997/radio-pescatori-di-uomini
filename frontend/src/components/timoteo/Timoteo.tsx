@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, Pressable, ScrollView, TextInput, ActivityIndicator,
-  KeyboardAvoidingView, Platform, StyleSheet, Dimensions,
-  Animated as RNAnimated, PanResponder,
+  KeyboardAvoidingView, Platform, StyleSheet,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
@@ -15,11 +14,8 @@ import { useAuth } from "@/src/context/AuthContext";
 import { usePlayer } from "@/src/context/PlayerContext";
 import { buildGreeting, getGreetingPrefs } from "./greeting";
 import { colors, spacing, radius } from "@/src/theme";
-import { MAX_CONTENT_WIDTH } from "@/src/components/DesktopFrame";
 
 const TIMOTEO_IMG = require("@/assets/images/timoteo.png");
-const FAB_SIZE = 60;
-const POS_KEY = "timoteo_fab_pos_v1";
 
 type Action = { type: "radio_live" | "open" | "screen"; label: string; path?: string; screen?: string };
 type Msg = { role: "user" | "assistant"; content: string; actions?: Action[]; welcome?: boolean; streaming?: boolean };
@@ -72,7 +68,7 @@ export default function Timoteo() {
   const router = useRouter();
   const segments = useSegments();
   const { user } = useAuth();
-  const { playLive, track } = usePlayer();
+  const { playLive } = usePlayer();
 
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -81,70 +77,6 @@ export default function Timoteo() {
   const [restored, setRestored] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const abortRef = useRef<null | (() => void)>(null);
-
-  // --- Draggable floating button (free positioning, persisted) ---
-  // On desktop web the app is centered in a max-width column; the FAB lives
-  // inside that column, so clamp its horizontal space to the column width.
-  const _win = Dimensions.get("window");
-  const SCREEN_W = Platform.OS === "web" ? Math.min(_win.width, MAX_CONTENT_WIDTH) : _win.width;
-  const SCREEN_H = _win.height;
-  const [fabReady, setFabReady] = useState(false);
-  const pan = useRef(new RNAnimated.ValueXY({ x: SCREEN_W - FAB_SIZE - 16, y: SCREEN_H - FAB_SIZE - 160 })).current;
-  // Track the live value so release can clamp/persist and distinguish tap vs drag.
-  const cur = useRef({ x: SCREEN_W - FAB_SIZE - 16, y: SCREEN_H - FAB_SIZE - 160 });
-  const boundsRef = useRef({ minX: 8, maxX: SCREEN_W - FAB_SIZE - 8, minY: 8, maxY: SCREEN_H - FAB_SIZE - 8 });
-
-  useEffect(() => {
-    const id = pan.addListener((v) => { cur.current = v; });
-    return () => pan.removeListener(id);
-  }, [pan]);
-
-  useEffect(() => {
-    boundsRef.current = {
-      minX: 8, maxX: SCREEN_W - FAB_SIZE - 8,
-      minY: insets.top + 8, maxY: SCREEN_H - FAB_SIZE - insets.bottom - 8,
-    };
-    (async () => {
-      const { minX, maxX, minY, maxY } = boundsRef.current;
-      let x = SCREEN_W - FAB_SIZE - 16;
-      let y = SCREEN_H - FAB_SIZE - (insets.bottom + 58 + 24) - (track ? 70 : 0);
-      try {
-        const saved = await AsyncStorage.getItem(POS_KEY);
-        if (saved) { const p = JSON.parse(saved); if (typeof p.x === "number") x = p.x; if (typeof p.y === "number") y = p.y; }
-      } catch { /* ignore */ }
-      x = Math.min(Math.max(x, minX), maxX);
-      y = Math.min(Math.max(y, minY), maxY);
-      pan.setValue({ x, y });
-      cur.current = { x, y };
-      setFabReady(true);
-    })();
-  }, [insets.top, insets.bottom]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 3 || Math.abs(g.dy) > 3,
-      onPanResponderGrant: () => {
-        pan.setOffset({ x: cur.current.x, y: cur.current.y });
-        pan.setValue({ x: 0, y: 0 });
-      },
-      onPanResponderMove: RNAnimated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
-      onPanResponderRelease: (_e, g) => {
-        pan.flattenOffset();
-        // Small movement = a tap → open Timoteo.
-        if (Math.abs(g.dx) < 6 && Math.abs(g.dy) < 6) {
-          setOpen(true);
-          return;
-        }
-        const { minX, maxX, minY, maxY } = boundsRef.current;
-        const x = Math.min(Math.max(cur.current.x, minX), maxX);
-        const y = Math.min(Math.max(cur.current.y, minY), maxY);
-        RNAnimated.spring(pan, { toValue: { x, y }, useNativeDriver: false, friction: 7, tension: 80 }).start();
-        cur.current = { x, y };
-        AsyncStorage.setItem(POS_KEY, JSON.stringify({ x, y })).catch(() => {});
-      },
-    })
-  ).current;
 
   const root = (segments[0] as string) || "";
   const hidden = HIDDEN_ROOTS.includes(root);
@@ -274,14 +206,17 @@ export default function Timoteo() {
 
   return (
     <>
-      <RNAnimated.View
+      {/* Linguetta laterale (segnalibro): non copre i contenuti e non entra in
+          conflitto con lo scorrimento della pagina. Al tocco apre Timoteo. */}
+      <Pressable
         testID="timoteo-fab"
-        accessibilityLabel="Apri Timoteo, la guida. Trascina per spostarlo."
-        style={[styles.fab, { opacity: fabReady ? 1 : 0, transform: pan.getTranslateTransform() }]}
-        {...panResponder.panHandlers}
+        accessibilityLabel="Apri Timoteo, la guida"
+        onPress={() => setOpen(true)}
+        style={[styles.tab, { top: insets.top + 120 }]}
       >
-        <Image source={TIMOTEO_IMG} style={styles.fabImg} contentFit="cover" pointerEvents="none" />
-      </RNAnimated.View>
+        <Image source={TIMOTEO_IMG} style={styles.tabImg} contentFit="cover" />
+        <Text style={styles.tabText}>TIMOTEO</Text>
+      </Pressable>
 
       {open && (
         <View style={styles.overlayRoot} pointerEvents="box-none">
@@ -394,12 +329,19 @@ export default function Timoteo() {
 }
 
 const styles = StyleSheet.create({
-  fab: {
-    position: "absolute", top: 0, left: 0, width: FAB_SIZE, height: FAB_SIZE, borderRadius: FAB_SIZE / 2,
-    backgroundColor: "#0B2A4A", overflow: "hidden", borderWidth: 2, borderColor: "rgba(255,255,255,0.9)",
-    shadowColor: colors.navy, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 8, zIndex: 50,
+  tab: {
+    position: "absolute", left: 0, zIndex: 50,
+    backgroundColor: "#0B2A4A", alignItems: "center", justifyContent: "center", gap: 4,
+    paddingVertical: 10, paddingHorizontal: 6, width: 42,
+    borderTopRightRadius: 16, borderBottomRightRadius: 16,
+    borderWidth: 1, borderLeftWidth: 0, borderColor: "rgba(255,255,255,0.25)",
+    shadowColor: colors.navy, shadowOffset: { width: 2, height: 2 }, shadowOpacity: 0.35, shadowRadius: 8, elevation: 8,
   },
-  fabImg: { width: "100%", height: "100%" },
+  tabImg: { width: 28, height: 28, borderRadius: 14, borderWidth: 1.5, borderColor: "rgba(255,255,255,0.9)" },
+  tabText: {
+    color: "#FFFFFF", fontSize: 9, fontWeight: "800", letterSpacing: 1,
+    transform: [{ rotate: "90deg" }], marginTop: 14, width: 60, textAlign: "center",
+  },
 
   overlayRoot: { ...StyleSheet.absoluteFillObject, justifyContent: "flex-end", zIndex: 100, elevation: 100 },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(10,17,40,0.45)" },

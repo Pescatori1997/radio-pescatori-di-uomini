@@ -318,3 +318,6 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 
 ## Layout desktop (2026-06)
 - Fix effetto "stirato" su desktop: `DesktopFrame` (web-only) centra l'app in una colonna da max 640px con cornice/letterbox navy ai lati quando la finestra supera 640px. Mobile e native invariati. Il FAB Timoteo e la barra tab restano allineati alla colonna. Scelta utente: opzione A, larghezza media ~640px.
+
+## Timoteo: linguetta laterale (2026-06)
+- Il pulsante flottante trascinabile causava conflitto con lo scroll (la pagina scorreva invece di spostare il cerchio). Sostituito con una LINGUETTA fissa sul bordo sinistro (avatar Timoteo + testo verticale "TIMOTEO") che al tocco apre l'assistente. Rimossa la logica di drag (PanResponder). Non copre i contenuti e non interferisce con lo scorrimento.

@@ -795,3 +795,17 @@ frontend:
         -working: true
         -agent: "main"
         -comment: "Screenshot desktop 1280px: app centrata in colonna ~640 con sfondo navy ai lati; hero, meteo, community, sezioni, tab bar e FAB Timoteo tutti allineati alla colonna. Mobile 390px invariato (le wide styles si attivano solo se width>640 su web). Solo presentazione web, backend intatto."
+
+
+## --- Timoteo: da FAB trascinabile a linguetta laterale (fix conflitto scroll) ---
+frontend:
+  - task: "Il FAB trascinabile entrava in conflitto con lo scroll della pagina (la pagina scorreva e non si riusciva a spostare il cerchio). Sostituito con una 'linguetta' fissa sul bordo sinistro (avatar + testo verticale TIMOTEO) che al tocco apre l'assistente. Rimossa tutta la logica PanResponder/drag."
+    implemented: true
+    working: true
+    file: "frontend/src/components/timoteo/Timoteo.tsx"
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Screenshot mobile: linguetta 'TIMOTEO' agganciata a sinistra (top insets+120, sotto l'eventuale freccia indietro), non copre i contenuti; tap apre il pannello (timoteo-input presente). Nessun drag => nessun conflitto con lo scorrimento. testID invariato 'timoteo-fab'."
