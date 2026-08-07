@@ -1725,7 +1725,7 @@ async def get_testimonies():
 async def get_public_settings():
     doc = await db.settings.find_one({"_id": "general"}) or {}
     doc.pop("_id", None)
-    return doc
+    return _with_section_defaults(doc)
 
 
 # ---------------- Admin: Prayer Requests ----------------
@@ -2343,6 +2343,24 @@ class GeneralSettings(BaseModel):
     about_card3_title: Optional[str] = None
     about_card3_text: Optional[str] = None
     about_quote: Optional[str] = None
+    # Section visibility toggles (admin decides what appears on the site).
+    section_visibility: Optional[Dict[str, bool]] = None
+
+
+# Canonical toggleable sections. Everything defaults ON except Merchandising,
+# which the team asked to hide for now. New keys added here default to visible.
+SECTION_DEFAULTS = {
+    "podcast": True, "meditazioni": True, "news": True, "palinsesto": True,
+    "meteo": True, "community": True, "vetrina": True, "team": True,
+    "verse": True, "bibbia": True, "piani": True, "traguardi": True,
+    "prayer": True, "donate": True, "about": True, "contact": True,
+    "merch": False,
+}
+
+
+def _with_section_defaults(doc: dict) -> dict:
+    doc["section_visibility"] = {**SECTION_DEFAULTS, **(doc.get("section_visibility") or {})}
+    return doc
 
 
 # Default "Chi Siamo" content (seeded once; fully editable from Admin > Impostazioni).
@@ -2369,7 +2387,7 @@ ABOUT_DEFAULTS = {
 async def admin_get_settings(admin=Depends(require_admin)):
     doc = await db.settings.find_one({"_id": "general"}) or {}
     doc.pop("_id", None)
-    return doc
+    return _with_section_defaults(doc)
 
 
 @api_router.put("/admin/settings")

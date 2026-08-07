@@ -753,3 +753,31 @@ frontend:
         -working: true
         -agent: "main"
         -comment: "Immagine caricata dall'utente ritagliata con PIL (rimosso bordo bianco) -> assets/images/timoteo.png 400x400. FAB ora RNAnimated.View + PanResponder (RNGH Gesture non rispondeva su web). Verificato via screenshot web/PWA: nuovo avatar nel FAB e nell'header; drag sposta il cerchio da (314,702) a (94,222) e resta nei limiti; tap (senza movimento) apre il pannello Timoteo (timoteo-input presente). Posizione salvata in AsyncStorage key timoteo_fab_pos_v1. Motivo richiesta: il cerchio a volte copriva funzioni -> ora spostabile."
+
+
+## --- Visibilità sezioni (on/off dal pannello admin) + Merch nascosto ---
+backend:
+  - task: "section_visibility: mappa on/off per sezione in GeneralSettings; default via SECTION_DEFAULTS (tutto ON tranne merch OFF) unito in GET /settings e /admin/settings; PUT /admin/settings persiste e fa merge"
+    implemented: true
+    working: true
+    file: "backend/server.py (GeneralSettings + SECTION_DEFAULTS + _with_section_defaults; /settings, /admin/settings)"
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Verificato via curl: GET /settings ritorna section_visibility con merch:false e resto true. PUT /admin/settings {section_visibility:{podcast:false,merch:true}} persiste e GET pubblico riflette; ripristino default OK. Chiavi: podcast, meditazioni, news, palinsesto, meteo, community, vetrina, team, verse, bibbia, piani, traguardi, prayer, donate, about, contact, merch."
+frontend:
+  - task: "SettingsProvider (fetch /settings una volta) + enforcement: tab in basso via href:null quando OFF, Home rende ogni blocco condizionale, menu Profilo filtrato; Admin Impostazioni con toggle per ogni sezione. Merch nascosto ovunque di default."
+    implemented: true
+    working: true
+    file: "frontend/src/context/SettingsContext.tsx, app/_layout.tsx, app/(tabs)/_layout.tsx, app/(tabs)/index.tsx, app/(tabs)/profilo.tsx, app/admin/settings.tsx"
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Screenshot: menu Profilo NON mostra piu' Merchandising (count=0). Admin > Impostazioni mostra card 'Visibilità sezioni' con tutti i toggle (Podcast, Meditazioni, Notizie, Palinsesto, Bibbia/Biblioteca, Piani, Versetto, Preghiera, ...). Backend verificato per tab hide (href:null) e home/menu conditional. Una sola fetch /settings all'avvio (nessun peso extra). NB: i cambi si applicano alla riapertura dell'app (provider carica una volta)."
+agent_communication:
+    -agent: "main"
+    -message: "Feature completata e verificata (backend curl + frontend screenshot). Non richiede retest urgente; se testing_agent gira, verificare: (1) GET /settings ha section_visibility con merch=false; (2) PUT /admin/settings persiste toggle (admin pescatoridiuomini@outlook.it/AdminTestPwd1!); (3) Merch assente dal menu Profilo; (4) spegnendo 'podcast' il tab Podcast sparisce dalla barra in basso e la sezione Home 'Ultimi Podcast' non appare (richiede riapertura app perche' il provider carica una volta)."

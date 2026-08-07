@@ -5,8 +5,29 @@ import { useFocusEffect } from "expo-router";
 import { api } from "@/src/api";
 import AdminShell from "@/src/components/AdminShell";
 import PressableScale from "@/src/components/PressableScale";
-import { AInput } from "@/src/components/adminForm";
+import { AInput, ASwitch } from "@/src/components/adminForm";
 import { colors, spacing, radius } from "@/src/theme";
+
+// Toggleable site sections (must match SECTION_DEFAULTS keys in the backend).
+const SECTIONS: { key: string; label: string }[] = [
+  { key: "podcast", label: "Podcast" },
+  { key: "meditazioni", label: "Meditazioni" },
+  { key: "news", label: "Notizie" },
+  { key: "palinsesto", label: "Palinsesto" },
+  { key: "bibbia", label: "Bibbia / Biblioteca" },
+  { key: "piani", label: "Piani di Lettura (Home)" },
+  { key: "verse", label: "Versetto del Giorno (Home)" },
+  { key: "prayer", label: "Richieste di Preghiera" },
+  { key: "traguardi", label: "Traguardi del Cammino" },
+  { key: "meteo", label: "Meteo (Home)" },
+  { key: "vetrina", label: "Vetrina (Home)" },
+  { key: "community", label: "Statistiche Community (Home)" },
+  { key: "team", label: "Il nostro Team" },
+  { key: "merch", label: "Merchandising" },
+  { key: "donate", label: "Sostieni il progetto" },
+  { key: "about", label: "Chi Siamo" },
+  { key: "contact", label: "Contatti" },
+];
 
 export default function AdminSettings() {
   const [f, setF] = useState<any>(null);
@@ -26,9 +47,13 @@ export default function AdminSettings() {
       about_card2_title: d.about_card2_title || "", about_card2_text: d.about_card2_text || "",
       about_card3_title: d.about_card3_title || "", about_card3_text: d.about_card3_text || "",
       about_quote: d.about_quote || "",
+      section_visibility: d.section_visibility || {},
     })).catch(() => {}).finally(() => setLoading(false));
   }, []);
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const toggleSection = (key: string, val: boolean) =>
+    setF((p: any) => ({ ...p, section_visibility: { ...(p.section_visibility || {}), [key]: val } }));
 
   const save = async () => {
     setBusy(true); setMsg("");
@@ -67,6 +92,18 @@ export default function AdminSettings() {
           <AInput testID="set-about-c3-text" label="Scheda 3 · Testo" value={f.about_card3_text} onChangeText={(v: string) => set("about_card3_text", v)} multiline />
           <AInput testID="set-about-quote" label="Citazione finale" value={f.about_quote} onChangeText={(v: string) => set("about_quote", v)} multiline />
 
+          <Text style={styles.section}>Visibilità sezioni</Text>
+          <Text style={styles.hint}>Decidi cosa mostrare sul sito. Spegnendo una voce, sparisce ovunque (menu, Home e barra in basso).</Text>
+          {SECTIONS.map((s) => (
+            <ASwitch
+              key={s.key}
+              testID={`sec-${s.key}`}
+              label={s.label}
+              value={f.section_visibility?.[s.key] !== false}
+              onValueChange={(v: boolean) => toggleSection(s.key, v)}
+            />
+          ))}
+
           {msg ? <Text style={styles.msg}>{msg}</Text> : null}
           <PressableScale testID="set-save" style={[styles.btn, busy && { opacity: 0.6 }]} onPress={save} disabled={busy}>
             <Ionicons name="save-outline" size={18} color={colors.white} /><Text style={styles.btnText}>Salva</Text>
@@ -80,6 +117,7 @@ export default function AdminSettings() {
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   section: { color: colors.white, fontSize: 16, fontWeight: "800", marginTop: spacing.md, marginBottom: spacing.md },
+  hint: { color: colors.muted, fontSize: 12.5, lineHeight: 18, marginTop: -6, marginBottom: spacing.md },
   msg: { color: colors.brandSecondary, fontSize: 14, textAlign: "center", marginVertical: spacing.md },
   btn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, paddingVertical: spacing.md, borderRadius: radius.pill, backgroundColor: colors.brandPrimary, marginTop: spacing.lg },
   btnText: { color: colors.white, fontSize: 16, fontWeight: "800" },

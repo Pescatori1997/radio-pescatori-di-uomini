@@ -10,6 +10,7 @@ import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, wit
 import { api } from "@/src/api";
 import { currentProgram } from "@/src/utils/onair";
 import { usePlayer } from "@/src/context/PlayerContext";
+import { useSettings } from "@/src/context/SettingsContext";
 import { configuredPlatforms } from "@/src/livePlatforms";
 import WatchLiveModal from "@/src/components/WatchLiveModal";
 import WeatherWidget from "@/src/components/WeatherWidget";
@@ -32,6 +33,7 @@ export default function Home() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { playLive, playTrack, track, isPlaying, liveInfo } = usePlayer();
+  const { sectionVisible } = useSettings();
   const [podcasts, setPodcasts] = useState<any[]>([]);
   const [programs, setPrograms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -167,34 +169,42 @@ export default function Home() {
       </View>
 
       {/* WEATHER WIDGET */}
-      <View style={styles.weatherWrap}>
-        <WeatherWidget />
-      </View>
+      {sectionVisible("meteo") && (
+        <View style={styles.weatherWrap}>
+          <WeatherWidget />
+        </View>
+      )}
 
       {/* COMMUNITY SOCIAL PROOF */}
-      <CommunityStats />
+      {sectionVisible("community") && <CommunityStats />}
 
       {/* PODCASTS */}
-      <SectionHeader title="Ultimi Podcast" onPress={() => router.push("/podcast")} />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hRow}>
-        {podcasts.slice(0, 6).map((p) => (
-          <PressableScale
-            key={p.id}
-            testID={`home-podcast-${p.id}`}
-            style={styles.podCard}
-            onPress={() => playTrack({ id: p.id, title: p.title, artist: p.author, artwork: p.artwork, url: p.audio_url, isLive: false })}
-          >
-            <Image source={{ uri: p.artwork }} style={styles.podArt} contentFit="cover" />
-            <Text numberOfLines={2} style={styles.podTitle}>{p.title}</Text>
-            <Text numberOfLines={1} style={styles.podCat}>{p.category} · {p.duration}</Text>
-          </PressableScale>
-        ))}
-      </ScrollView>
+      {sectionVisible("podcast") && (
+        <>
+          <SectionHeader title="Ultimi Podcast" onPress={() => router.push("/podcast")} />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hRow}>
+            {podcasts.slice(0, 6).map((p) => (
+              <PressableScale
+                key={p.id}
+                testID={`home-podcast-${p.id}`}
+                style={styles.podCard}
+                onPress={() => playTrack({ id: p.id, title: p.title, artist: p.author, artwork: p.artwork, url: p.audio_url, isLive: false })}
+              >
+                <Image source={{ uri: p.artwork }} style={styles.podArt} contentFit="cover" />
+                <Text numberOfLines={2} style={styles.podTitle}>{p.title}</Text>
+                <Text numberOfLines={1} style={styles.podCat}>{p.category} · {p.duration}</Text>
+              </PressableScale>
+            ))}
+          </ScrollView>
+        </>
+      )}
 
       {/* VETRINA */}
-      <ShowcaseCarousel />
+      {sectionVisible("vetrina") && <ShowcaseCarousel />}
 
       {/* ORA IN ONDA (compact widget) */}
+      {sectionVisible("palinsesto") && (
+      <>
       <SectionHeader title="Palinsesto" onPress={() => router.push("/palinsesto")} />
       <View style={{ paddingHorizontal: spacing.lg }}>
         <PressableScale testID="home-onair" style={styles.onAirCard} onPress={() => router.push("/palinsesto")}>
@@ -233,19 +243,23 @@ export default function Home() {
           <Text style={styles.scheduleBtnText}>Visualizza palinsesto</Text>
         </PressableScale>
       </View>
+      </>
+      )}
 
-      <Collaborators />
+      {sectionVisible("team") && <Collaborators />}
 
       <WhatsAppSection />
 
-      <VerseOfDayCard />
+      {sectionVisible("verse") && <VerseOfDayCard />}
 
-      <BibleCard />
+      {sectionVisible("bibbia") && <BibleCard />}
 
-      <ReadingPlansCard />
+      {sectionVisible("piani") && <ReadingPlansCard />}
 
-      <BachecaCard />
+      {sectionVisible("traguardi") && <BachecaCard />}
 
+      {sectionVisible("prayer") && (
+      <>
       <Pressable testID="prayer-cta" style={styles.prayerCta} onPress={() => router.push("/prayer")}>
         <Ionicons name="heart" size={20} color={colors.brandPrimary} />
         <Text style={styles.prayerCtaText}>Invia una richiesta di preghiera</Text>
@@ -260,6 +274,8 @@ export default function Home() {
         </View>
         <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.7)" />
       </Pressable>
+      </>
+      )}
 
       <WatchLiveModal visible={watchOpen} links={liveInfo?.live_links} onClose={() => setWatchOpen(false)} />
     </ScrollView>

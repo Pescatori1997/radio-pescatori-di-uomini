@@ -15,6 +15,7 @@ import { setupPWA } from "@/src/utils/pwa";
 import { AuthProvider, useAuth } from "@/src/context/AuthContext";
 import { PlayerProvider } from "@/src/context/PlayerContext";
 import { WeatherProvider } from "@/src/weather/WeatherContext";
+import { SettingsProvider } from "@/src/context/SettingsContext";
 import InstallPrompt from "@/src/components/InstallPrompt";
 import Timoteo from "@/src/components/timoteo/Timoteo";
 
@@ -126,6 +127,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AuthProvider>
+          <SettingsProvider>
           <PlayerProvider>
             <WeatherProvider>
             <StatusBar style="light" />
@@ -166,6 +168,7 @@ export default function RootLayout() {
             <Timoteo />
             </WeatherProvider>
           </PlayerProvider>
+          </SettingsProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

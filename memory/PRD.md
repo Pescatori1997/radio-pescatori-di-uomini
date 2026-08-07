@@ -309,3 +309,9 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 ## Timoteo — immagine + FAB trascinabile (2026-06)
 - Cambiata l'immagine dell'assistente Timoteo: dalla lampada SVG all'illustrazione ufficiale del pescatore ("IL TIMOTEO"), ritagliata su cerchio pulito (assets/images/timoteo.png). Usata nel pulsante flottante e nell'header del pannello.
 - Il pulsante flottante (cerchio) è ora trascinabile liberamente su tutte le schermate (PanResponder + RNAnimated.ValueXY), con vincolo ai bordi (safe-area) e posizione memorizzata (AsyncStorage `timoteo_fab_pos_v1`). Tap = apre Timoteo, trascinamento = sposta. Risolve il problema del cerchio che copriva alcune funzioni.
+
+## Visibilità sezioni (2026-06)
+- Nuovo controllo admin: in Admin > Impostazioni > "Visibilità sezioni" ogni sezione del sito ha un interruttore ON/OFF. Spegnendo una sezione sparisce ovunque: barra tab in basso (href:null), card Home e voci del menu Profilo.
+- Backend: `section_visibility` (mappa) in GeneralSettings; default `SECTION_DEFAULTS` (tutto ON tranne **merch OFF**) unito nelle risposte `/settings` e `/admin/settings`; PUT persiste. Chiavi: podcast, meditazioni, news, palinsesto, meteo, community, vetrina, team, verse, bibbia, piani, traguardi, prayer, donate, about, contact, merch.
+- Frontend: `SettingsProvider` (una sola fetch `/settings` all'avvio → nessun peso extra) espone `sectionVisible(key)`. Usato in `(tabs)/_layout`, Home `index`, `profilo`. **Merchandising nascosto di default** come richiesto.
+- I cambi si applicano alla riapertura dell'app (il provider carica all'avvio).

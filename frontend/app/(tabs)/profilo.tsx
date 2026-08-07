@@ -6,6 +6,7 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/src/context/AuthContext";
 import { usePlayer } from "@/src/context/PlayerContext";
+import { useSettings } from "@/src/context/SettingsContext";
 import { api } from "@/src/api";
 import { SupporterMedal, SupporterTag } from "@/src/components/SupporterBadge";
 import { colors, spacing, radius } from "@/src/theme";
@@ -15,6 +16,7 @@ export default function Profilo() {
   const router = useRouter();
   const { user, logout, refreshUser } = useAuth();
   const { playTrack } = usePlayer();
+  const { sectionVisible } = useSettings();
   const [favs, setFavs] = useState<any[]>([]);
   const [history, setHistory] = useState<any[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -37,21 +39,21 @@ export default function Profilo() {
 
   const menu = [
     ...(isAdmin ? [{ icon: "shield-checkmark-outline", label: "Pannello Amministratore", route: "/admin" }] : []),
-    { icon: "boat-outline", label: "Il nostro Team", route: "/equipaggio" },
-    ...(user ? [{ icon: "ribbon-outline", label: "Traguardi del Cammino", route: "/traguardi" }] : []),
-    { icon: "library-outline", label: "Biblioteca", route: "/biblioteca" },
-    { icon: "heart-outline", label: "Richieste di Preghiera", route: "/prayer" },
-    { icon: "bag-handle-outline", label: "Merchandising", route: "/merch" },
-    { icon: "information-circle-outline", label: "Chi Siamo", route: "/about" },
-    { icon: "gift-outline", label: "Sostieni il progetto", route: "/donate" },
+    { icon: "boat-outline", label: "Il nostro Team", route: "/equipaggio", section: "team" },
+    ...(user ? [{ icon: "ribbon-outline", label: "Traguardi del Cammino", route: "/traguardi", section: "traguardi" }] : []),
+    { icon: "library-outline", label: "Biblioteca", route: "/biblioteca", section: "bibbia" },
+    { icon: "heart-outline", label: "Richieste di Preghiera", route: "/prayer", section: "prayer" },
+    { icon: "bag-handle-outline", label: "Merchandising", route: "/merch", section: "merch" },
+    { icon: "information-circle-outline", label: "Chi Siamo", route: "/about", section: "about" },
+    { icon: "gift-outline", label: "Sostieni il progetto", route: "/donate", section: "donate" },
     ...(user ? [{ icon: "receipt-outline", label: "Le mie offerte", route: "/donations-history" }] : []),
     ...(user ? [{ icon: "person-circle-outline", label: "Il mio account", route: "/account" }] : []),
     ...(user ? [{ icon: "notifications-outline", label: "Notifiche", route: "/notifications-settings" }] : []),
-    { icon: "mail-outline", label: "Contatti", route: "/contact" },
+    { icon: "mail-outline", label: "Contatti", route: "/contact", section: "contact" },
     { icon: "alert-circle-outline", label: "Segnala un problema", route: "/report" },
     { icon: "shield-checkmark-outline", label: "Privacy Policy", route: "/privacy" },
     { icon: "settings-outline", label: "Impostazioni", route: "/settings" },
-  ];
+  ].filter((m: any) => !m.section || sectionVisible(m.section));
 
   const play = (p: any) =>
     playTrack({ id: p.id, title: p.title, artist: p.author, artwork: p.artwork, url: p.audio_url, isLive: false });
