@@ -120,8 +120,8 @@ export default function WhatsAppSection() {
 
         {/* Disclaimer */}
         <Text style={styles.disclaimer}>
-          Durante le dirette del lunedì, mercoledì e domenica leggeremo alcuni dei vostri messaggi e
-          ascolteremo i vostri vocali (previo consenso).
+          Durante le dirette dedicate a questa tipologia di programma leggeremo alcuni dei vostri
+          messaggi e ascolteremo i vostri vocali (previo consenso).
         </Text>
       </View>
     </Animated.View>
