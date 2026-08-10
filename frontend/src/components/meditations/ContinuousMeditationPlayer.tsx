@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator, Share,
-  useWindowDimensions, Animated,
+  useWindowDimensions, Animated, Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -12,6 +12,7 @@ import { useAuth } from "@/src/context/AuthContext";
 import MeditationPlayer from "@/src/components/MeditationPlayer";
 import MeditationCommentsPanel from "@/src/components/meditations/MeditationCommentsPanel";
 import MeditationInfoSheet from "@/src/components/meditations/MeditationInfoSheet";
+import { MAX_CONTENT_WIDTH } from "@/src/components/DesktopFrame";
 import { colors, spacing } from "@/src/theme";
 
 const WHITE = "#FFFFFF";
@@ -39,6 +40,11 @@ export default function ContinuousMeditationPlayer({
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { width, height } = useWindowDimensions();
+  // On desktop web the app is centered in a ~640px column (see DesktopFrame),
+  // but useWindowDimensions returns the FULL window width. Using that width made
+  // the video overflow the column and get cropped to a zoomed sliver. Clamp the
+  // layout width to the visible column so the video fits correctly.
+  const W = Platform.OS === "web" ? Math.min(width, MAX_CONTENT_WIDTH) : width;
   const { user } = useAuth();
 
   const [items, setItems] = useState<any[]>([]);
@@ -146,7 +152,7 @@ export default function ContinuousMeditationPlayer({
     const st = state[m.id] || {};
     const showPlayer = Math.abs(index - active) <= 1;
     return (
-      <View style={{ height: itemH, width, backgroundColor: "#000" }}>
+      <View style={{ height: itemH, width: W, backgroundColor: "#000" }}>
         {showPlayer ? (
           <View style={StyleSheet.absoluteFill}>
             <MeditationPlayer m={m} active={index === active} autoplay fill />
@@ -206,7 +212,7 @@ export default function ContinuousMeditationPlayer({
         ) : <View style={{ width: 40 }} />}
       </View>
 
-      <View style={{ height: itemH, width, overflow: "hidden" }}>
+      <View style={{ height: itemH, width: W, overflow: "hidden" }}>
         {loading ? (
           <View style={styles.center}><ActivityIndicator color={WHITE} size="large" /></View>
         ) : items.length === 0 ? (

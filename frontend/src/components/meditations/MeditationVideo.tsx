@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { StyleSheet, Pressable, View } from "react-native";
 import { useVideoPlayer, VideoView } from "expo-video";
+import { getSoundOn, setSoundOn } from "./soundPref";
 
 /**
  * Native fullscreen (TikTok-style) video for the continuous meditation player.
@@ -15,7 +16,6 @@ import { useVideoPlayer, VideoView } from "expo-video";
 export default function MeditationVideo({
   uri, active,
 }: { uri: string; active: boolean; poster?: string }) {
-  const unmuted = useRef(false);
   const activeRef = useRef(active);
 
   const player = useVideoPlayer({ uri }, (p) => {
@@ -28,7 +28,7 @@ export default function MeditationVideo({
     const sub = player.addListener("statusChange", ({ status }: any) => {
       if (status === "readyToPlay") {
         try {
-          player.muted = !unmuted.current;
+          player.muted = !getSoundOn();
           if (activeRef.current) player.play();
         } catch { /* ignore */ }
       }
@@ -40,7 +40,7 @@ export default function MeditationVideo({
     activeRef.current = active;
     if (!player) return;
     try {
-      player.muted = !unmuted.current;
+      player.muted = !getSoundOn();
       if (active) player.play();
       else player.pause();
     } catch { /* player may be released */ }
@@ -48,7 +48,7 @@ export default function MeditationVideo({
 
   const onTap = () => {
     try {
-      if (player.muted) { unmuted.current = true; player.muted = false; player.play(); }
+      if (player.muted) { setSoundOn(true); player.muted = false; player.play(); }
       else if (!player.playing) player.play();
       else player.pause();
     } catch { /* ignore */ }
