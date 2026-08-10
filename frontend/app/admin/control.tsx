@@ -156,8 +156,8 @@ export default function RadioControl() {
           <PressableScale testID="goto-streaming" onPress={() => router.push("/admin/streaming")} style={styles.linkRow}>
             <MaterialCommunityIcons name="video-wireless" size={20} color={colors.brandPrimary} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.linkTitle}>Piattaforme di Streaming</Text>
-              <Text style={styles.linkSub}>{linkCount} configurate · tocca per gestire i link</Text>
+              <Text style={styles.linkTitle}>Gestione Live (Player & Piattaforme)</Text>
+              <Text style={styles.linkSub}>{linkCount} piattaforme · configura il Live Player</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={ADMIN.muted} />
           </PressableScale>

@@ -18,7 +18,7 @@ import uuid
 import httpx
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr, field_validator
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
 from verses_data import VERSES_SEED
 import timoteo
@@ -421,6 +421,7 @@ async def live_status():
         "live_mode": bool(doc.get("live_mode")),
         "live_watch_url": doc.get("live_watch_url") or "",
         "live_links": doc.get("live_links") or {},
+        "live_player": doc.get("live_player") or {},
         "playing_next": None,
         "song_history": [],
     }
@@ -2163,6 +2164,8 @@ class RadioSettings(BaseModel):
     artwork: Optional[str] = None
     live_watch_url: Optional[str] = None
     live_links: Optional[Dict[str, str]] = None
+    # Configurable in-app Live Player (provider/source/etc.) — see /live screen.
+    live_player: Optional[Dict[str, Any]] = None
     azuracast_api_key: Optional[str] = None
     station_shortcode: Optional[str] = None
 
@@ -2208,6 +2211,7 @@ async def _radio_status_payload():
         "live_mode": bool(doc.get("live_mode")),
         "live_watch_url": doc.get("live_watch_url") or "",
         "live_links": doc.get("live_links") or {},
+        "live_player": doc.get("live_player") or {},
         "station_shortcode": station,
         "status_error": None,
     }

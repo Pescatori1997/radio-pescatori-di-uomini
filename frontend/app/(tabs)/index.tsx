@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, RefreshControl, Linking, useWindowDimensions, Platform } from "react-native";
+import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, RefreshControl, useWindowDimensions, Platform } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -11,8 +11,6 @@ import { api } from "@/src/api";
 import { currentProgram } from "@/src/utils/onair";
 import { usePlayer } from "@/src/context/PlayerContext";
 import { useSettings } from "@/src/context/SettingsContext";
-import { configuredPlatforms } from "@/src/livePlatforms";
-import WatchLiveModal from "@/src/components/WatchLiveModal";
 import WeatherWidget from "@/src/components/WeatherWidget";
 import Collaborators from "@/src/components/Collaborators";
 import WhatsAppSection from "@/src/components/WhatsAppSection";
@@ -43,7 +41,6 @@ export default function Home() {
   const [programs, setPrograms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [watchOpen, setWatchOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -81,21 +78,6 @@ export default function Home() {
   const onListen = () => {
     playLive();
     router.push("/player");
-  };
-
-  const openWatch = () => {
-    const platforms = configuredPlatforms(liveInfo?.live_links);
-    if (platforms.length === 0) {
-      // Backward-compat: fall back to the legacy single URL if still set.
-      const legacy = liveInfo?.live_watch_url;
-      if (legacy) Linking.openURL(legacy).catch(() => {});
-      return;
-    }
-    if (platforms.length === 1) {
-      Linking.openURL(platforms[0].url).catch(() => {});
-      return;
-    }
-    setWatchOpen(true);
   };
 
   if (loading) {
@@ -150,7 +132,7 @@ export default function Home() {
               <Text style={styles.liveNowSub}>Guarda la diretta streaming ora in corso</Text>
             </Animated.View>
             <Animated.View style={ctaPulse}>
-              <PressableScale testID="watch-live-button" style={styles.cta} onPress={openWatch}>
+              <PressableScale testID="watch-live-button" style={styles.cta} onPress={() => router.push("/live")}>
                 <Ionicons name="videocam" size={22} color={colors.navy} />
                 <Text style={styles.ctaText}>Guarda la diretta</Text>
               </PressableScale>
@@ -292,8 +274,6 @@ export default function Home() {
       </Pressable>
       </>
       )}
-
-      <WatchLiveModal visible={watchOpen} links={liveInfo?.live_links} onClose={() => setWatchOpen(false)} />
     </ScrollView>
   );
 }

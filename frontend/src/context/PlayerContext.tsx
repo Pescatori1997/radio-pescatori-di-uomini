@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { createAudioPlayer, setAudioModeAsync, AudioPlayer } from "expo-audio";
 import { api, liveStreamUrl } from "@/src/api";
+import type { LivePlayerConfig } from "@/src/livePlayer";
 
 export type Track = {
   id: string;
@@ -50,6 +51,7 @@ export type LiveInfo = {
   live_mode?: boolean;
   live_watch_url?: string;
   live_links?: Record<string, string>;
+  live_player?: LivePlayerConfig;
   playing_next?: { title: string; artist: string; artwork?: string } | null;
   song_history?: HistoryTrack[];
   current_program?: CurrentProgram | null;

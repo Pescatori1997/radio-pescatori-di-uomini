@@ -327,3 +327,12 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Home a 2 colonne su desktop: `BibleCard`, `ReadingPlansCard`, `BachecaCard` accettano prop `inGrid`; su web >640px vengono disposte in griglia 2 colonne (celle 50%) per non sembrare stirate. Mobile invariato.
 - Bolla Timoteo semi-trasparente durante la lettura: opacità animata a 0.35 nei root `lettore`, `c` (articoli CMS), `news`; torna piena al tocco/drag.
 - Edge-snapping: al rilascio la bolla scivola (spring) al bordo laterale piu vicino (sinistra/destra).
+
+## Live Hub — LivePlayer configurabile (2026-06)
+- Nuovo LivePlayer generico e modulare (provider-based), NON legato a YouTube. Provider: youtube, twitch, embed (URL iframe), audio (stream), none. Aggiungere provider = aggiornare `src/livePlayer.ts` senza toccare la UI.
+- File: `src/livePlayer.ts` (config/type + buildLiveEmbedUrl + provider list), `src/components/live/FishingNetFrame.tsx` (cornice SVG a rete da pesca: corde, nodi angoli, galleggianti, angoli irregolari), `src/components/live/LivePlayer.tsx` (native WebView) + `.web.tsx` (iframe), `app/live.tsx` (Live Hub).
+- Pagina `/live`: stato LIVE (badge "SIAMO IN DIRETTA", player incorporato in cornice, caption, pulsante "Guarda sulla piattaforma" + pulsanti per-piattaforma dai `live_links`); stato OFFLINE ("Al momento non siamo in diretta" + card "Prossima diretta" con data/ora/titolo/cover + "🔔 Ricordamelo" collegato a `updateNotifPrefs({live:true})`, predisposto per push reali).
+- Home: quando `live_mode` ON, il pulsante "Guarda la diretta" apre `/live` (rimosso il vecchio WatchLiveModal esterno dalla Home; file WatchLiveModal.tsx resta inutilizzato).
+- Backend: aggiunto campo `live_player` (Dict) al modello RadioSettings; esposto in `/api/live/status` e `/admin/radio/status`. Nessun dato esistente rimosso; Radio Player/AzuraCast intatti.
+- Admin: pagina "Gestione Live" (`/admin/streaming`, ex Dirette Streaming) estesa con selettore provider, ID/URL sorgente, titolo, sottotitolo, copertina, link esterno + label, prossima diretta (titolo/data/cover). `live_links` esistenti mantenuti.
+- Verificato: LIVE (YouTube embed su desktop+mobile, cornice rete, no scroll orizzontale), OFFLINE (prossima diretta + Ricordamelo), round-trip Admin API (provider twitch persistito e pubblicato).
