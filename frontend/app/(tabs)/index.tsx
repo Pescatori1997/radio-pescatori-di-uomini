@@ -80,6 +80,7 @@ export default function Home() {
 
   const onListen = () => {
     playLive();
+    router.push("/player");
   };
 
   const openWatch = () => {

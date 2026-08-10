@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { View, Text, StyleSheet, Pressable, Share, ScrollView } from "react-native";
+import React, { useRef, useState } from "react";
+import { View, Text, StyleSheet, Pressable, Share, ScrollView, PanResponder } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -29,17 +29,35 @@ function playedTime(ts?: number) {
 }
 
 function TouchBar({ value, onSeek, filled }: { value: number; onSeek: (v: number) => void; filled: string }) {
-  const [width, setWidth] = useState(1);
+  const widthRef = useRef(1);
+  const [, force] = useState(0);
+  const clamp = (v: number) => Math.max(0, Math.min(1, v));
+  const seekAt = (x: number) => onSeek(clamp(x / widthRef.current));
+
+  // PanResponder so the bar responds to a tap AND to dragging (grab the thumb
+  // and slide) on both web and native — the previous tap-only bar felt "fake".
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: (e) => seekAt(e.nativeEvent.locationX),
+      onPanResponderMove: (e) => seekAt(e.nativeEvent.locationX),
+    })
+  ).current;
+
+  const pct = clamp(value) * 100;
   return (
-    <Pressable
+    <View
       testID="touch-bar"
-      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
-      onPress={(e) => onSeek(Math.max(0, Math.min(1, e.nativeEvent.locationX / width)))}
-      style={barStyles.track}
+      onLayout={(e) => { widthRef.current = e.nativeEvent.layout.width || 1; force((n) => n + 1); }}
+      style={[barStyles.track, { cursor: "pointer" } as any]}
+      {...pan.panHandlers}
     >
-      <View style={[barStyles.fill, { width: `${Math.max(0, Math.min(1, value)) * 100}%`, backgroundColor: filled }]} />
-      <View style={[barStyles.thumb, { left: `${Math.max(0, Math.min(1, value)) * 100}%` }]} />
-    </Pressable>
+      <View style={barStyles.rail} />
+      <View style={[barStyles.fill, { width: `${pct}%`, backgroundColor: filled }]} />
+      <View style={[barStyles.thumb, { left: `${pct}%` }]} />
+    </View>
   );
 }
 
@@ -206,9 +224,10 @@ export default function PlayerScreen() {
 }
 
 const barStyles = StyleSheet.create({
-  track: { height: 20, justifyContent: "center" },
-  fill: { position: "absolute", left: 0, height: 5, borderRadius: 3, top: 7.5 },
-  thumb: { position: "absolute", width: 14, height: 14, borderRadius: 7, backgroundColor: "#FFF", marginLeft: -7, top: 3 },
+  track: { height: 28, justifyContent: "center" },
+  rail: { position: "absolute", left: 0, right: 0, height: 5, borderRadius: 3, top: 11.5, backgroundColor: "rgba(255,255,255,0.25)" },
+  fill: { position: "absolute", left: 0, height: 5, borderRadius: 3, top: 11.5 },
+  thumb: { position: "absolute", width: 16, height: 16, borderRadius: 8, backgroundColor: "#FFF", marginLeft: -8, top: 6 },
 });
 
 const styles = StyleSheet.create({
