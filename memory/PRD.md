@@ -336,3 +336,10 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Backend: aggiunto campo `live_player` (Dict) al modello RadioSettings; esposto in `/api/live/status` e `/admin/radio/status`. Nessun dato esistente rimosso; Radio Player/AzuraCast intatti.
 - Admin: pagina "Gestione Live" (`/admin/streaming`, ex Dirette Streaming) estesa con selettore provider, ID/URL sorgente, titolo, sottotitolo, copertina, link esterno + label, prossima diretta (titolo/data/cover). `live_links` esistenti mantenuti.
 - Verificato: LIVE (YouTube embed su desktop+mobile, cornice rete, no scroll orizzontale), OFFLINE (prossima diretta + Ricordamelo), round-trip Admin API (provider twitch persistito e pubblicato).
+
+## Personalizzazione Layout Home (2026-06)
+- Nuova pagina Admin "Layout Home" (`/admin/home-layout`): riordino sezioni (frecce su/giù), Larghezza (Intera / Metà — due "Metà" consecutive si affiancano), Dimensione (Compatta / Normale / Grande). Salva in settings `home_layout`.
+- Modello: `src/homeLayout.ts` (HOME_SECTIONS canoniche, mergeHomeLayout, scaleFor). Wrapper `src/components/home/ScaleBox.tsx` (scala uniforme con transformOrigin top-center e riserva altezza).
+- Home (`app/(tabs)/index.tsx`) riscritta: hero fisso + motore di layout dinamico (ordine + pairing metà + scala). Le card Bibbia/Piani/Traguardi usano prop `inGrid` quando a metà. Rimossa la vecchia auto-2col desktop (sostituita dal controllo manuale di larghezza).
+- Backend: aggiunto `home_layout: Optional[List[Dict[str,Any]]]` a GeneralSettings; servito da `/api/settings` e `/api/admin/settings` (nessun default lato server; il merge/ordinamento avviene sul client).
+- Verificato: Home default (full), affiancamento metà (Meteo+Community, Bibbia+Piani), riordino, scala compatta; round-trip Admin API (save→read pubblico).

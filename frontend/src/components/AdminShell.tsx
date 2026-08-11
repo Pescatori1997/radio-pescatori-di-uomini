@@ -42,6 +42,7 @@ const NAV = [
   { key: "users", label: "Utenti", icon: "account-group", route: "/admin/users", perm: null },
   { key: "activity", label: "Registro Attività", icon: "history", route: "/admin/activity", perm: null },
   { key: "settings", label: "Impostazioni", icon: "cog", route: "/admin/settings", perm: null },
+  { key: "home_layout", label: "Layout Home", icon: "view-dashboard", route: "/admin/home-layout", perm: null },
 ];
 
 const ADMIN = {

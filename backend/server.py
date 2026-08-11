@@ -2349,6 +2349,8 @@ class GeneralSettings(BaseModel):
     about_quote: Optional[str] = None
     # Section visibility toggles (admin decides what appears on the site).
     section_visibility: Optional[Dict[str, bool]] = None
+    # Home layout personalization: ordered list of { key, width, size }.
+    home_layout: Optional[List[Dict[str, Any]]] = None
 
 
 # Canonical toggleable sections. Everything defaults ON except Merchandising,

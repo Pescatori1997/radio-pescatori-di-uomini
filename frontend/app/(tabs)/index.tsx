@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, RefreshControl, useWindowDimensions, Platform } from "react-native";
+import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, RefreshControl } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -20,10 +20,11 @@ import BibleCard from "@/src/components/BibleCard";
 import ReadingPlansCard from "@/src/components/ReadingPlansCard";
 import BachecaCard from "@/src/components/BachecaCard";
 import ShowcaseCarousel from "@/src/components/showcase/ShowcaseCarousel";
+import ScaleBox from "@/src/components/home/ScaleBox";
 import { PulsingDot, SoundRings } from "@/src/components/LiveHeroFx";
 import PressableScale from "@/src/components/PressableScale";
 import Logo from "@/src/components/Logo";
-import { MAX_CONTENT_WIDTH } from "@/src/components/DesktopFrame";
+import { mergeHomeLayout, scaleFor, HomeSectionCfg } from "@/src/homeLayout";
 import { colors, spacing, radius } from "@/src/theme";
 
 const STUDIO = require("@/assets/images/studio.png");
@@ -32,11 +33,7 @@ export default function Home() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { playLive, playTrack, track, isPlaying, liveInfo } = usePlayer();
-  const { sectionVisible } = useSettings();
-  const { width } = useWindowDimensions();
-  // On desktop web the app is a centered ~640px column; laying the feature
-  // cards out in two columns keeps them from looking stretched/elongated.
-  const twoCol = Platform.OS === "web" && width > MAX_CONTENT_WIDTH;
+  const { sectionVisible, settings } = useSettings();
   const [podcasts, setPodcasts] = useState<any[]>([]);
   const [programs, setPrograms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,10 +41,7 @@ export default function Home() {
 
   const load = useCallback(async () => {
     try {
-      const [p, pr] = await Promise.all([
-        api.podcasts(),
-        api.programs(),
-      ]);
+      const [p, pr] = await Promise.all([api.podcasts(), api.programs()]);
       setPodcasts(p);
       setPrograms(pr);
     } catch (e) {
@@ -64,7 +58,6 @@ export default function Home() {
   const isLive = !!(liveInfo?.live_mode || live?.is_live);
   const onAir = currentProgram(programs);
 
-  // Gentle breathing glow + CTA pulse while on air (very light, UI-thread only).
   const glow = useSharedValue(0);
   useEffect(() => {
     glow.value = withRepeat(withTiming(1, { duration: 2400, easing: Easing.inOut(Easing.ease) }), -1, true);
@@ -75,17 +68,137 @@ export default function Home() {
     ? ((onAir.images?.length ? onAir.images : (onAir.presenters || []).map((p: any) => p.image)).filter(Boolean))
     : [];
 
-  const onListen = () => {
-    playLive();
-    router.push("/player");
+  const onListen = () => { playLive(); router.push("/player"); };
+
+  // ---- Section renderers (order/width/size come from the admin layout) ----
+  const sectionNode = (key: string): React.ReactNode => {
+    switch (key) {
+      case "meteo":
+        return <View style={styles.weatherWrap}><WeatherWidget /></View>;
+      case "community":
+        return <CommunityStats />;
+      case "podcast":
+        return (
+          <>
+            <SectionHeader title="Ultimi Podcast" onPress={() => router.push("/podcast")} />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hRow}>
+              {podcasts.slice(0, 6).map((p) => (
+                <PressableScale key={p.id} testID={`home-podcast-${p.id}`} style={styles.podCard}
+                  onPress={() => playTrack({ id: p.id, title: p.title, artist: p.author, artwork: p.artwork, url: p.audio_url, isLive: false })}>
+                  <Image source={{ uri: p.artwork }} style={styles.podArt} contentFit="cover" />
+                  <Text numberOfLines={2} style={styles.podTitle}>{p.title}</Text>
+                  <Text numberOfLines={1} style={styles.podCat}>{p.category} · {p.duration}</Text>
+                </PressableScale>
+              ))}
+            </ScrollView>
+          </>
+        );
+      case "vetrina":
+        return <ShowcaseCarousel />;
+      case "palinsesto":
+        return (
+          <>
+            <SectionHeader title="Palinsesto" onPress={() => router.push("/palinsesto")} />
+            <View style={{ paddingHorizontal: spacing.lg }}>
+              <PressableScale testID="home-onair" style={styles.onAirCard} onPress={() => router.push("/palinsesto")}>
+                {onAir ? (
+                  <>
+                    {onAirPics.length ? (
+                      <View style={styles.onAirStack}>
+                        {onAirPics.slice(0, 3).map((uri, i) => (
+                          <Image key={i} source={{ uri }} style={[styles.onAirAvatar, { marginLeft: i === 0 ? 0 : -16, borderColor: colors.surfaceSecondary, zIndex: 10 - i }]} contentFit="cover" />
+                        ))}
+                      </View>
+                    ) : (
+                      <View style={[styles.onAirAvatar, styles.onAirAvatarEmpty]}><Ionicons name="mic" size={22} color={colors.brandPrimary} /></View>
+                    )}
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <View style={styles.onAirBadge}><View style={styles.onAirDot} /><Text style={styles.onAirBadgeText}>IN ONDA</Text></View>
+                      <Text style={styles.onAirTitle} numberOfLines={1}>{onAir.title}</Text>
+                      {!!onAir.host && <Text style={styles.onAirHost} numberOfLines={1}>{onAir.host}</Text>}
+                      {(onAir.start_time || onAir.end_time) ? <Text style={styles.onAirTime}>{onAir.start_time}{onAir.end_time ? ` – ${onAir.end_time}` : ""}</Text> : null}
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+                  </>
+                ) : (
+                  <>
+                    <View style={[styles.onAirAvatar, styles.onAirAvatarEmpty]}><Ionicons name="radio-outline" size={22} color={colors.muted} /></View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.onAirTitle}>Nessun programma in onda</Text>
+                      <Text style={styles.onAirHost}>Visualizza il palinsesto completo</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+                  </>
+                )}
+              </PressableScale>
+              <PressableScale testID="home-view-schedule" style={styles.scheduleBtn} onPress={() => router.push("/palinsesto")}>
+                <Ionicons name="calendar-outline" size={18} color={colors.brandPrimary} />
+                <Text style={styles.scheduleBtnText}>Visualizza palinsesto</Text>
+              </PressableScale>
+            </View>
+          </>
+        );
+      case "team":
+        return <Collaborators />;
+      case "whatsapp":
+        return <WhatsAppSection />;
+      case "verse":
+        return <VerseOfDayCard />;
+      case "bibbia":
+        return <BibleCard inGrid={false} />;
+      case "piani":
+        return <ReadingPlansCard inGrid={false} />;
+      case "traguardi":
+        return <BachecaCard inGrid={false} />;
+      case "prayer":
+        return (
+          <>
+            <Pressable testID="prayer-cta" style={styles.prayerCta} onPress={() => router.push("/prayer")}>
+              <Ionicons name="heart" size={20} color={colors.brandPrimary} />
+              <Text style={styles.prayerCtaText}>Invia una richiesta di preghiera</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+            </Pressable>
+            <Pressable testID="prayer-board-cta" style={styles.boardCta} onPress={() => router.push("/prayer-board")}>
+              <View style={styles.boardIcon}><Ionicons name="heart" size={20} color={colors.white} /></View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.boardTitle}>Bacheca delle Richieste di Preghiera</Text>
+                <Text style={styles.boardSub}>Prega per i tuoi fratelli e sorelle</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.7)" />
+            </Pressable>
+          </>
+        );
+      default:
+        return null;
+    }
   };
 
+  // Card components that render nicely edge-to-edge inside a half cell.
+  const cardInGrid: Record<string, (half: boolean) => React.ReactNode> = {
+    bibbia: (half) => <BibleCard inGrid={half} />,
+    piani: (half) => <ReadingPlansCard inGrid={half} />,
+    traguardi: (half) => <BachecaCard inGrid={half} />,
+  };
+
+  const renderSection = (cfg: HomeSectionCfg, half: boolean) => {
+    const node = half && cardInGrid[cfg.key] ? cardInGrid[cfg.key](true) : sectionNode(cfg.key);
+    const scale = scaleFor(cfg.width, cfg.size);
+    return <ScaleBox scale={scale}>{node}</ScaleBox>;
+  };
+
+  // Build the ordered, visibility-filtered layout, pairing consecutive halves.
+  const layout = mergeHomeLayout(settings?.home_layout).filter((s) => sectionVisible(s.key));
+  const rows: HomeSectionCfg[][] = [];
+  let buf: HomeSectionCfg[] = [];
+  const flush = () => { if (buf.length) { rows.push(buf); buf = []; } };
+  layout.forEach((it) => {
+    if (it.width === "half") { buf.push(it); if (buf.length === 2) flush(); }
+    else { flush(); rows.push([it]); }
+  });
+  flush();
+
   if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.brandPrimary} size="large" />
-      </View>
-    );
+    return <View style={styles.center}><ActivityIndicator color={colors.brandPrimary} size="large" /></View>;
   }
 
   return (
@@ -96,18 +209,11 @@ export default function Home() {
       showsVerticalScrollIndicator={false}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.brandPrimary} />}
     >
-      {/* HERO */}
+      {/* HERO (fixed, not part of the configurable layout) */}
       <View style={[styles.hero, { paddingTop: insets.top + spacing.lg }]}>
-        <Image
-          source={STUDIO}
-          style={StyleSheet.absoluteFill}
-          contentFit="cover"
-          contentPosition="top"
-          blurRadius={1}
-        />
+        <Image source={STUDIO} style={StyleSheet.absoluteFill} contentFit="cover" contentPosition="top" blurRadius={1} />
         <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(10,17,40,0.65)" }]} />
         <LinearGradient colors={["rgba(10,17,40,0.35)", "rgba(10,17,40,0.92)"]} style={StyleSheet.absoluteFill} />
-        {/* Soft blue glow that gently breathes */}
         <Animated.View pointerEvents="none" style={[styles.heroGlow, glowStyle]} />
         <Animated.View entering={FadeInDown.duration(500)} style={styles.brandRow}>
           <View>
@@ -145,7 +251,6 @@ export default function Home() {
               <Text style={styles.nowTitle} numberOfLines={1}>{live?.title}</Text>
               <Text style={styles.nowArtist} numberOfLines={1}>{live?.artist}</Text>
             </Animated.View>
-
             <Animated.View style={ctaPulse}>
               <PressableScale testID="listen-live-button" style={styles.cta} onPress={onListen}>
                 <Ionicons name={isLivePlaying ? "pause" : "play"} size={22} color={colors.navy} />
@@ -156,124 +261,19 @@ export default function Home() {
         )}
       </View>
 
-      {/* WEATHER WIDGET */}
-      {sectionVisible("meteo") && (
-        <View style={styles.weatherWrap}>
-          <WeatherWidget />
-        </View>
-      )}
-
-      {/* COMMUNITY SOCIAL PROOF */}
-      {sectionVisible("community") && <CommunityStats />}
-
-      {/* PODCASTS */}
-      {sectionVisible("podcast") && (
-        <>
-          <SectionHeader title="Ultimi Podcast" onPress={() => router.push("/podcast")} />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hRow}>
-            {podcasts.slice(0, 6).map((p) => (
-              <PressableScale
-                key={p.id}
-                testID={`home-podcast-${p.id}`}
-                style={styles.podCard}
-                onPress={() => playTrack({ id: p.id, title: p.title, artist: p.author, artwork: p.artwork, url: p.audio_url, isLive: false })}
-              >
-                <Image source={{ uri: p.artwork }} style={styles.podArt} contentFit="cover" />
-                <Text numberOfLines={2} style={styles.podTitle}>{p.title}</Text>
-                <Text numberOfLines={1} style={styles.podCat}>{p.category} · {p.duration}</Text>
-              </PressableScale>
-            ))}
-          </ScrollView>
-        </>
-      )}
-
-      {/* VETRINA */}
-      {sectionVisible("vetrina") && <ShowcaseCarousel />}
-
-      {/* ORA IN ONDA (compact widget) */}
-      {sectionVisible("palinsesto") && (
-      <>
-      <SectionHeader title="Palinsesto" onPress={() => router.push("/palinsesto")} />
-      <View style={{ paddingHorizontal: spacing.lg }}>
-        <PressableScale testID="home-onair" style={styles.onAirCard} onPress={() => router.push("/palinsesto")}>
-          {onAir ? (
-            <>
-              {onAirPics.length ? (
-                <View style={styles.onAirStack}>
-                  {onAirPics.slice(0, 3).map((uri, i) => (
-                    <Image key={i} source={{ uri }} style={[styles.onAirAvatar, { marginLeft: i === 0 ? 0 : -16, borderColor: colors.surfaceSecondary, zIndex: 10 - i }]} contentFit="cover" />
-                  ))}
-                </View>
-              ) : (
-                <View style={[styles.onAirAvatar, styles.onAirAvatarEmpty]}><Ionicons name="mic" size={22} color={colors.brandPrimary} /></View>
-              )}
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <View style={styles.onAirBadge}><View style={styles.onAirDot} /><Text style={styles.onAirBadgeText}>IN ONDA</Text></View>
-                <Text style={styles.onAirTitle} numberOfLines={1}>{onAir.title}</Text>
-                {!!onAir.host && <Text style={styles.onAirHost} numberOfLines={1}>{onAir.host}</Text>}
-                {(onAir.start_time || onAir.end_time) ? <Text style={styles.onAirTime}>{onAir.start_time}{onAir.end_time ? ` – ${onAir.end_time}` : ""}</Text> : null}
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
-            </>
-          ) : (
-            <>
-              <View style={[styles.onAirAvatar, styles.onAirAvatarEmpty]}><Ionicons name="radio-outline" size={22} color={colors.muted} /></View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.onAirTitle}>Nessun programma in onda</Text>
-                <Text style={styles.onAirHost}>Visualizza il palinsesto completo</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
-            </>
-          )}
-        </PressableScale>
-        <PressableScale testID="home-view-schedule" style={styles.scheduleBtn} onPress={() => router.push("/palinsesto")}>
-          <Ionicons name="calendar-outline" size={18} color={colors.brandPrimary} />
-          <Text style={styles.scheduleBtnText}>Visualizza palinsesto</Text>
-        </PressableScale>
-      </View>
-      </>
-      )}
-
-      {sectionVisible("team") && <Collaborators />}
-
-      <WhatsAppSection />
-
-      {sectionVisible("verse") && <VerseOfDayCard />}
-
-      {(() => {
-        const cards: React.ReactNode[] = [];
-        if (sectionVisible("bibbia")) cards.push(<BibleCard key="bibbia" inGrid={twoCol} />);
-        if (sectionVisible("piani")) cards.push(<ReadingPlansCard key="piani" inGrid={twoCol} />);
-        if (sectionVisible("traguardi")) cards.push(<BachecaCard key="traguardi" inGrid={twoCol} />);
-        if (!cards.length) return null;
-        if (!twoCol) return <>{cards}</>;
+      {/* DYNAMIC, ADMIN-CONFIGURABLE SECTIONS */}
+      {rows.map((row, ri) => {
+        if (row.length === 1 && row[0].width === "full") {
+          return <View key={`r${ri}`}>{renderSection(row[0], false)}</View>;
+        }
         return (
-          <View style={styles.cardGrid}>
-            {cards.map((c, i) => (
-              <View key={i} style={styles.cardCell}>{c}</View>
+          <View key={`r${ri}`} style={styles.halfRow}>
+            {row.map((it) => (
+              <View key={it.key} style={styles.halfCell}>{renderSection(it, true)}</View>
             ))}
           </View>
         );
-      })()}
-
-      {sectionVisible("prayer") && (
-      <>
-      <Pressable testID="prayer-cta" style={styles.prayerCta} onPress={() => router.push("/prayer")}>
-        <Ionicons name="heart" size={20} color={colors.brandPrimary} />
-        <Text style={styles.prayerCtaText}>Invia una richiesta di preghiera</Text>
-        <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-      </Pressable>
-
-      <Pressable testID="prayer-board-cta" style={styles.boardCta} onPress={() => router.push("/prayer-board")}>
-        <View style={styles.boardIcon}><Ionicons name="heart" size={20} color={colors.white} /></View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.boardTitle}>Bacheca delle Richieste di Preghiera</Text>
-          <Text style={styles.boardSub}>Prega per i tuoi fratelli e sorelle</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.7)" />
-      </Pressable>
-      </>
-      )}
+      })}
     </ScrollView>
   );
 }
@@ -289,8 +289,8 @@ function SectionHeader({ title, onPress }: { title: string; onPress: () => void 
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
-  cardGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: spacing.sm, marginTop: spacing.lg },
-  cardCell: { width: "50%", padding: spacing.sm },
+  halfRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start", paddingHorizontal: spacing.xs },
+  halfCell: { width: "50%", paddingHorizontal: spacing.xs },
   hero: { padding: spacing.xl, paddingBottom: spacing.xl, overflow: "hidden" },
   heroGlow: { position: "absolute", top: 40, alignSelf: "center", width: 320, height: 320, borderRadius: 160, backgroundColor: colors.brandPrimary },
   brandRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
@@ -315,12 +315,6 @@ const styles = StyleSheet.create({
   podArt: { width: 150, height: 150, borderRadius: radius.md, backgroundColor: colors.surfaceTertiary, shadowColor: colors.navy, shadowOpacity: 0.15, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 4 },
   podTitle: { color: colors.onSurface, fontSize: 14, fontWeight: "700", marginTop: spacing.sm },
   podCat: { color: colors.onSurfaceTertiary, fontSize: 12, marginTop: 2 },
-  newsCard: { width: 260, height: 160, borderRadius: radius.lg, overflow: "hidden", backgroundColor: colors.navy, shadowColor: colors.navy, shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 5 },
-  newsImg: { ...StyleSheet.absoluteFillObject },
-  newsScrim: { ...StyleSheet.absoluteFillObject },
-  newsBadge: { position: "absolute", top: spacing.md, left: spacing.md, backgroundColor: colors.brandPrimary, paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.sm },
-  newsBadgeText: { color: colors.white, fontSize: 10, fontWeight: "700" },
-  newsTitle: { position: "absolute", bottom: spacing.md, left: spacing.md, right: spacing.md, color: colors.white, fontSize: 15, fontWeight: "700" },
   onAirCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.border },
   onAirAvatar: { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.navy, borderWidth: 2, borderColor: colors.brandPrimary },
   onAirStack: { flexDirection: "row", alignItems: "center" },
