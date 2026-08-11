@@ -343,3 +343,7 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Home (`app/(tabs)/index.tsx`) riscritta: hero fisso + motore di layout dinamico (ordine + pairing metà + scala). Le card Bibbia/Piani/Traguardi usano prop `inGrid` quando a metà. Rimossa la vecchia auto-2col desktop (sostituita dal controllo manuale di larghezza).
 - Backend: aggiunto `home_layout: Optional[List[Dict[str,Any]]]` a GeneralSettings; servito da `/api/settings` e `/api/admin/settings` (nessun default lato server; il merge/ordinamento avviene sul client).
 - Verificato: Home default (full), affiancamento metà (Meteo+Community, Bibbia+Piani), riordino, scala compatta; round-trip Admin API (save→read pubblico).
+
+## Mini-player X + Barra di navigazione globale (2026-06)
+- MiniPlayer: aggiunta X (angolo alto-dx della card) che chiama `stop()` del PlayerContext → ferma audio e nasconde la barra. Spostati borderRadius/overflow sul BlurView così la X sporgente non viene tagliata.
+- GlobalTabBar (`src/components/GlobalTabBar.tsx`): barra inferiore persistente identica alla GlassTabBar, renderizzata nel root `_layout.tsx` su TUTTE le schermate stack (Bibbia, Preghiera, Live, Donazioni, ecc.). Nascosta su root: (tabs) [usa la barra nativa], welcome/auth/login/invite/reset-password/admin/player. Rispetta section_visibility. Navigazione via `router.navigate` (cambia tab e chiude la schermata stack). Verificato: /bibbia→tab Podcast, X mini-player ferma la riproduzione.

@@ -18,6 +18,7 @@ import { WeatherProvider } from "@/src/weather/WeatherContext";
 import { SettingsProvider } from "@/src/context/SettingsContext";
 import InstallPrompt from "@/src/components/InstallPrompt";
 import Timoteo from "@/src/components/timoteo/Timoteo";
+import GlobalTabBar from "@/src/components/GlobalTabBar";
 import DesktopFrame from "@/src/components/DesktopFrame";
 
 LogBox.ignoreAllLogs(true);
@@ -167,6 +168,7 @@ export default function RootLayout() {
               <Stack.Screen name="podcast/[id]" />
               <Stack.Screen name="admin" />
             </Stack>
+            <GlobalTabBar />
             <Timoteo />
             </DesktopFrame>
             </WeatherProvider>
