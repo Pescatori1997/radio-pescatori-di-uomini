@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/src/context/AuthContext";
 import { usePlayer } from "@/src/context/PlayerContext";
 import { useSettings } from "@/src/context/SettingsContext";
-import { api } from "@/src/api";
+import { api, audioSrc } from "@/src/api";
 import { SupporterMedal, SupporterTag } from "@/src/components/SupporterBadge";
 import { colors, spacing, radius } from "@/src/theme";
 
@@ -56,7 +56,7 @@ export default function Profilo() {
   ].filter((m: any) => !m.section || sectionVisible(m.section));
 
   const play = (p: any) =>
-    playTrack({ id: p.id, title: p.title, artist: p.author, artwork: p.artwork, url: p.audio_url, isLive: false });
+    playTrack({ id: p.id, title: p.title, artist: p.author, artwork: p.artwork, url: audioSrc(p.audio_url), isLive: false });
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.surface }} contentContainerStyle={{ paddingTop: insets.top + spacing.lg, paddingBottom: 180 }} showsVerticalScrollIndicator={false}>

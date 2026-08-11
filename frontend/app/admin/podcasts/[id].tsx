@@ -3,9 +3,10 @@ import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Platform, Keyboa
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { api } from "@/src/api";
+import { api, mediaUrl } from "@/src/api";
 import { ADMIN } from "@/src/components/AdminShell";
 import PressableScale from "@/src/components/PressableScale";
+import MediaUpload from "@/src/components/MediaUpload";
 import { AInput, ASwitch, AImagePicker } from "@/src/components/adminForm";
 import { colors, spacing, radius } from "@/src/theme";
 
@@ -14,7 +15,7 @@ export default function PodcastEditor() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const isNew = id === "new";
-  const [f, setF] = useState<any>({ title: "", subtitle: "", description: "", author: "", category: "", tags: "", artwork: null, audio_url: "", episode_number: "", duration: "", featured: false, published: false });
+  const [f, setF] = useState<any>({ title: "", subtitle: "", description: "", author: "", category: "", tags: "", artwork: null, audio_url: "", media_id: null, media_type: null, media_filename: null, episode_number: "", duration: "", featured: false, published: false });
   const [loading, setLoading] = useState(!isNew);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -32,6 +33,7 @@ export default function PodcastEditor() {
     title: f.title, subtitle: f.subtitle, description: f.description, author: f.author,
     category: f.category || "Generale", tags: f.tags ? String(f.tags).split(",").map((s: string) => s.trim()).filter(Boolean) : [],
     artwork: f.artwork, audio_url: f.audio_url,
+    media_id: f.media_id || null, media_type: f.media_type || null, media_filename: f.media_filename || null,
     episode_number: f.episode_number ? parseInt(f.episode_number, 10) : null,
     duration: f.duration, featured: f.featured, published: f.published,
   });
@@ -64,7 +66,21 @@ export default function PodcastEditor() {
         <AInput label="Speaker / Conduttore" value={f.author} onChangeText={(v: string) => set("author", v)} />
         <AInput label="Categoria" value={f.category} onChangeText={(v: string) => set("category", v)} placeholder="Es. Studi Biblici" />
         <AInput label="Tag (separati da virgola)" value={f.tags} onChangeText={(v: string) => set("tags", v)} />
-        <AInput label="URL Audio (o carica sotto)" value={f.audio_url} onChangeText={(v: string) => set("audio_url", v)} placeholder="https://.../episodio.mp3" />
+        <Text style={styles.fieldLabel}>Audio del podcast</Text>
+        <MediaUpload
+          accept={["audio/*"]}
+          value={{ media_id: f.media_id, media_type: f.media_type, media_filename: f.media_filename, video_url: f.media_id ? "" : (f.audio_url || ""), duration: f.duration }}
+          onChange={(v) => {
+            setF((p: any) => ({
+              ...p,
+              media_id: v.media_id || null,
+              media_type: v.media_type || null,
+              media_filename: v.media_filename || null,
+              audio_url: v.media_id ? mediaUrl(v.media_id) : (v.video_url || ""),
+              duration: p.duration || v.duration || "",
+            }));
+          }}
+        />
         <AInput label="Numero episodio" value={f.episode_number} onChangeText={(v: string) => set("episode_number", v.replace(/[^0-9]/g, ""))} keyboardType="number-pad" />
         <AInput label="Durata" value={f.duration} onChangeText={(v: string) => set("duration", v)} placeholder="Es. 32:14" />
         <ASwitch testID="pod-featured" label="Episodio in evidenza" value={f.featured} onValueChange={(v: boolean) => set("featured", v)} />
@@ -90,6 +106,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: ADMIN.border },
   iconBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: ADMIN.card, alignItems: "center", justifyContent: "center" },
   headerTitle: { color: colors.white, fontSize: 18, fontWeight: "800" },
+  fieldLabel: { color: ADMIN.muted, fontSize: 13, fontWeight: "700", marginBottom: 8 },
   msg: { color: colors.brandSecondary, fontSize: 14, textAlign: "center", marginBottom: spacing.md },
   btn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, paddingVertical: spacing.md, borderRadius: radius.pill },
   btnText: { color: colors.white, fontSize: 16, fontWeight: "800" },

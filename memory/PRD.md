@@ -347,3 +347,9 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 ## Mini-player X + Barra di navigazione globale (2026-06)
 - MiniPlayer: aggiunta X (angolo alto-dx della card) che chiama `stop()` del PlayerContext → ferma audio e nasconde la barra. Spostati borderRadius/overflow sul BlurView così la X sporgente non viene tagliata.
 - GlobalTabBar (`src/components/GlobalTabBar.tsx`): barra inferiore persistente identica alla GlassTabBar, renderizzata nel root `_layout.tsx` su TUTTE le schermate stack (Bibbia, Preghiera, Live, Donazioni, ecc.). Nascosta su root: (tabs) [usa la barra nativa], welcome/auth/login/invite/reset-password/admin/player. Rispetta section_visibility. Navigazione via `router.navigate` (cambia tab e chiude la schermata stack). Verificato: /bibbia→tab Podcast, X mini-player ferma la riproduzione.
+
+## Fix riproduzione Podcast + Upload file audio (2026-06)
+- Causa: expo-audio sul web non riproduce audio cross-origin senza header CORS (la radio funziona perché proxata). I podcast con URL esterni non partivano sul web.
+- Proxy audio: nuovo `GET /api/audio-proxy?src=` (same-origin, Range/206) in server.py. Helper `audioSrc()` in api.ts: sul web instrada gli URL esterni tramite il proxy; su native e per gli URL same-origin (/api/media) resta invariato. Applicato in: podcast/[id], Home card, profilo.
+- Upload file nel pannello Admin: `app/admin/podcasts/[id].tsx` ora usa `<MediaUpload accept={["audio/*"]}>` (Carica file | URL esterno). I file caricati vanno su GridFS (`/api/media/{id}`, Range) e sono riproducibili ovunque. Aggiunti campi `media_id/media_type/media_filename` a PodcastIn/PodcastEdit.
+- Verificato: proxy 206 con Range; su web la riproduzione podcast passa dal proxy (log backend 206). Upload UI riusa il componente CMS già in produzione.

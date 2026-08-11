@@ -12,6 +12,21 @@ export const mediaUrl = (id: string, download = false) =>
   `${BASE}/api/media/${id}${download ? "?download=1" : ""}`;
 
 /**
+ * Returns a playable audio URL. On web, expo-audio cannot load cross-origin
+ * audio without CORS headers, so external files are routed through our
+ * same-origin `/api/audio-proxy` (Range-enabled). Same-origin and native URLs
+ * are returned unchanged.
+ */
+export const audioSrc = (url?: string): string => {
+  const u = (url || "").trim();
+  if (!u) return "";
+  if (Platform.OS !== "web") return u;
+  if (u.startsWith("/") || u.startsWith(BASE)) return u;
+  if (/^https?:\/\//i.test(u)) return `${BASE}/api/audio-proxy?src=${encodeURIComponent(u)}`;
+  return u;
+};
+
+/**
  * Upload one chunk via XMLHttpRequest. iOS Safari/WebKit frequently aborts
  * `fetch()` uploads with a generic "Load failed" error, whereas XHR is the
  * reliable, well-supported path for request bodies on iOS (and works on

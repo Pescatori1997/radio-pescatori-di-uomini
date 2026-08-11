@@ -533,6 +533,50 @@ async def live_stream():
     return StreamingResponse(gen(), media_type=media, headers={"Cache-Control": "no-cache"})
 
 
+@api_router.get("/audio-proxy")
+async def audio_proxy(request: Request, src: str):
+    """Same-origin pass-through for external podcast audio files so they play on
+    web (expo-audio's web player cannot load cross-origin audio without CORS
+    headers). Forwards the Range header so seeking still works."""
+    if not src.startswith("http"):
+        raise HTTPException(status_code=400, detail="URL non valido")
+    fwd = {}
+    rng = request.headers.get("range")
+    if rng:
+        fwd["Range"] = rng
+    client = httpx.AsyncClient(timeout=httpx.Timeout(20.0, read=None), follow_redirects=True)
+    try:
+        req = client.build_request("GET", src, headers=fwd)
+        upstream = await client.send(req, stream=True)
+    except Exception as e:
+        await client.aclose()
+        logger.warning("Audio proxy connect failed: %s", e)
+        raise HTTPException(status_code=503, detail="Audio non disponibile")
+    if upstream.status_code not in (200, 206):
+        code = upstream.status_code
+        await upstream.aclose()
+        await client.aclose()
+        logger.warning("Audio proxy upstream status %s", code)
+        raise HTTPException(status_code=503, detail="Audio non disponibile")
+
+    async def gen():
+        try:
+            async for chunk in upstream.aiter_bytes(chunk_size=65536):
+                yield chunk
+        except Exception as e:
+            logger.info("Audio proxy stream ended: %s", e)
+        finally:
+            await upstream.aclose()
+            await client.aclose()
+
+    headers = {"Accept-Ranges": "bytes", "Cache-Control": "public, max-age=3600"}
+    for h in ("content-length", "content-range"):
+        if h in upstream.headers:
+            headers[h.replace("content", "Content").replace("range", "Range").replace("length", "Length")] = upstream.headers[h]
+    media = upstream.headers.get("content-type", "audio/mpeg")
+    return StreamingResponse(gen(), status_code=upstream.status_code, media_type=media, headers=headers)
+
+
 @api_router.get("/live/art")
 async def live_art(u: str):
     """HTTPS proxy for now-playing artwork (AzuraCast serves it over HTTP)."""
@@ -1276,6 +1320,9 @@ class PodcastIn(BaseModel):
     tags: Optional[List[str]] = []
     artwork: Optional[str] = None
     audio_url: Optional[str] = None
+    media_id: Optional[str] = None
+    media_type: Optional[str] = None
+    media_filename: Optional[str] = None
     episode_number: Optional[int] = None
     duration: Optional[str] = ""
     publish_date: Optional[str] = None
@@ -1292,6 +1339,9 @@ class PodcastEdit(BaseModel):
     tags: Optional[List[str]] = None
     artwork: Optional[str] = None
     audio_url: Optional[str] = None
+    media_id: Optional[str] = None
+    media_type: Optional[str] = None
+    media_filename: Optional[str] = None
     episode_number: Optional[int] = None
     duration: Optional[str] = None
     publish_date: Optional[str] = None

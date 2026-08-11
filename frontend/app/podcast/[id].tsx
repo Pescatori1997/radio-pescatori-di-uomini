@@ -5,7 +5,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { api } from "@/src/api";
+import { api, audioSrc } from "@/src/api";
 import { goBackOrHome } from "@/src/utils/nav";
 import { usePlayer } from "@/src/context/PlayerContext";
 import { useAuth } from "@/src/context/AuthContext";
@@ -33,7 +33,7 @@ export default function PodcastDetail() {
   const isThis = track?.id === p.id;
   const play = () => {
     if (isThis) { togglePlay(); return; }
-    playTrack({ id: p.id, title: p.title, artist: p.author, artwork: p.artwork, url: p.audio_url, isLive: false });
+    playTrack({ id: p.id, title: p.title, artist: p.author, artwork: p.artwork, url: audioSrc(p.audio_url), isLive: false });
     if (user) { api.addHistory(p.id).catch(() => {}); api.trackContent("podcast", p.id, "play"); }
   };
   const toggleFav = async () => {

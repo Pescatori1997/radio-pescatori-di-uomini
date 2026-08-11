@@ -7,7 +7,7 @@ import { useRouter } from "expo-router";
 import { useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, interpolate } from "react-native-reanimated";
-import { api } from "@/src/api";
+import { api, audioSrc } from "@/src/api";
 import { currentProgram } from "@/src/utils/onair";
 import { usePlayer } from "@/src/context/PlayerContext";
 import { useSettings } from "@/src/context/SettingsContext";
@@ -84,7 +84,7 @@ export default function Home() {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hRow}>
               {podcasts.slice(0, 6).map((p) => (
                 <PressableScale key={p.id} testID={`home-podcast-${p.id}`} style={styles.podCard}
-                  onPress={() => playTrack({ id: p.id, title: p.title, artist: p.author, artwork: p.artwork, url: p.audio_url, isLive: false })}>
+                  onPress={() => playTrack({ id: p.id, title: p.title, artist: p.author, artwork: p.artwork, url: audioSrc(p.audio_url), isLive: false })}>
                   <Image source={{ uri: p.artwork }} style={styles.podArt} contentFit="cover" />
                   <Text numberOfLines={2} style={styles.podTitle}>{p.title}</Text>
                   <Text numberOfLines={1} style={styles.podCat}>{p.category} · {p.duration}</Text>
