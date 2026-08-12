@@ -21,16 +21,12 @@ export default function ResetPassword() {
   const requestCode = async () => {
     setError(""); setInfo(""); setBusy(true);
     try {
-      const res = await api.forgotPassword(email.trim());
-      if (res.code) {
-        setCode(String(res.code));
-        setInfo(`Servizio email non ancora attivo: usa questo codice → ${res.code}`);
-      } else {
-        setInfo("Se l'email è registrata, riceverai un codice a breve.");
-      }
+      await api.forgotPassword(email.trim());
+      setInfo("Ti abbiamo inviato un codice via email. Controlla la posta (anche lo spam) e inseriscilo qui sotto.");
       setStep("reset");
     } catch (e: any) {
-      setError(e.message || "Errore");
+      const msg = String(e?.message || "");
+      setError(msg && !msg.includes("<") && msg.length < 160 ? msg : "Impossibile inviare l'email in questo momento. Riprova più tardi.");
     } finally { setBusy(false); }
   };
 

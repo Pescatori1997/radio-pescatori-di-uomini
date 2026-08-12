@@ -388,3 +388,10 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Card gestione abbonamento in cima (se attivo): mostra piano + data rinnovo; pulsante "Disattiva abbonamento" → `POST /me/subscription/cancel` (Stripe cancel_at_period_end=true: resta attivo fino a fine periodo pagato, poi non si rinnova). Dopo l'annullamento mostra "Attivo fino al … Non verrà rinnovato".
 - Backend: nuovo endpoint `/me/subscription/cancel`; api frontend `cancelSubscription`.
 - Verificato: endpoint protetto (401 senza auth), pagina si carica; badge/card dipendono da dati reali con auth+Stripe.
+
+## Sicurezza reset password (2026-06)
+- BUG sicurezza corretto: `/auth/forgot-password` NON restituisce più il codice nella risposta (prima esposto come fallback e auto-compilato dal frontend). Il codice arriva SOLO via email (Emergent Resend).
+- Email non registrata → 404 "Nessun account trovato con questa email." (scelta esplicita del proprietario di rivelare l'esistenza). Account Google senza password → messaggio "usa Google".
+- Fallimento invio email → 400 (non 502) così il JSON sopravvive all'ingress Cloudflare. Frontend `reset-password.tsx`: rimosso l'auto-fill del codice, catch robusto per body non-JSON.
+- `EMERGENT_EMAIL_KEY` provisionata in `/app/backend/.env`.
+- Verificato dal testing_agent (iter 43+44): 404 messaggio, nessun `code` in risposta, flusso completo reset+login, UI (unregistered mostra messaggio pulito, registered avanza con campo codice VUOTO). Test: `/app/backend/tests/test_password_reset_security.py`.

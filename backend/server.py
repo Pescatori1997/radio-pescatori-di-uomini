@@ -3658,8 +3658,11 @@ async def forgot_password(body: ForgotPwIn):
     email = body.email.lower().strip()
     user = await db.users.find_one({"email": email})
     if not user:
-        # Do not reveal whether the email exists.
-        return {"ok": True, "delivered": False}
+        # The product owner explicitly wants to tell the user when no account exists.
+        raise HTTPException(status_code=404, detail="Nessun account trovato con questa email.")
+    # Google-only accounts have no password to reset.
+    if not user.get("password") and user.get("provider") == "google":
+        raise HTTPException(status_code=400, detail="Questo account usa l'accesso con Google.")
     code = f"{secrets.randbelow(1000000):06d}"
     await db.password_resets.update_one(
         {"email": email},
@@ -3672,11 +3675,12 @@ async def forgot_password(body: ForgotPwIn):
             f"<p>Il tuo codice di verifica è: <b style='font-size:22px'>{code}</b></p>"
             f"<p>Il codice scade tra 30 minuti. Se non hai richiesto tu il reset, ignora questa email.</p>")
     delivered = await send_email(email, "Reimposta la tua password", html)
-    # Fallback: expose the code in the response when email delivery is not configured.
-    resp = {"ok": True, "delivered": delivered}
     if not delivered:
-        resp["code"] = code
-    return resp
+        # Never expose the code in the response. Use a 4xx so the JSON detail
+        # survives the ingress (a 5xx gets replaced by an HTML error page).
+        await db.password_resets.delete_one({"email": email})
+        raise HTTPException(status_code=400, detail="Impossibile inviare l'email in questo momento. Riprova più tardi.")
+    return {"ok": True, "delivered": True}
 
 
 @api_router.post("/auth/reset-password")

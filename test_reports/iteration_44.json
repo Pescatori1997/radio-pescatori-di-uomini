@@ -1,0 +1,30 @@
+{
+  "summary": "Password-reset security fix RETEST — ALL GREEN. EMERGENT_EMAIL_KEY is now provisioned in /app/backend/.env; the previously-blocked registered-email happy path now works end-to-end. Backend: POST /api/auth/forgot-password with the registered account returns HTTP 200 {\"ok\":true,\"delivered\":true} with NO 'code' field in the JSON body; unregistered email still returns 404 with the exact Italian detail 'Nessun account trovato con questa email.'. Pytest suite /app/backend/tests/test_password_reset_security.py now runs 3/3 tests PASSED (the previously-skipped test_no_code_in_response executes and passes). Frontend /reset-password verified on 390x844: unregistered email displays the Italian not-found message cleanly (no raw HTML); registered email advances to the code step with the info banner 'Ti abbiamo inviato un codice via email...' and the reset-code TextInput is EMPTY (not pre-filled).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_password_reset_security.py",
+    "/app/test_reports/pytest/iteration_44_pwreset.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Security fix fully validated: (a) unregistered email → 404 with the exact Italian detail, (b) registered email → 200 with delivered:true and NO 'code' key in the JSON body (asserted both on the raw text and on the parsed dict), (c) full reset flow (forgot → read code from Mongo → reset-password → login with new pw → old pw rejected) works, (d) frontend reset-code TextInput no longer auto-filled and starts empty.",
+    "Minor test-isolation fix applied to /app/backend/tests/test_password_reset_security.py: added `pytestmark = pytest.mark.xdist_group('password_reset_security')` so pytest-xdist keeps all 3 tests on the same worker (previously the FullResetFlow test could race with the TestForgotPasswordRegistered assertion on the shared password_resets record for REG_EMAIL, causing an intermittent xdist-only failure). Sequential run and grouped-xdist run both pass 3/3."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_password_reset_security.py (added xdist_group marker to serialize the module and prevent race on password_resets record)"
+  ],
+  "success_rate": {"backend": "100% (3/3 pytest passed; direct curl verified 200 + delivered:true no code, and 404 with exact Italian detail)", "frontend": "100% (both unregistered and registered UI flows verified on 390x844)"},
+  "seed_data_creation": "Reference account test@pescatoridiuomini.it / Test1234! is (re-)ensured by the module fixture and the well-known password is restored at the end of the full-flow test.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Fix is fully verified in this pod. If EMERGENT_EMAIL_KEY is ever unset again in .env, the endpoint will now return 400 (not 502) with the Italian detail so the JSON body survives the Cloudflare ingress, and the frontend requestCode catch falls back to a generic Italian message when the error body is HTML/too long."
+}
