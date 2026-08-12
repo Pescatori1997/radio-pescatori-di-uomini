@@ -18,14 +18,12 @@ export default function Profilo() {
   const { playTrack } = usePlayer();
   const { sectionVisible } = useSettings();
   const [favs, setFavs] = useState<any[]>([]);
-  const [history, setHistory] = useState<any[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       if (user) {
         api.favorites().then(setFavs).catch(() => {});
-        api.history().then(setHistory).catch(() => {});
         api.adminMe().then(() => setIsAdmin(true)).catch(() => setIsAdmin(false));
         // Authoritative supporter refresh: sync the subscription from Stripe
         // (server-side) then refresh the user so the badge reflects the real
@@ -103,19 +101,6 @@ export default function Profilo() {
         <Section title="Podcast preferiti">
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hRow}>
             {favs.map((p) => (
-              <Pressable key={p.id} style={styles.miniCard} onPress={() => play(p)}>
-                <Image source={{ uri: p.artwork }} style={styles.miniArt} contentFit="cover" />
-                <Text numberOfLines={2} style={styles.miniTitle}>{p.title}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        </Section>
-      )}
-
-      {user && history.length > 0 && (
-        <Section title="Cronologia">
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hRow}>
-            {history.map((p) => (
               <Pressable key={p.id} style={styles.miniCard} onPress={() => play(p)}>
                 <Image source={{ uri: p.artwork }} style={styles.miniArt} contentFit="cover" />
                 <Text numberOfLines={2} style={styles.miniTitle}>{p.title}</Text>
