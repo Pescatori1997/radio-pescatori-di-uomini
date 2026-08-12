@@ -21,7 +21,7 @@ const ITEMS: { name: string; label: string; route: string; icon: keyof typeof Io
 
 // Roots where the app bottom bar must NOT appear (the tabs group renders its own
 // GlassTabBar; the others are pre-auth / admin / full-screen modal screens).
-const HIDE_ROOTS = new Set(["", "(tabs)", "welcome", "auth", "login", "invite", "reset-password", "admin", "player"]);
+const HIDE_ROOTS = new Set(["", "(tabs)", "welcome", "auth", "login", "invite", "reset-password", "admin", "player", "join"]);
 
 /**
  * Persistent bottom navigation shown on every stack screen (Bibbia, Preghiera,

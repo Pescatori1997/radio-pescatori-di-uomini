@@ -39,15 +39,12 @@ export default function Equipaggio() {
   if (others.length) groups.push({ key: "__others", title: sortedRanks.length ? "Equipaggio" : "", members: others });
 
   const renderMember = (m: any, i: number) => (
-    <Animated.View key={m.id} entering={FadeInDown.duration(400).delay(i * 40)}>
+    <Animated.View key={m.id} entering={FadeInDown.duration(400).delay(i * 40)} style={styles.tileWrap}>
       <PressableScale testID={`crew-card-${m.id}`} scaleTo={0.94} style={styles.tile} onPress={() => router.push(`/equipaggio/${m.id}`)}>
-        <Image source={crewPortrait(m)} style={styles.tileImg} contentFit="cover" contentPosition="top" />
-        <LinearGradient colors={["transparent", "rgba(10,17,40,0.9)"]} locations={[0.45, 1]} style={StyleSheet.absoluteFill} />
-        <View style={styles.tileBody}>
-          <Text style={styles.tileName} numberOfLines={1}>{m.name}</Text>
-          {!!m.role && <Text style={styles.tileRole} numberOfLines={1}>{m.role}</Text>}
-        </View>
+        <Image source={crewPortrait(m)} style={styles.tileImg} contentFit="contain" />
       </PressableScale>
+      <Text style={styles.tileName} numberOfLines={1}>{m.name}</Text>
+      {!!m.role && <Text style={styles.tileRole} numberOfLines={1}>{m.role}</Text>}
     </Animated.View>
   );
 
@@ -85,7 +82,7 @@ export default function Equipaggio() {
 
           {/* Join the team */}
           <LinearGradient colors={[colors.brandPrimary, "#0369A1"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.joinCard}>
-            <MaterialCommunityIcons name="anchor" size={34} color={colors.white} />
+            <MaterialCommunityIcons name="anchor" size={26} color={colors.white} />
             <Text style={styles.joinTitle}>{"Entra nell'Equipaggio"}</Text>
             <Text style={styles.joinSub}>Dio può usare anche te per annunciare il Vangelo.</Text>
             <PressableScale testID="join-crew-button" style={styles.joinBtn} onPress={() => router.push("/join")}>
@@ -110,14 +107,14 @@ const styles = StyleSheet.create({
   rankTitle: { color: colors.white, fontSize: 15, fontWeight: "800", letterSpacing: 0.3, textTransform: "uppercase" },
   rankLine: { flex: 1, height: 1, backgroundColor: "rgba(255,255,255,0.12)", marginLeft: spacing.sm },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  tile: { width: "31%", aspectRatio: 0.82, minHeight: 120, borderRadius: radius.md, overflow: "hidden", backgroundColor: colors.navyCard, marginBottom: spacing.sm, borderWidth: 1, borderColor: "rgba(56,189,248,0.25)", shadowColor: "#000", shadowOpacity: 0.4, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 5 },
-  tileImg: { ...StyleSheet.absoluteFillObject },
-  tileBody: { position: "absolute", left: 0, right: 0, bottom: 0, padding: 6 },
-  tileName: { color: colors.white, fontSize: 12, fontWeight: "800" },
-  tileRole: { color: colors.brandSecondary, fontSize: 9.5, fontWeight: "600", marginTop: 1 },
-  joinCard: { borderRadius: radius.lg, padding: spacing.xl, alignItems: "center", marginTop: spacing.sm, shadowColor: colors.brandPrimary, shadowOpacity: 0.5, shadowRadius: 20, shadowOffset: { width: 0, height: 10 }, elevation: 10 },
-  joinTitle: { color: colors.white, fontSize: 24, fontWeight: "800", marginTop: spacing.md, textAlign: "center" },
-  joinSub: { color: "rgba(255,255,255,0.9)", fontSize: 15, textAlign: "center", marginTop: spacing.sm, lineHeight: 21 },
-  joinBtn: { backgroundColor: colors.white, paddingHorizontal: spacing["2xl"], paddingVertical: spacing.md, borderRadius: radius.pill, marginTop: spacing.xl },
-  joinBtnText: { color: colors.brandPrimary, fontSize: 16, fontWeight: "800" },
+  tileWrap: { width: "31%", marginBottom: spacing.md },
+  tile: { width: "100%", aspectRatio: 0.78, borderRadius: radius.md, overflow: "hidden", backgroundColor: "#0A1128", borderWidth: 1, borderColor: "rgba(56,189,248,0.3)", shadowColor: "#000", shadowOpacity: 0.4, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 5 },
+  tileImg: { width: "100%", height: "100%" },
+  tileName: { color: colors.white, fontSize: 12, fontWeight: "800", marginTop: 5, textAlign: "center" },
+  tileRole: { color: colors.brandSecondary, fontSize: 10, fontWeight: "600", marginTop: 1, textAlign: "center" },
+  joinCard: { borderRadius: radius.lg, padding: spacing.lg, alignItems: "center", marginTop: spacing.sm, shadowColor: colors.brandPrimary, shadowOpacity: 0.4, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 8 },
+  joinTitle: { color: colors.white, fontSize: 18, fontWeight: "800", marginTop: spacing.sm, textAlign: "center" },
+  joinSub: { color: "rgba(255,255,255,0.9)", fontSize: 13, textAlign: "center", marginTop: 4, lineHeight: 18 },
+  joinBtn: { backgroundColor: colors.white, paddingHorizontal: spacing.xl, paddingVertical: spacing.sm, borderRadius: radius.pill, marginTop: spacing.md },
+  joinBtnText: { color: colors.brandPrimary, fontSize: 14, fontWeight: "800" },
 });
