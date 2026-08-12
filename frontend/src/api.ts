@@ -512,6 +512,7 @@ export const api = {
 
   // supporter status (authoritative, synced from Stripe server-side)
   mySubscription: () => request("/me/subscription", {}, true),
+  cancelSubscription: () => request("/me/subscription/cancel", { method: "POST" }, true),
 
   // ---- analytics & community social proof ----
   trackActive: () => request("/track/active", { method: "POST" }, true).catch(() => null),

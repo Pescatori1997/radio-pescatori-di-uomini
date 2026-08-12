@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Pressable, RefreshControl } from "react-native";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Pressable, RefreshControl, Alert, Platform } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -16,15 +16,39 @@ export default function DonationsHistory() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [items, setItems] = useState<any[]>([]);
+  const [sub, setSub] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   const load = useCallback(() => {
-    api.myDonations().then(setItems).catch(() => setItems([])).finally(() => { setLoading(false); setRefreshing(false); });
+    Promise.all([
+      api.myDonations().catch(() => []),
+      api.mySubscription().catch(() => null),
+    ]).then(([d, s]) => { setItems(d || []); setSub(s?.subscription || null); })
+      .finally(() => { setLoading(false); setRefreshing(false); });
   }, []);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const total = items.reduce((s, d) => s + (d.amount || 0), 0);
+  const isMonthly = (d: any) => d.frequency === "monthly";
+
+  const doCancel = async () => {
+    setCancelling(true);
+    try { const r = await api.cancelSubscription(); setSub(r?.subscription || null); }
+    catch (e: any) { Alert.alert("Errore", e?.message || "Impossibile annullare l'abbonamento."); }
+    finally { setCancelling(false); }
+  };
+  const confirmCancel = () => {
+    if (Platform.OS === "web") { if (typeof window !== "undefined" && window.confirm("Vuoi disattivare l'abbonamento mensile? Resterà attivo fino alla fine del periodo già pagato.")) doCancel(); return; }
+    Alert.alert("Disattiva abbonamento", "L'abbonamento resterà attivo fino alla fine del periodo già pagato, poi non verrà più rinnovato.", [
+      { text: "Annulla", style: "cancel" },
+      { text: "Disattiva", style: "destructive", onPress: doCancel },
+    ]);
+  };
+
+  const subActive = sub && (sub.status === "active" || sub.status === "trialing" || sub.status === "past_due");
+  const willCancel = sub?.cancel_at_period_end;
 
   return (
     <View style={styles.container}>
@@ -46,6 +70,26 @@ export default function DonationsHistory() {
               <Text style={styles.summaryCount}>{items.length} {items.length === 1 ? "offerta" : "offerte"}</Text>
             </View>
           )}
+
+          {subActive && (
+            <View style={styles.subCard} testID="subscription-card">
+              <View style={styles.subHead}>
+                <MaterialCommunityIcons name="autorenew" size={20} color={colors.brandPrimary} />
+                <Text style={styles.subTitle}>Abbonamento mensile{sub.plan ? ` · €${sub.plan}` : ""}</Text>
+              </View>
+              {willCancel ? (
+                <Text style={styles.subInfo}>Attivo fino al {fmtDate(sub.current_period_end)}. Non verrà rinnovato.</Text>
+              ) : (
+                <Text style={styles.subInfo}>Rinnovo automatico{sub.current_period_end ? ` il ${fmtDate(sub.current_period_end)}` : ""}.</Text>
+              )}
+              {!willCancel && (
+                <PressableScale testID="cancel-subscription" style={styles.cancelBtn} onPress={confirmCancel} disabled={cancelling}>
+                  {cancelling ? <ActivityIndicator color={colors.error} /> : <><Ionicons name="close-circle-outline" size={18} color={colors.error} /><Text style={styles.cancelText}>Disattiva abbonamento</Text></>}
+                </PressableScale>
+              )}
+            </View>
+          )}
+
           {items.length === 0 ? (
             <View style={styles.empty}>
               <MaterialCommunityIcons name="gift-outline" size={54} color={colors.muted} />
@@ -57,13 +101,19 @@ export default function DonationsHistory() {
             </View>
           ) : items.map((d, i) => (
             <Animated.View key={d.id} entering={FadeInDown.delay(Math.min(i * 40, 300))} style={styles.row} testID={`donation-${d.id}`}>
-              <View style={styles.iconWrap}><MaterialCommunityIcons name="gift" size={20} color={colors.success} /></View>
+              <View style={[styles.iconWrap, isMonthly(d) && { backgroundColor: colors.brandPrimary + "22" }]}>
+                <MaterialCommunityIcons name={isMonthly(d) ? "autorenew" : "gift"} size={20} color={isMonthly(d) ? colors.brandPrimary : colors.success} />
+              </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.amount}>€{(d.amount || 0).toFixed(2)}</Text>
-                <Text style={styles.date}>{fmtDate(d.paid_at || d.created_at)}</Text>
+                <View style={styles.typeRow}>
+                  <View style={[styles.typeBadge, { backgroundColor: (isMonthly(d) ? colors.brandPrimary : colors.success) + "22" }]}>
+                    <Text style={[styles.typeText, { color: isMonthly(d) ? colors.brandPrimary : colors.success }]}>{isMonthly(d) ? "Abbonamento mensile" : "Una tantum"}</Text>
+                  </View>
+                  <Text style={styles.date}>{fmtDate(d.paid_at || d.created_at)}</Text>
+                </View>
                 {!!d.message && <Text style={styles.msg} numberOfLines={2}>"{d.message}"</Text>}
               </View>
-              <View style={styles.badge}><Text style={styles.badgeText}>Completata</Text></View>
             </Animated.View>
           ))}
         </ScrollView>
@@ -90,6 +140,15 @@ const styles = StyleSheet.create({
   amount: { color: colors.onSurface, fontSize: 18, fontWeight: "800" },
   date: { color: colors.onSurfaceTertiary, fontSize: 13, marginTop: 2 },
   msg: { color: colors.onSurfaceSecondary, fontSize: 13, fontStyle: "italic", marginTop: 4 },
+  typeRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: 4, flexWrap: "wrap" },
+  typeBadge: { paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radius.pill },
+  typeText: { fontSize: 11, fontWeight: "800" },
+  subCard: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.lg, marginBottom: spacing.lg, borderWidth: 1, borderColor: colors.brandPrimary + "44" },
+  subHead: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  subTitle: { color: colors.onSurface, fontSize: 15, fontWeight: "800", flex: 1 },
+  subInfo: { color: colors.onSurfaceSecondary, fontSize: 13, marginTop: 6 },
+  cancelBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, marginTop: spacing.md, paddingVertical: spacing.md, borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.error },
+  cancelText: { color: colors.error, fontSize: 14, fontWeight: "800" },
   badge: { backgroundColor: colors.success + "22", paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: radius.pill },
   badgeText: { color: colors.success, fontSize: 11, fontWeight: "700" },
 });

@@ -382,3 +382,9 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Sezione salvati (`lettore/salvati.tsx`): "Preferiti" → "Evidenziati" (titolo pagina "Evidenziati e note" + tab). Testi aggiornati (empty/login) → "clicca sul numero del versetto per evidenziarlo". Aggiunto pulsante elimina (cestino) per rimuovere evidenziato/nota direttamente dalla lista senza aprire il capitolo (api.bibleDeleteBookmark/DeleteNote + update stato).
 - Testo prompt login lettore aggiornato (rimosso "salvarli nei preferiti").
 - Verificato: tap sul numero apre pannello; +/− ridimensionano; testi aggiornati.
+
+## Le mie offerte: tipo offerta + disattiva abbonamento (2026-06)
+- Ogni offerta ora mostra un badge "Una tantum" o "Abbonamento mensile" (in base a `frequency`), con icona coerente.
+- Card gestione abbonamento in cima (se attivo): mostra piano + data rinnovo; pulsante "Disattiva abbonamento" → `POST /me/subscription/cancel` (Stripe cancel_at_period_end=true: resta attivo fino a fine periodo pagato, poi non si rinnova). Dopo l'annullamento mostra "Attivo fino al … Non verrà rinnovato".
+- Backend: nuovo endpoint `/me/subscription/cancel`; api frontend `cancelSubscription`.
+- Verificato: endpoint protetto (401 senza auth), pagina si carica; badge/card dipendono da dati reali con auth+Stripe.

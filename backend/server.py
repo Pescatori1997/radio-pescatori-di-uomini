@@ -3148,6 +3148,27 @@ async def my_subscription(authorization: Optional[str] = Header(None)):
     return await get_supporter_state(user, sync=True)
 
 
+@api_router.post("/me/subscription/cancel")
+async def cancel_my_subscription(authorization: Optional[str] = Header(None)):
+    """Cancel the user's monthly donation at period end (benefits stay until the
+    paid period ends). Sets cancel_at_period_end on Stripe, then syncs locally."""
+    user = await get_current_user(authorization)
+    sub = await db.subscriptions.find_one({"user_id": user["user_id"]})
+    if not sub or not sub.get("stripe_subscription_id"):
+        raise HTTPException(status_code=404, detail="Nessun abbonamento attivo")
+    sub_id = sub["stripe_subscription_id"]
+    if STRIPE_API_KEY:
+        try:
+            await asyncio.to_thread(lambda: stripe_sdk.Subscription.modify(sub_id, cancel_at_period_end=True))
+        except Exception as e:
+            logger.warning("cancel subscription failed: %s", e)
+            raise HTTPException(status_code=502, detail="Impossibile annullare l'abbonamento")
+        await _sync_subscription_by_id(sub_id, user["user_id"])
+    else:
+        await db.subscriptions.update_one({"user_id": user["user_id"]}, {"$set": {"cancel_at_period_end": True}})
+    return await get_supporter_state(user, sync=False)
+
+
 # ---------------- Merchandising orders (Stripe payment mode, multi line-item) ----------------
 class OrderItemIn(BaseModel):
     product_id: str
