@@ -1,62 +1,38 @@
 {
   "app_name": "Pescatori di Uomini",
-  "personality": "1 iOS-Native Clean with 6 Glass / Luxe media player surfaces",
-  "personality_one_liner": "A serene, professional, and fluid media experience that elevates the broadcast through minimal elegance and deep navy tones.",
+  "personality": "6 Glass / Luxe DARK (Customized to user's requested Dark Navy / White palette)",
+  "personality_one_liner": "A cinematic, immersive vertical video experience focused on fluidity, high-contrast typography, and minimal chrome.",
   "color": {
-    "surface": "#FFFFFF",
-    "onSurface": "#0A1128",
-    "surfaceSecondary": "#F8FAFC",
-    "onSurfaceSecondary": "#334155",
-    "surfaceTertiary": "#F1F5F9",
-    "onSurfaceTertiary": "#475569",
-    "surfaceInverse": "#0A1128",
-    "onSurfaceInverse": "#FFFFFF",
-    "brand": "#0A1128",
-    "brandPrimary": "#0EA5E9",
-    "onBrandPrimary": "#FFFFFF",
-    "brandSecondary": "#38BDF8",
-    "onBrandSecondary": "#0A1128",
-    "brandTertiary": "#E0F2FE",
-    "onBrandTertiary": "#0284C7",
-    "success": "#10B981",
-    "onSuccess": "#FFFFFF",
-    "warning": "#F59E0B",
-    "onWarning": "#FFFFFF",
-    "error": "#EF4444",
-    "onError": "#FFFFFF",
-    "border": "#E2E8F0",
-    "borderStrong": "#CBD5E1",
-    "divider": "#F1F5F9"
-  },
-  "color_dark": {
-    "surface": "#0A1128",
+    "surface": "#050A18",
     "onSurface": "#FFFFFF",
-    "surfaceSecondary": "#16213E",
-    "onSurfaceSecondary": "#CBD5E1",
+    "surfaceSecondary": "#0F172A",
+    "onSurfaceSecondary": "#F8FAFC",
     "surfaceTertiary": "#1E293B",
-    "onSurfaceTertiary": "#94A3B8",
+    "onSurfaceTertiary": "#CBD5E1",
     "surfaceInverse": "#FFFFFF",
-    "onSurfaceInverse": "#0A1128",
-    "brand": "#0A1128",
-    "brandPrimary": "#0EA5E9",
-    "onBrandPrimary": "#FFFFFF",
+    "onSurfaceInverse": "#050A18",
+    "brand": "#38BDF8",
+    "brandPrimary": "#FFFFFF",
+    "onBrandPrimary": "#050A18",
     "brandSecondary": "#38BDF8",
-    "onBrandSecondary": "#0A1128",
-    "brandTertiary": "#0C4A6E",
-    "onBrandTertiary": "#BAE6FD",
+    "onBrandSecondary": "#FFFFFF",
+    "brandTertiary": "#0EA5E9",
+    "onBrandTertiary": "#FFFFFF",
     "success": "#10B981",
     "onSuccess": "#FFFFFF",
     "warning": "#F59E0B",
     "onWarning": "#FFFFFF",
     "error": "#EF4444",
     "onError": "#FFFFFF",
-    "border": "#1E293B",
-    "borderStrong": "#334155",
-    "divider": "#1E293B"
+    "info": "#3B82F6",
+    "onInfo": "#FFFFFF",
+    "border": "rgba(255, 255, 255, 0.1)",
+    "borderStrong": "rgba(255, 255, 255, 0.2)",
+    "divider": "rgba(255, 255, 255, 0.1)"
   },
   "typography": {
-    "displayFontFamily": "Plus Jakarta Sans",
-    "textFontFamily": "Geist",
+    "displayFontFamily": "Inter",
+    "textFontFamily": "Inter",
     "scale": {
       "sm": 12,
       "base": 14,
@@ -66,7 +42,7 @@
     }
   },
   "spacing": {
-    "rule": "Generous iOS-native padding for a minimal look. Use whitespace instead of borders to group items. Touch targets minimum 44x44pt.",
+    "rule": "Use 8pt grid strictly. Edge padding is critical to avoid overlapping with right rail or bottom tabs.",
     "xs": 4,
     "sm": 8,
     "md": 12,
@@ -81,23 +57,24 @@
     "lg": 20,
     "pill": 999
   },
-  "shadow_tier": 1,
-  "navigation": "bottom_tabs",
-  "icon_set": "Phosphor",
+  "shadow_tier": "1",
+  "navigation": "stack_only",
+  "icon_set": "Ionicons",
   "glassmorphism": {
-    "enabled": true,
+    "enabled": "true",
     "do's": [
-      "Use heavy glass effect for the persistent mini-player capsule above the bottom navigation rail.",
-      "Use glass effect for bottom-sheet headers and sticky section headers over scrolling content.",
-      "Ensure text on glass has a high-contrast underlying tint to guarantee readability."
+      "Use subtle drop shadows on text and icons over video for contrast without dark circle backgrounds.",
+      "Use vertical gradient scrims to ensure text readability over the video.",
+      "Use glass effects on the bottom sheet header/drag handle."
     ],
     "dont's": [
-      "Don't use glass on regular list rows, cards, or inputs."
+      "No solid dark circle backgrounds behind the right-rail action icons.",
+      "Do not blur the video itself except when the comments bottom sheet is active."
     ]
   },
   "platform_libraries": {
     "glass": {
-      "ios": "expo-blur",
+      "ios": "expo-glass-effect",
       "android": "expo-blur",
       "low_end_android_fallback": "solid surfaceSecondary"
     },
@@ -109,88 +86,37 @@
   },
   "screens": [
     {
-      "name": "Home",
-      "purpose": "Showcase the radio station with a strong CTA to listen live, recent podcasts, and latest news.",
+      "name": "Meditazioni",
+      "purpose": "A fluid, vertical swiping feed of short-form meditations (Reels style).",
       "states": {
-        "loading": "Centered brand-colored spinner",
-        "empty": "No recent content available",
-        "error": "Failed to load feed. Retry button."
+        "loading": "Dark navy surface with a minimal white loading spinner in the center.",
+        "empty": "No meditations available. Show a soft mic icon with a prompt to check back.",
+        "error": "Error loading feed. Retry button."
       },
-      "layout": "Hero section at top (logo, slogan, dark blue background with abstract blur or mic image, large 'Ascolta la Diretta' CTA). Horizontal scroll for 'Ultimi Podcast' (cards with imagery). Horizontal scroll for 'Ultime Notizie'. List at bottom for 'Programmi della settimana'. Scroll content must clear bottom padding for the persistent mini-player."
-    },
-    {
-      "name": "Player (Mini & Full)",
-      "purpose": "A fluid media playback experience akin to Spotify/YouTube Music.",
-      "states": {
-        "loading": "Spinner over artwork",
-        "empty": "No media playing",
-        "error": "Playback error, tap to retry"
-      },
-      "layout": "Mini-player: Floating rounded capsule anchored right above bottom tabs. Contains play/pause, small artwork, title, and green/red LIVE indicator. Full-screen Player (via bottom sheet or stack push): Massive square artwork with top gradient, large title, artist/show, playback controls (Play, volume, share), progress bar (for podcast) or pulsing LIVE tag (for radio)."
-    },
-    {
-      "name": "Podcast Library",
-      "purpose": "Browse, filter, and listen to past radio broadcasts and exclusive podcasts.",
-      "states": {
-        "loading": "Skeleton grid",
-        "empty": "No podcasts match the filter",
-        "error": "Failed to load library"
-      },
-      "layout": "Top sticky header with search bar and filter chips (categorie). 2-column grid of podcast cover cards. Each card uses a gradient scrim if text is on the image, showing duration and play icon."
-    },
-    {
-      "name": "Palinsesto (Schedule)",
-      "purpose": "Display the weekly programming calendar.",
-      "states": {
-        "loading": "Skeleton list",
-        "empty": "Schedule not available yet",
-        "error": "Unable to fetch schedule"
-      },
-      "layout": "Day-of-the-week selector at the top (pill tabs). Vertical list of programs for the selected day. Each row shows time, program name, host, and a short description. 'On Air Now' row gets highlighted with brandPrimary tint or border."
-    },
-    {
-      "name": "News Evangeliche",
-      "purpose": "Christian updates, missions, events, and testimonies.",
-      "states": {
-        "loading": "Skeleton list",
-        "empty": "No recent news",
-        "error": "Failed to load news"
-      },
-      "layout": "List view of wide cards. Each card has a cover image (using expo-image + bottom gradient scrim) with title and date overlay, or side-by-side thumbnail layout."
-    },
-    {
-      "name": "Richieste di Preghiera (Prayer Requests)",
-      "purpose": "A serene, private form for users to submit prayer requests.",
-      "states": {
-        "loading": "Spinner on submit",
-        "empty": "N/A",
-        "error": "Submission failed error message"
-      },
-      "layout": "A clean, single-column form with top instructions. Generous padding, inputs on surfaceTertiary. Sticky 'Invia' (Submit) button anchored to the keyboard."
+      "layout": "1. Root container is 100vh with a FlatList/FlashList pagingEnabled vertically. \n2. Video Component takes absoluteFill of each cell. \n3. Layer 1 (Overlays): expo-linear-gradient at the bottom (transparent to 80% #050A18 from 50% down to 100%) and top (transparent to 60% #050A18 from 20% to 0%). \n4. Layer 2 (Right Action Rail): Positioned absolutely right: 8pt, bottom: ~100pt. Stack of icons (Heart, Chatbubble, Share) with vertical gap of 24pt. Icons MUST NOT have circular dark backgrounds—just white icons with text-shadow/drop-shadow (shadowColor: '#000', opacity: 0.5, radius: 2) and small text counters below them. \n5. Layer 3 (Bottom Info Block): Positioned absolutely left: 16pt, bottom: ~40pt, right: 80pt (to clear the action rail). Contains: Avatar + '🎙 Username' in a row, large Video Title below it, and italicized Bible Verse below that. All text needs drop-shadows. \n6. Layer 4 (Interactions): Wrap video in TapGestureHandler. Single tap: Play/Pause (shows a subtle pulsing play/pause icon in the center that fades out). Double tap: Like (triggers a heart burst animation in the center). \n7. Bottom Sheet: @gorhom/bottom-sheet for comments. When it slides up to ~55%, the video should dynamically scale/translate to occupy the top 45% (using Reanimated shared values)."
     }
   ],
   "images": {
-    "hero_radio_live": {
-      "url": "https://images.pexels.com/photos/31575854/pexels-photo-31575854.png?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-      "alt": "Podcast studio microphone with dramatic blue lighting"
+    "meditation_video_cover": {
+      "url": "https://images.unsplash.com/photo-1624878436089-bc8dfc84b6d7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA0MTJ8MHwxfHNlYXJjaHwzfHxkYXJrJTIwY2luZW1hdGljJTIwcG9ydHJhaXQlMjBtYW4lMjBzcGVha2luZyUyMGludG8lMjBtaWNyb3Bob25lfGVufDB8fHx8MTc4NjU3ODU2MXww&ixlib=rb-4.1.0&q=85",
+      "alt": "Cinematic portrait of a man speaking into a microphone"
     },
-    "podcast_cover_placeholder": {
-      "url": "https://images.unsplash.com/photo-1592818868295-f527dbac420d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzB8MHwxfHNlYXJjaHwzfHxzZXJlbmUlMjBjaHJpc3RpYW4lMjB3b3JzaGlwJTIwc2t5JTIwY3Jvc3N8ZW58MHx8fHwxNzg0ODk1OTk4fDA&ixlib=rb-4.1.0&q=85",
-      "alt": "Serene cross on rocks during sunrise"
-    },
-    "news_cover_placeholder": {
-      "url": "https://images.pexels.com/photos/13963623/pexels-photo-13963623.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-      "alt": "Congregation praying in a church setting"
+    "speaker_avatar": {
+      "url": "https://images.unsplash.com/photo-1735816981455-cfa0a87e657f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA0MTJ8MHwxfHNlYXJjaHwxfHxkYXJrJTIwY2luZW1hdGljJTIwcG9ydHJhaXQlMjBtYW4lMjBzcGVha2luZyUyMGludG8lMjBtaWNyb3Bob25lfGVufDB8fHx8MTc4NjU3ODU2MXww&ixlib=rb-4.1.0&q=85",
+      "alt": "Speaker profile image"
     }
   },
+  "haptics": {
+    "double_tap_like": "impactLight",
+    "open_comments": "selection",
+    "swipe_next_video": "selection"
+  },
   "instructions_to_main_agent": [
-    "Strictly follow the color tokens: use deep navy (brand/surface in dark mode) and light blue (brandPrimary) as the accent.",
-    "Implement a persistent mini-player. It MUST sit above the bottom tab navigation and below the scroll content. Add bottom padding to all main scrollviews to ensure content is not hidden by this floating player.",
-    "Use expo-blur heavily for the mini-player background to achieve the requested Spotify-like fluid experience.",
-    "Ensure 'Now Playing' full screen uses @gorhom/bottom-sheet or a fluid Stack push with shared element vibes. Make artwork huge, with a bold typography.",
-    "Do NOT use any default blue/purple colors that aren't defined in the JSON. Stick exclusively to the navy and azzurro specified in the JSON.",
-    "Do not use generic emojis anywhere in the UI.",
-    "Always apply a vertical gradient scrim (transparent to dark) when placing text over the hero image or podcast/news cover images.",
-    "Implement the 'LIVE' indicator clearly, either a pulsing green (#10B981) dot or red (#EF4444) dot next to the radio title."
+    "Reels/TikTok Feed Redesign: Strip out the heavy circular dark backgrounds behind the action icons on the right rail. This is the #1 thing that makes it look cheap. Use clean, white Ionicons with a subtle black drop shadow (shadowColor: '#000', shadowOffset: {width: 0, height: 1}, shadowOpacity: 0.6, shadowRadius: 3).",
+    "Gradient Scrims: Do not apply text-shadow to every piece of text if a gradient scrim does the job better. Use a 2-stop vertical expo-linear-gradient from 'transparent' at 0% to 'rgba(5, 10, 24, 0.85)' at 100% positioned absolutely at the bottom 40% of the screen. This ensures the title, verse, and speaker name are legible regardless of the video underneath.",
+    "Interaction Polish: Implement double-tap to like using 'react-native-gesture-handler' TapGestureHandler (numberOfTaps={2}). Play/Pause should use a separate TapGestureHandler (numberOfTaps={1}) that triggers a Reanimated fade-in/fade-out of a Play/Pause icon in the center of the screen.",
+    "Comments Bottom Sheet: Use @gorhom/bottom-sheet. As requested by the user, animate the video's container height or scale using Reanimated's useAnimatedStyle bound to the bottom sheet's animated index/position. When the sheet covers 55%, the video should smoothly compress/translate to fit the remaining 45% at the top.",
+    "Safe Area: Do not overlap the top title 'Meditazioni' with the OS status bar. Ensure the bottom text block stops at least 24pt above the bottom screen edge (or bottom tab bar if one exists).",
+    "Palette Override: The user explicitly requested a 'dark blue/white palette'. The strict 'no-blue' rule is overridden here by explicit user request. Use #050A18 for the base navy and white for primary text/icons."
   ]
 }
