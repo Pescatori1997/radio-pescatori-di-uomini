@@ -728,6 +728,13 @@ async def get_crew():
     return imageopt.lighten_list("crew", docs)
 
 
+# Configurable "gradi" (ranks). Members are grouped by rank on the Equipaggio page.
+# Defined before /crew/{member_id} so "ranks" isn't captured as a member id.
+@api_router.get("/crew/ranks")
+async def get_crew_ranks():
+    return await db.crew_ranks.find({}, {"_id": 0}).sort("level", 1).to_list(100)
+
+
 @api_router.get("/crew/{member_id}")
 async def get_crew_member(member_id: str):
     doc = await db.crew.find_one({"id": member_id}, {"_id": 0})
@@ -1129,6 +1136,7 @@ class CrewEdit(BaseModel):
     verse_ref: Optional[str] = None
     portrait: Optional[str] = None
     published: Optional[bool] = None
+    rank_id: Optional[str] = None
 
 
 class PortraitIn(BaseModel):
@@ -1307,6 +1315,37 @@ async def admin_crew_portrait(member_id: str, body: PortraitIn, admin=Depends(re
 async def admin_delete_crew(member_id: str, admin=Depends(require_perm("team"))):
     await db.crew.delete_one({"id": member_id})
     await db.crew_applications.update_many({"crew_id": member_id}, {"$set": {"crew_id": None}})
+    return {"ok": True}
+
+
+# ---------------- Admin: Crew Ranks (gradi) ----------------
+class RankIn(BaseModel):
+    name: str
+    level: Optional[int] = 1
+
+
+@api_router.get("/admin/crew/ranks")
+async def admin_crew_ranks(admin=Depends(require_perm("team"))):
+    return await db.crew_ranks.find({}, {"_id": 0}).sort("level", 1).to_list(100)
+
+
+@api_router.post("/admin/crew/ranks", status_code=201)
+async def admin_create_rank(body: RankIn, admin=Depends(require_perm("team"))):
+    doc = {"id": new_id("rank"), "name": body.name, "level": body.level or 1, "created_at": now_utc()}
+    await db.crew_ranks.insert_one(dict(doc))
+    return {"ok": True, "id": doc["id"]}
+
+
+@api_router.patch("/admin/crew/ranks/{rid}")
+async def admin_edit_rank(rid: str, body: RankIn, admin=Depends(require_perm("team"))):
+    await db.crew_ranks.update_one({"id": rid}, {"$set": {"name": body.name, "level": body.level or 1}})
+    return {"ok": True}
+
+
+@api_router.delete("/admin/crew/ranks/{rid}")
+async def admin_delete_rank(rid: str, admin=Depends(require_perm("team"))):
+    await db.crew_ranks.delete_one({"id": rid})
+    await db.crew.update_many({"rank_id": rid}, {"$set": {"rank_id": None}})
     return {"ok": True}
 
 

@@ -19,9 +19,10 @@ const STATUS_COLOR: Record<string, string> = { pending: "#F59E0B", approved: col
 
 export default function AdminTeam() {
   const router = useRouter();
-  const [tab, setTab] = useState<"apps" | "members">("apps");
+  const [tab, setTab] = useState<"apps" | "members" | "ranks">("apps");
   const [apps, setApps] = useState<any[]>([]);
   const [members, setMembers] = useState<any[]>([]);
+  const [ranks, setRanks] = useState<any[]>([]);
   const [status, setStatus] = useState("");
   const [sort, setSort] = useState("newest");
   const [search, setSearch] = useState("");
@@ -32,12 +33,19 @@ export default function AdminTeam() {
     Promise.all([
       api.adminApplications(status || undefined, sort, search || undefined),
       api.adminCrew(),
-    ]).then(([a, m]) => { setApps(a); setMembers(m); })
+      api.adminCrewRanks(),
+    ]).then(([a, m, r]) => { setApps(a); setMembers(m); setRanks(r || []); })
       .catch(() => {})
       .finally(() => { setLoading(false); setRefreshing(false); });
   }, [status, sort, search]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const rankName = (rid?: string) => ranks.find((r) => r.id === rid)?.name || null;
+  const addRank = async () => { await api.adminCreateRank({ name: "Nuovo grado", level: (ranks.length || 0) + 1 }).catch(() => {}); load(); };
+  const saveRank = async (r: any) => { await api.adminEditRank(r.id, { name: r.name, level: parseInt(String(r.level), 10) || 1 }).catch(() => {}); load(); };
+  const delRank = async (rid: string) => { await api.adminDeleteRank(rid).catch(() => {}); load(); };
+  const setRankField = (id: string, k: string, v: any) => setRanks((prev) => prev.map((r) => (r.id === id ? { ...r, [k]: v } : r)));
 
   return (
     <AdminShell title="Gestione Team" activeKey="team">
@@ -47,6 +55,9 @@ export default function AdminTeam() {
         </Pressable>
         <Pressable testID="tab-members" style={[styles.tab, tab === "members" && styles.tabActive]} onPress={() => setTab("members")}>
           <Text style={[styles.tabText, tab === "members" && styles.tabTextActive]}>Membri ({members.length})</Text>
+        </Pressable>
+        <Pressable testID="tab-ranks" style={[styles.tab, tab === "ranks" && styles.tabActive]} onPress={() => setTab("ranks")}>
+          <Text style={[styles.tabText, tab === "ranks" && styles.tabTextActive]}>Gradi ({ranks.length})</Text>
         </Pressable>
       </View>
 
@@ -96,7 +107,7 @@ export default function AdminTeam() {
             </PressableScale>
           ))}
         </ScrollView>
-      ) : (
+      ) : tab === "members" ? (
         <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.brandPrimary} />}>
           {members.length === 0 ? (
@@ -106,13 +117,31 @@ export default function AdminTeam() {
               <Image source={crewPortrait(m)} style={styles.thumb} contentFit="cover" contentPosition="top" />
               <View style={{ flex: 1 }}>
                 <Text style={styles.rowName}>{m.name}</Text>
-                <Text style={styles.rowRole}>{m.role}</Text>
+                <Text style={styles.rowRole}>{m.role}{rankName(m.rank_id) ? ` · ${rankName(m.rank_id)}` : ""}</Text>
               </View>
               <View style={[styles.badge, { backgroundColor: (m.published ? colors.success : ADMIN.muted) + "22" }]}>
                 <Text style={[styles.badgeText, { color: m.published ? colors.success : ADMIN.muted }]}>{m.published ? "Pubblico" : "Nascosto"}</Text>
               </View>
             </PressableScale>
           ))}
+        </ScrollView>
+      ) : (
+        <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+          <Text style={styles.rankIntro}>Crea i gradi (livelli) del team. I membri vengono raggruppati per grado nella pagina Equipaggio, in ordine di livello (1 in alto). Assegna il grado dalla scheda di ogni membro.</Text>
+          {ranks.map((r) => (
+            <View key={r.id} style={styles.rankRow}>
+              <View style={styles.levelBox}>
+                <Text style={styles.levelLabel}>Liv.</Text>
+                <TextInput testID={`rank-level-${r.id}`} value={String(r.level ?? "")} onChangeText={(v) => setRankField(r.id, "level", v.replace(/[^0-9]/g, ""))} keyboardType="number-pad" style={styles.levelInput} />
+              </View>
+              <TextInput testID={`rank-name-${r.id}`} value={r.name} onChangeText={(v) => setRankField(r.id, "name", v)} placeholder="Nome grado" placeholderTextColor={ADMIN.muted} style={styles.rankInput} />
+              <PressableScale testID={`rank-save-${r.id}`} onPress={() => saveRank(r)} style={styles.rankSave}><Ionicons name="checkmark" size={18} color={colors.white} /></PressableScale>
+              <PressableScale testID={`rank-del-${r.id}`} onPress={() => delRank(r.id)} style={styles.rankDel}><Ionicons name="trash" size={16} color={colors.error} /></PressableScale>
+            </View>
+          ))}
+          <PressableScale testID="rank-add" onPress={addRank} style={styles.rankAdd}>
+            <Ionicons name="add" size={20} color={colors.white} /><Text style={styles.rankAddText}>Aggiungi grado</Text>
+          </PressableScale>
         </ScrollView>
       )}
     </AdminShell>
@@ -143,4 +172,14 @@ const styles = StyleSheet.create({
   rowMeta: { color: ADMIN.muted, fontSize: 12, marginTop: 2 },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.sm },
   badgeText: { fontSize: 11, fontWeight: "800" },
+  rankIntro: { color: ADMIN.muted, fontSize: 13, lineHeight: 19, marginBottom: spacing.lg },
+  rankRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.md },
+  levelBox: { alignItems: "center", backgroundColor: ADMIN.card, borderRadius: radius.md, borderWidth: 1, borderColor: ADMIN.border, paddingHorizontal: 8, paddingVertical: 4 },
+  levelLabel: { color: ADMIN.muted, fontSize: 9, fontWeight: "700" },
+  levelInput: { color: colors.white, fontSize: 16, fontWeight: "800", width: 34, textAlign: "center", padding: 0 },
+  rankInput: { flex: 1, backgroundColor: ADMIN.card, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: 12, color: colors.white, fontSize: 15, borderWidth: 1, borderColor: ADMIN.border },
+  rankSave: { width: 42, height: 42, borderRadius: radius.md, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
+  rankDel: { width: 42, height: 42, borderRadius: radius.md, backgroundColor: colors.error + "22", alignItems: "center", justifyContent: "center" },
+  rankAdd: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, backgroundColor: colors.navy, paddingVertical: spacing.md, borderRadius: radius.pill, marginTop: spacing.sm },
+  rankAddText: { color: colors.white, fontSize: 15, fontWeight: "800" },
 });

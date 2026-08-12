@@ -353,3 +353,11 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Proxy audio: nuovo `GET /api/audio-proxy?src=` (same-origin, Range/206) in server.py. Helper `audioSrc()` in api.ts: sul web instrada gli URL esterni tramite il proxy; su native e per gli URL same-origin (/api/media) resta invariato. Applicato in: podcast/[id], Home card, profilo.
 - Upload file nel pannello Admin: `app/admin/podcasts/[id].tsx` ora usa `<MediaUpload accept={["audio/*"]}>` (Carica file | URL esterno). I file caricati vanno su GridFS (`/api/media/{id}`, Range) e sono riproducibili ovunque. Aggiunti campi `media_id/media_type/media_filename` a PodcastIn/PodcastEdit.
 - Verificato: proxy 206 con Range; su web la riproduzione podcast passa dal proxy (log backend 206). Upload UI riusa il componente CMS già in produzione.
+
+## Team: griglia "personaggi" + Gradi configurabili (2026-06)
+- Pagina Equipaggio (`app/equipaggio/index.tsx`) ridisegnata: griglia di quadrati piccoli (3 per riga, tap → dettaglio `equipaggio/[id]`), raggruppati per GRADO. Ogni grado è una riga con intestazione; ordinati per `level` (1 in alto). Membri senza grado sotto "Equipaggio".
+- Gradi configurabili: nuova collection `crew_ranks` {id,name,level}. Endpoint: pubblico `GET /crew/ranks`; admin `GET/POST/PATCH/DELETE /admin/crew/ranks` (perm team). Delete rimuove il grado dai membri (cascade rank_id=None). Aggiunto `rank_id` a CrewEdit.
+- Admin Team: nuovo tab "Gradi" (aggiungi/rinomina/livello/elimina). Editor membro (`admin/member/[id]`): selettore grado (chips) + salvataggio `rank_id`. Badge grado nella lista membri.
+- API frontend: crewRanks, adminCrewRanks, adminCreateRank/EditRank/DeleteRank.
+- Default seed: gradi "Responsabili"(1) e "Collaboratori"(2); Luigi Volpe → Responsabili (modificabili/eliminabili dall'admin).
+- Verificato: griglia render (tile foto+nome+ruolo), round-trip API gradi completo.

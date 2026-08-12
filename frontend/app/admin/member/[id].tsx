@@ -27,6 +27,7 @@ export default function MemberEditor() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [m, setM] = useState<any>(null);
   const [e, setE] = useState<any>({});
+  const [ranks, setRanks] = useState<any[]>([]);
   const [newPortrait, setNewPortrait] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -34,10 +35,10 @@ export default function MemberEditor() {
   const loadData = () => api.crewMember(id!).then((d) => {
     setM(d);
     setE({ name: d.name, role: d.role, mission: d.mission, bio: d.bio, ministry: d.ministry,
-      programs: (d.programs || []).join(", "), verse: d.verse, verse_ref: d.verse_ref, published: d.published });
+      programs: (d.programs || []).join(", "), verse: d.verse, verse_ref: d.verse_ref, published: d.published, rank_id: d.rank_id || null });
     setNewPortrait(null);
   }).catch(() => {});
-  useEffect(() => { if (id) loadData(); }, [id]);
+  useEffect(() => { if (id) loadData(); api.adminCrewRanks().then(setRanks).catch(() => {}); }, [id]);
 
   const pickImage = async () => {
     const cur = await ImagePicker.getMediaLibraryPermissionsAsync();
@@ -54,7 +55,7 @@ export default function MemberEditor() {
       await api.adminEditCrew(id!, {
         name: e.name, role: e.role, mission: e.mission, bio: e.bio, ministry: e.ministry,
         programs: e.programs ? e.programs.split(",").map((s: string) => s.trim()).filter(Boolean) : [],
-        verse: e.verse, verse_ref: e.verse_ref, published: e.published,
+        verse: e.verse, verse_ref: e.verse_ref, published: e.published, rank_id: e.rank_id || null,
       });
       if (newPortrait) await api.adminCrewPortrait(id!, newPortrait);
       setMsg("Salvato"); loadData();
@@ -92,6 +93,19 @@ export default function MemberEditor() {
         <AInput label="Versetto preferito" value={e.verse} onChangeText={(v: string) => setE({ ...e, verse: v })} multiline />
         <AInput label="Riferimento versetto" value={e.verse_ref} onChangeText={(v: string) => setE({ ...e, verse_ref: v })} />
 
+        <Text style={styles.label}>Grado</Text>
+        <View style={styles.rankChips}>
+          <PressableScale testID="rank-none" onPress={() => setE({ ...e, rank_id: null })} style={[styles.rankChip, !e.rank_id && styles.rankChipOn]}>
+            <Text style={[styles.rankChipText, !e.rank_id && styles.rankChipTextOn]}>Nessuno</Text>
+          </PressableScale>
+          {ranks.map((r) => (
+            <PressableScale key={r.id} testID={`rank-${r.id}`} onPress={() => setE({ ...e, rank_id: r.id })} style={[styles.rankChip, e.rank_id === r.id && styles.rankChipOn]}>
+              <Text style={[styles.rankChipText, e.rank_id === r.id && styles.rankChipTextOn]} numberOfLines={1}>{r.name}</Text>
+            </PressableScale>
+          ))}
+        </View>
+        {ranks.length === 0 && <Text style={styles.rankHint}>Nessun grado creato. Aggiungili da Team → Gradi.</Text>}
+
         <View style={styles.switchRow}>
           <Text style={styles.label}>Visibile pubblicamente</Text>
           <Switch testID="member-published" value={!!e.published} onValueChange={(v) => setE({ ...e, published: v })} trackColor={{ true: colors.brandPrimary }} />
@@ -121,6 +135,12 @@ const styles = StyleSheet.create({
   replaceBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: ADMIN.card, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill, borderWidth: 1, borderColor: ADMIN.border },
   replaceText: { color: colors.white, fontSize: 13, fontWeight: "700" },
   label: { color: ADMIN.muted, fontSize: 13, fontWeight: "700", marginBottom: 6 },
+  rankChips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: spacing.lg },
+  rankChip: { paddingHorizontal: spacing.md, paddingVertical: 9, borderRadius: radius.pill, backgroundColor: ADMIN.card, borderWidth: 1.5, borderColor: ADMIN.border },
+  rankChipOn: { backgroundColor: colors.brandPrimary + "22", borderColor: colors.brandPrimary },
+  rankChipText: { color: ADMIN.muted, fontSize: 13, fontWeight: "700" },
+  rankChipTextOn: { color: colors.white },
+  rankHint: { color: ADMIN.muted, fontSize: 12, marginTop: -spacing.md, marginBottom: spacing.lg },
   input: { backgroundColor: ADMIN.card, borderRadius: radius.md, padding: spacing.md, fontSize: 15, color: colors.white, borderWidth: 1, borderColor: ADMIN.border },
   switchRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.lg },
   msg: { color: colors.brandSecondary, fontSize: 14, textAlign: "center", marginBottom: spacing.md },

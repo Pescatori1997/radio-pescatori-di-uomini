@@ -15,12 +15,40 @@ export default function Equipaggio() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [crew, setCrew] = useState<any[]>([]);
+  const [ranks, setRanks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
-      api.crew().then(setCrew).catch(() => {}).finally(() => setLoading(false));
+      Promise.all([api.crew(), api.crewRanks().catch(() => [])])
+        .then(([c, r]) => { setCrew(c); setRanks(r || []); })
+        .catch(() => {})
+        .finally(() => setLoading(false));
     }, [])
+  );
+
+  // Group members by rank (ranks ordered by level; members without a rank go last).
+  const sortedRanks = [...ranks].sort((a, b) => (a.level || 0) - (b.level || 0));
+  const rankIds = new Set(sortedRanks.map((r) => r.id));
+  const groups: { key: string; title: string; members: any[] }[] = [];
+  sortedRanks.forEach((r) => {
+    const members = crew.filter((m) => m.rank_id === r.id);
+    if (members.length) groups.push({ key: r.id, title: r.name, members });
+  });
+  const others = crew.filter((m) => !m.rank_id || !rankIds.has(m.rank_id));
+  if (others.length) groups.push({ key: "__others", title: sortedRanks.length ? "Equipaggio" : "", members: others });
+
+  const renderMember = (m: any, i: number) => (
+    <Animated.View key={m.id} entering={FadeInDown.duration(400).delay(i * 40)}>
+      <PressableScale testID={`crew-card-${m.id}`} scaleTo={0.94} style={styles.tile} onPress={() => router.push(`/equipaggio/${m.id}`)}>
+        <Image source={crewPortrait(m)} style={styles.tileImg} contentFit="cover" contentPosition="top" />
+        <LinearGradient colors={["transparent", "rgba(10,17,40,0.9)"]} locations={[0.45, 1]} style={StyleSheet.absoluteFill} />
+        <View style={styles.tileBody}>
+          <Text style={styles.tileName} numberOfLines={1}>{m.name}</Text>
+          {!!m.role && <Text style={styles.tileRole} numberOfLines={1}>{m.role}</Text>}
+        </View>
+      </PressableScale>
+    </Animated.View>
   );
 
   return (
@@ -39,30 +67,20 @@ export default function Equipaggio() {
       {loading ? (
         <View style={styles.center}><ActivityIndicator color={colors.brandPrimary} size="large" /></View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: insets.bottom + 40 }} showsVerticalScrollIndicator={false}>
-          <Text style={styles.intro}>Le persone che servono in Pescatori di Uomini. Uomini e donne chiamati ad annunciare il Vangelo.</Text>
+        <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: insets.bottom + 80 }} showsVerticalScrollIndicator={false}>
+          <Text style={styles.intro}>Le persone che servono in Pescatori di Uomini. Tocca un volto per scoprire chi è.</Text>
 
-          {crew.map((m, i) => (
-            <Animated.View key={m.id} entering={FadeInDown.duration(450).delay(i * 90)}>
-              <PressableScale testID={`crew-card-${m.id}`} scaleTo={0.98} style={styles.card} onPress={() => router.push(`/equipaggio/${m.id}`)}>
-                {m.poster ? (
-                  <Image source={crewPortrait(m)} style={StyleSheet.absoluteFill} contentFit="cover" contentPosition="top" />
-                ) : (
-                  <>
-                    <Image source={crewPortrait(m)} style={StyleSheet.absoluteFill} contentFit="cover" contentPosition="top" />
-                    <LinearGradient colors={["transparent", "rgba(10,17,40,0.35)", "rgba(10,17,40,0.96)"]} locations={[0, 0.45, 1]} style={StyleSheet.absoluteFill} />
-                    <View style={styles.cardBody}>
-                      <View style={styles.roleTag}>
-                        <MaterialCommunityIcons name="anchor" size={12} color={colors.white} />
-                        <Text style={styles.roleTagText}>{m.role}</Text>
-                      </View>
-                      <Text style={styles.name}>{m.name}</Text>
-                      <Text style={styles.mission} numberOfLines={2}>{`"${m.mission}"`}</Text>
-                    </View>
-                  </>
-                )}
-              </PressableScale>
-            </Animated.View>
+          {groups.map((g) => (
+            <View key={g.key} style={{ marginBottom: spacing.lg }}>
+              {!!g.title && (
+                <View style={styles.rankHeader}>
+                  <MaterialCommunityIcons name="chevron-right" size={18} color={colors.brandPrimary} />
+                  <Text style={styles.rankTitle}>{g.title}</Text>
+                  <View style={styles.rankLine} />
+                </View>
+              )}
+              <View style={styles.grid}>{g.members.map((m, i) => renderMember(m, i))}</View>
+            </View>
           ))}
 
           {/* Join the team */}
@@ -88,14 +106,15 @@ const styles = StyleSheet.create({
   headerTitle: { color: colors.white, fontSize: 18, fontWeight: "800" },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   intro: { color: colors.muted, fontSize: 14, lineHeight: 21, marginBottom: spacing.lg },
-  card: { width: "100%", aspectRatio: 0.72, borderRadius: radius.lg, overflow: "hidden", backgroundColor: colors.navyCard, marginBottom: spacing.lg, shadowColor: "#000", shadowOpacity: 0.45, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 12 },
-  cardBody: { position: "absolute", left: 0, right: 0, bottom: 0, padding: spacing.xl },
-  roleTag: { flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start", backgroundColor: colors.brandPrimary, paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill },
-  roleTagText: { color: colors.white, fontSize: 11, fontWeight: "800", letterSpacing: 0.3, textTransform: "uppercase" },
-  name: { color: colors.white, fontSize: 30, fontWeight: "800", marginTop: spacing.sm, letterSpacing: -0.5 },
-  mission: { color: "rgba(255,255,255,0.85)", fontSize: 14, fontStyle: "italic", marginTop: 4, lineHeight: 20 },
-  viewMore: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: spacing.md },
-  viewMoreText: { color: colors.brandSecondary, fontSize: 13, fontWeight: "700" },
+  rankHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: spacing.md },
+  rankTitle: { color: colors.white, fontSize: 15, fontWeight: "800", letterSpacing: 0.3, textTransform: "uppercase" },
+  rankLine: { flex: 1, height: 1, backgroundColor: "rgba(255,255,255,0.12)", marginLeft: spacing.sm },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  tile: { width: "31%", aspectRatio: 0.82, minHeight: 120, borderRadius: radius.md, overflow: "hidden", backgroundColor: colors.navyCard, marginBottom: spacing.sm, borderWidth: 1, borderColor: "rgba(56,189,248,0.25)", shadowColor: "#000", shadowOpacity: 0.4, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 5 },
+  tileImg: { ...StyleSheet.absoluteFillObject },
+  tileBody: { position: "absolute", left: 0, right: 0, bottom: 0, padding: 6 },
+  tileName: { color: colors.white, fontSize: 12, fontWeight: "800" },
+  tileRole: { color: colors.brandSecondary, fontSize: 9.5, fontWeight: "600", marginTop: 1 },
   joinCard: { borderRadius: radius.lg, padding: spacing.xl, alignItems: "center", marginTop: spacing.sm, shadowColor: colors.brandPrimary, shadowOpacity: 0.5, shadowRadius: 20, shadowOffset: { width: 0, height: 10 }, elevation: 10 },
   joinTitle: { color: colors.white, fontSize: 24, fontWeight: "800", marginTop: spacing.md, textAlign: "center" },
   joinSub: { color: "rgba(255,255,255,0.9)", fontSize: 15, textAlign: "center", marginTop: spacing.sm, lineHeight: 21 },
