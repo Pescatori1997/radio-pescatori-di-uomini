@@ -16,7 +16,6 @@ const CATEGORIES: { key: string; label: string; desc: string; icon: string }[] =
   { key: "live", label: "Dirette", desc: "Quando iniziamo una diretta", icon: "access-point" },
   { key: "announcements", label: "Annunci", desc: "Comunicazioni importanti", icon: "bullhorn" },
   { key: "events", label: "Eventi in programma", desc: "Eventi ed appuntamenti live", icon: "calendar-star" },
-  { key: "prayers", label: "Richieste di preghiera", desc: "Aggiornamenti sulle preghiere", icon: "hand-heart" },
 ];
 
 export default function NotificationsSettings() {

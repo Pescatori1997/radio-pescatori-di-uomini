@@ -126,7 +126,7 @@ export default function Account() {
           </PressableScale>
         </View>
 
-        <Text style={styles.section}>Zona pericolosa</Text>
+        <Text style={styles.section}>Elimina account</Text>
         <View style={styles.card}>
           <Text style={styles.hint}>Eliminando l'account, i tuoi dati personali verranno rimossi in modo permanente.</Text>
           <Pressable testID="account-delete" onPress={remove} style={styles.deleteBtn}>
