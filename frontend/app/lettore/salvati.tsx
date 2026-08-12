@@ -28,24 +28,30 @@ export default function BibleSaved() {
   }, [user]));
 
   const open = (r: any) => router.push(`/lettore/read?book=${r.book_nr}&chapter=${r.chapter}&highlight=${r.verse}`);
+  const remove = async (r: any) => {
+    try {
+      if (tab === "bm") { await api.bibleDeleteBookmark(r.id); setBookmarks((p) => p.filter((x) => x.id !== r.id)); }
+      else { await api.bibleDeleteNote(r.id); setNotes((p) => p.filter((x) => x.id !== r.id)); }
+    } catch {}
+  };
   const list = tab === "bm" ? bookmarks : notes;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <PressableScale onPress={() => router.back()} style={styles.iconBtn}><Ionicons name="arrow-back" size={22} color={colors.onSurface} /></PressableScale>
-        <Text style={styles.title}>Preferiti e note</Text>
+        <Text style={styles.title}>Evidenziati e note</Text>
         <View style={{ width: 40 }} />
       </View>
 
       {!user ? (
-        <View style={styles.center}><Ionicons name="bookmark-outline" size={40} color={colors.muted} /><Text style={styles.empty}>Accedi per vedere i tuoi preferiti e le note.</Text></View>
+        <View style={styles.center}><Ionicons name="bookmark-outline" size={40} color={colors.muted} /><Text style={styles.empty}>Accedi per vedere i tuoi versetti evidenziati e le note.</Text></View>
       ) : loading ? (
         <View style={styles.center}><ActivityIndicator color={colors.brandPrimary} size="large" /></View>
       ) : (
         <>
           <View style={styles.tabs}>
-            {([["bm", "Preferiti"], ["notes", "Note"]] as const).map(([k, label]) => (
+            {([["bm", "Evidenziati"], ["notes", "Note"]] as const).map(([k, label]) => (
               <Pressable key={k} onPress={() => setTab(k)} style={[styles.tab, tab === k && styles.tabOn]}>
                 <Text style={[styles.tabText, tab === k && styles.tabTextOn]}>{label}</Text>
               </Pressable>
@@ -53,20 +59,22 @@ export default function BibleSaved() {
           </View>
           <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }}>
             {list.length === 0 ? (
-              <Text style={styles.empty}>{tab === "bm" ? "Nessun versetto salvato. Tieni premuto su un versetto per evidenziarlo." : "Nessuna nota. Aggiungi una nota da un versetto."}</Text>
+              <Text style={styles.empty}>{tab === "bm" ? "Nessun versetto evidenziato. Clicca sul numero del versetto per evidenziarlo." : "Nessuna nota. Aggiungi una nota da un versetto."}</Text>
             ) : list.map((r) => (
-              <PressableScale key={r.id} testID={`saved-${r.id}`} style={styles.row} onPress={() => open(r)}>
+              <View key={r.id} style={styles.row}>
                 {tab === "bm" && <View style={[styles.dot, { backgroundColor: HL_COLORS[r.color] || HL_COLORS.yellow }]} />}
-                <View style={{ flex: 1 }}>
+                <Pressable testID={`saved-${r.id}`} style={{ flex: 1 }} onPress={() => open(r)}>
                   <Text style={styles.ref}>{r.book_name} {r.chapter}:{r.verse}</Text>
                   {tab === "bm" ? (
                     <Text style={styles.snippet} numberOfLines={2}>{r.text}</Text>
                   ) : (
                     <Text style={styles.noteText} numberOfLines={3}>{r.note}</Text>
                   )}
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-              </PressableScale>
+                </Pressable>
+                <Pressable testID={`del-${r.id}`} onPress={() => remove(r)} hitSlop={8} style={styles.delBtn}>
+                  <Ionicons name="trash-outline" size={18} color={colors.error} />
+                </Pressable>
+              </View>
             ))}
           </ScrollView>
         </>
@@ -91,4 +99,5 @@ const styles = StyleSheet.create({
   ref: { color: colors.brandPrimary, fontSize: 13, fontWeight: "800" },
   snippet: { color: colors.onSurface, fontSize: 14, lineHeight: 20, marginTop: 3 },
   noteText: { color: colors.onSurfaceSecondary, fontSize: 14, lineHeight: 20, marginTop: 3, fontStyle: "italic" },
+  delBtn: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", backgroundColor: colors.error + "15" },
 });

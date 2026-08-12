@@ -86,17 +86,14 @@ export default function BibleReader() {
     return () => clearTimeout(t);
   }, [data, hlStart]);
 
-  const changeFont = () => {
-    const next = (fontIdx + 1) % FONT_SIZES.length;
-    setFontIdx(next);
-    AsyncStorage.setItem("bible_font", String(next)).catch(() => {});
-  };
+  const incFont = () => { const n = Math.min(FONT_SIZES.length - 1, fontIdx + 1); setFontIdx(n); AsyncStorage.setItem("bible_font", String(n)).catch(() => {}); };
+  const decFont = () => { const n = Math.max(0, fontIdx - 1); setFontIdx(n); AsyncStorage.setItem("bible_font", String(n)).catch(() => {}); };
   const goChapter = (c: number) => { setPicker(false); if (data) loadChapter(data.book_nr, c); };
   const fs = FONT_SIZES[fontIdx];
 
   const verseText = (n: number) => (data?.verses.find((v: any) => v.verse === n)?.text) || "";
   const refOf = (n: number) => `${data?.book_name} ${data?.chapter}:${n}`;
-  const onLongPress = (verse: number) => { if (!user) { setLoginPrompt(true); return; } setSelected(verse); };
+  const openPanel = (verse: number) => { if (!user) { setLoginPrompt(true); return; } setSelected(verse); };
 
   const setHighlight = async (color: string) => {
     if (selected == null || !data) return;
@@ -138,7 +135,10 @@ export default function BibleReader() {
             <Text style={styles.title}>{data ? `${data.book_name} ${data.chapter}` : "Bibbia"}</Text>
             <Ionicons name="chevron-down" size={16} color={colors.white} />
           </PressableScale>
-          <PressableScale testID="font-toggle" onPress={changeFont} style={styles.iconBtn}><Text style={styles.aA}>A</Text></PressableScale>
+          <View style={styles.fontBtns}>
+            <PressableScale testID="font-dec" onPress={decFont} style={styles.iconBtnSm}><Text style={styles.aA}>−</Text></PressableScale>
+            <PressableScale testID="font-inc" onPress={incFont} style={styles.iconBtnSm}><Text style={styles.aA}>+</Text></PressableScale>
+          </View>
         </View>
       </View>
 
@@ -151,13 +151,15 @@ export default function BibleReader() {
             const note = notes[v.verse];
             const bg = bm ? HL_COLORS[bm.color] || HL_COLORS.yellow : ((hlStart != null && v.verse >= hlStart && v.verse <= (hlEnd ?? hlStart)) ? colors.brandTertiary : undefined);
             return (
-              <Pressable key={v.verse} onLongPress={() => onLongPress(v.verse)} delayLongPress={250}
+              <View key={v.verse}
                 onLayout={(e) => { versePos.current[v.verse] = e.nativeEvent.layout.y; }}
                 style={[styles.verseRow, bg ? { backgroundColor: bg } : null]}>
-                <Text style={[styles.vnum, { fontSize: fs - 5 }]}>{v.verse}</Text>
+                <Pressable testID={`verse-num-${v.verse}`} onPress={() => openPanel(v.verse)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text style={[styles.vnum, { fontSize: fs - 5 }, bg ? { color: colors.navy } : null]}>{v.verse}</Text>
+                </Pressable>
                 <Text style={[styles.vtext, { fontSize: fs, lineHeight: fs * 1.55 }, bg ? { color: colors.navy } : null]}>{v.text}</Text>
                 {note ? <Ionicons name="document-text" size={14} color={colors.brandPrimary} style={{ marginTop: 3 }} /> : null}
-              </Pressable>
+              </View>
             );
           })}
 
@@ -241,7 +243,7 @@ export default function BibleReader() {
           <Pressable style={styles.sheet} onPress={() => {}}>
             <Ionicons name="bookmark" size={28} color={colors.brandPrimary} style={{ alignSelf: "center" }} />
             <Text style={[styles.sheetTitle, { textAlign: "center", marginTop: spacing.sm }]}>Accedi per salvare</Text>
-            <Text style={[styles.sheetVerse, { textAlign: "center" }]}>Crea un account per evidenziare versetti, salvarli nei preferiti e aggiungere note personali.</Text>
+            <Text style={[styles.sheetVerse, { textAlign: "center" }]}>Crea un account per evidenziare versetti e aggiungere note personali.</Text>
             <PressableScale style={[styles.sheetAction, { justifyContent: "center", marginTop: spacing.md }]} onPress={() => { setLoginPrompt(false); router.push("/profilo"); }}>
               <Text style={styles.sheetActionText}>Accedi / Registrati</Text>
             </PressableScale>
@@ -259,6 +261,8 @@ const styles = StyleSheet.create({
   topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   iconBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.12)", alignItems: "center", justifyContent: "center" },
   aA: { color: colors.white, fontSize: 18, fontWeight: "800" },
+  fontBtns: { flexDirection: "row", gap: 6 },
+  iconBtnSm: { width: 34, height: 34, borderRadius: 17, backgroundColor: "rgba(255,255,255,0.12)", alignItems: "center", justifyContent: "center" },
   titleBtn: { flexDirection: "row", alignItems: "center", gap: 4 },
   title: { color: colors.white, fontSize: 18, fontWeight: "800" },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },

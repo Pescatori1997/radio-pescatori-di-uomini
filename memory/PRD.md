@@ -375,3 +375,10 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Admin: dettaglio messaggio ora mostra l'email del mittente.
 - Rimosso il dict fisso non più usato; le push reali si vedono solo su build nativa/PWA con push abilitate.
 - Verificato: POST /contact → appare in /admin/messages con email e source.
+
+## Bibbia: UX evidenziazione (2026-06)
+- Pannello azioni (evidenzia/nota/condividi) ora si apre col TAP sul NUMERO del versetto (`verse-num-{n}`), non più con long-press. Riga versetto convertita da Pressable a View + numero tappabile.
+- Header lettore: sostituita la "A" con due pulsanti +/− (`font-inc`/`font-dec`, clamp su FONT_SIZES).
+- Sezione salvati (`lettore/salvati.tsx`): "Preferiti" → "Evidenziati" (titolo pagina "Evidenziati e note" + tab). Testi aggiornati (empty/login) → "clicca sul numero del versetto per evidenziarlo". Aggiunto pulsante elimina (cestino) per rimuovere evidenziato/nota direttamente dalla lista senza aprire il capitolo (api.bibleDeleteBookmark/DeleteNote + update stato).
+- Testo prompt login lettore aggiornato (rimosso "salvarli nei preferiti").
+- Verificato: tap sul numero apre pannello; +/− ridimensionano; testi aggiornati.
