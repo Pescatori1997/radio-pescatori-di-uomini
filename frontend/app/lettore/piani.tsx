@@ -56,26 +56,23 @@ export default function ReadingPlans() {
               <Text style={styles.section}>I miei piani</Text>
               {mine.map((p, i) => (
                 <Animated.View key={p.id} entering={FadeInDown.delay(i * 40)}>
-                  <PressableScale testID={`my-plan-${p.id}`} style={styles.myCard} onPress={() => router.push(`/lettore/piano/${p.id}`)}>
-                    <View style={styles.coverWrap}>
+                  <PressableScale testID={`my-plan-${p.id}`} style={styles.myRow} onPress={() => router.push(`/lettore/piano/${p.id}`)}>
+                    <View style={styles.thumb}>
                       {p.cover ? (
                         <Image source={{ uri: p.cover }} style={StyleSheet.absoluteFill} contentFit="cover" />
                       ) : (
-                        <View style={[StyleSheet.absoluteFill, styles.coverEmpty]}><Ionicons name="book" size={40} color="rgba(255,255,255,0.5)" /></View>
+                        <View style={[StyleSheet.absoluteFill, styles.coverEmpty]}><Ionicons name="book" size={24} color="rgba(255,255,255,0.5)" /></View>
                       )}
-                      <LinearGradient colors={["rgba(10,17,40,0.05)", "rgba(10,17,40,0.85)"]} style={StyleSheet.absoluteFill} />
-                      <View style={styles.coverTopRow}>
-                        {p.progress?.status === "completed" ? <View style={styles.doneBadge}><Ionicons name="checkmark" size={14} color={colors.white} /></View> : <View />}
-                        <PressableScale testID={`my-plan-share-${p.id}`} onPress={() => setSharePlan(p)} hitSlop={8} style={styles.shareIconDark}><Ionicons name="share-social" size={16} color={colors.white} /></PressableScale>
-                      </View>
-                      <Text style={styles.coverTitle} numberOfLines={2}>{p.title}</Text>
+                      {p.progress?.status === "completed" && <View style={styles.doneBadgeSm}><Ionicons name="checkmark" size={12} color={colors.white} /></View>}
                     </View>
-                    <View style={styles.myBody}>
-                      <View style={styles.progressTrack}>
-                        <View style={[styles.progressFill, { width: `${p.progress?.percent || 0}%` }]} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.myRowTitle} numberOfLines={2}>{p.title}</Text>
+                      <View style={styles.progressTrackSm}>
+                        <View style={[styles.progressFillSm, { width: `${p.progress?.percent || 0}%` }]} />
                       </View>
-                      <Text style={styles.progressText}>{p.progress?.completed_count || 0}/{p.progress?.duration_days || p.duration_days} giorni · {p.progress?.percent || 0}%</Text>
+                      <Text style={styles.progressTextSm}>{p.progress?.completed_count || 0}/{p.progress?.duration_days || p.duration_days} giorni · {p.progress?.percent || 0}%</Text>
                     </View>
+                    <PressableScale testID={`my-plan-share-${p.id}`} onPress={() => setSharePlan(p)} hitSlop={8} style={styles.shareIconLight}><Ionicons name="share-social" size={18} color={colors.muted} /></PressableScale>
                   </PressableScale>
                 </Animated.View>
               ))}
@@ -139,6 +136,14 @@ const styles = StyleSheet.create({
   shareIconDark: { width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(0,0,0,0.35)", alignItems: "center", justifyContent: "center" },
   progressTrack: { height: 8, borderRadius: 4, backgroundColor: "rgba(255,255,255,0.15)", overflow: "hidden" },
   progressFill: { height: 8, borderRadius: 4, backgroundColor: colors.brandPrimary },
+  myRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginBottom: spacing.md },
+  thumb: { width: 76, height: 76, borderRadius: radius.md, overflow: "hidden", backgroundColor: colors.navy },
+  doneBadgeSm: { position: "absolute", top: 4, right: 4, width: 20, height: 20, borderRadius: 10, backgroundColor: "#22C55E", alignItems: "center", justifyContent: "center" },
+  myRowTitle: { color: colors.onSurface, fontSize: 17, fontWeight: "800", lineHeight: 21 },
+  progressTrackSm: { height: 6, borderRadius: 3, backgroundColor: colors.border, overflow: "hidden", marginTop: 8, maxWidth: 180 },
+  progressFillSm: { height: 6, borderRadius: 3, backgroundColor: colors.brandPrimary },
+  progressTextSm: { color: colors.onSurfaceTertiary, fontSize: 12, marginTop: 4 },
+  shareIconLight: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceSecondary },
   progressText: { color: colors.brandSecondary, fontSize: 12, fontWeight: "700", marginTop: spacing.sm },
   card: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
   cardBody: { padding: spacing.lg, paddingTop: spacing.md },

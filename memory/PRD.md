@@ -395,3 +395,6 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Fallimento invio email → 400 (non 502) così il JSON sopravvive all'ingress Cloudflare. Frontend `reset-password.tsx`: rimosso l'auto-fill del codice, catch robusto per body non-JSON.
 - `EMERGENT_EMAIL_KEY` provisionata in `/app/backend/.env`.
 - Verificato dal testing_agent (iter 43+44): 404 messaggio, nessun `code` in risposta, flusso completo reset+login, UI (unregistered mostra messaggio pulito, registered avanza con campo codice VUOTO). Test: `/app/backend/tests/test_password_reset_security.py`.
+
+## Piani biblici: lista "I miei piani" compatta (2026-06)
+- `app/lettore/piani.tsx`: sezione "I miei piani" convertita da card grandi 16:9 a righe compatte (thumbnail quadrata 76px a sinistra + titolo + barra progresso + share), per ridurre lo scroll. Aggiunti stili myRow/thumb/doneBadgeSm/myRowTitle/progressTrackSm/progressFillSm/progressTextSm/shareIconLight. La lista "Piani disponibili" (discover) è rimasta invariata come richiesto.
