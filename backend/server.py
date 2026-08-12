@@ -858,9 +858,24 @@ async def create_message(body: MessageIn):
 
 @api_router.post("/contact")
 async def contact(body: ContactMessage):
-    doc = {"id": new_id("ct"), "name": body.name, "email": body.email,
-           "message": body.message, "created_at": now_utc().isoformat()}
-    await db.contact_messages.insert_one(dict(doc))
+    # Store in the unified `messages` collection so it shows up in the admin
+    # "Messaggi e testimonianze" section (was previously in a separate collection).
+    doc = {"id": new_id("msg"), "text": body.message, "name": body.name, "email": body.email,
+           "type": "message", "source": "contact", "status": "new",
+           "created_at": now_utc().isoformat()}
+    await db.messages.insert_one(dict(doc))
+    # Notify administrators via push (native + web).
+    try:
+        preview = (body.message or "").strip().replace("\n", " ")
+        if len(preview) > 80:
+            preview = preview[:80] + "…"
+        await notify_admins(
+            title=f"Nuovo messaggio da {body.name}",
+            message=preview or "Hai ricevuto un nuovo messaggio dai contatti.",
+            action_url="/admin/messages",
+        )
+    except Exception as e:
+        logger.warning("Notifica admin contatto non inviata: %s", e)
     return {"ok": True}
 
 
@@ -3441,6 +3456,36 @@ async def notify_category(category: str, title: str, message: str, action_url: O
         "created_at": now_utc(),
     })
     return len(recipients)
+
+
+async def notify_admins(title: str, message: str, action_url: Optional[str] = None) -> int:
+    """Send a push (native + web) to administrators / users with the messages
+    permission. Used e.g. when a new contact message arrives. Never raises."""
+    users = await db.users.find(
+        {"status": {"$ne": "suspended"}, "$or": [
+            {"role": "administrator"}, {"role": "admin"}, {"permissions": "messages"},
+        ]},
+        {"_id": 0, "user_id": 1},
+    ).to_list(1000)
+    ids = [u["user_id"] for u in users if u.get("user_id")]
+    if not ids:
+        return 0
+    data = {"title": title, "message": message}
+    if action_url:
+        data["action_url"] = action_url
+    try:
+        await send_push(ids, data, idempotency_key=new_id("ntf"))
+    except Exception as e:
+        logger.warning("Admin push non inviata: %s", e)
+    try:
+        await send_web_push(ids, data)
+    except Exception as e:
+        logger.warning("Admin web push non inviata: %s", e)
+    await db.notifications_log.insert_one({
+        "id": new_id("nlog"), "category": "admin", "title": title, "message": message,
+        "action_url": action_url, "recipients": len(ids), "status": "sent", "created_at": now_utc(),
+    })
+    return len(ids)
 
 
 # ---- Web Push (PWA / VAPID) — standard self-hosted push for the installed web app ----

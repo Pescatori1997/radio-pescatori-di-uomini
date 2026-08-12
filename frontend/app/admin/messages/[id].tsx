@@ -49,6 +49,7 @@ export default function MessageDetail() {
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: insets.bottom + 40 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <View style={styles.card}>
           <Text style={styles.from}>{m?.name || "Senza nome"}</Text>
+          {!!m?.email && <Text style={styles.email}>{m.email}</Text>}
           <Text style={styles.date}>{m?.created_at ? new Date(m.created_at).toLocaleString("it-IT") : ""}</Text>
         </View>
 
@@ -91,6 +92,7 @@ const styles = StyleSheet.create({
   headerTitle: { color: colors.white, fontSize: 18, fontWeight: "800" },
   card: { backgroundColor: ADMIN.card, borderRadius: radius.md, padding: spacing.lg, borderWidth: 1, borderColor: ADMIN.border },
   from: { color: colors.white, fontSize: 16, fontWeight: "800" },
+  email: { color: colors.brandSecondary, fontSize: 13, fontWeight: "600", marginTop: 2 },
   date: { color: ADMIN.muted, fontSize: 12, marginTop: 2 },
   section: { color: ADMIN.muted, fontSize: 13, fontWeight: "700", marginTop: spacing.lg, marginBottom: spacing.sm },
   hint: { color: colors.brandSecondary, fontSize: 12, marginBottom: spacing.sm },

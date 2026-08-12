@@ -368,3 +368,10 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Admin: nuova pagina `app/admin/donate-config.tsx` ("Sostieni il Progetto" nel menu) per modificare tutto; salva via `adminUpdateSettings({donate_config})`. Gestione piani mensili dinamici (aggiungi/elimina, importo/etichetta/descrizione).
 - Backend: `donate_config` aggiunto a GeneralSettings (servito da /settings e /admin/settings). Piani mensili Stripe ora derivati da qualunque importo (`_plan_cents`), non più dal dict fisso MONTHLY_PLANS (rimosso). `_get_or_create_monthly_price` e `/donations/subscribe` aggiornati con validazione €1–€5000.
 - Verificato: pagina donate riflette config personalizzata (titolo/testi/presets/default/mensili) via screenshot; lettura da /settings pubblico.
+
+## Fix Contatti → Messaggi admin + notifica push admin (2026-06)
+- Causa: `/contact` scriveva in `contact_messages`, ma l'admin legge `messages`. Ora `/contact` salva in `db.messages` (type "message", campi text/name/email/status/source="contact"), così compare in "Messaggi e testimonianze".
+- Notifica push admin: nuova `notify_admins(title,message,action_url)` (send_push + send_web_push) verso utenti role administrator/admin o con permesso "messages". Chiamata su nuovo messaggio contatti (action_url /admin/messages). Logga in notifications_log; non solleva mai.
+- Admin: dettaglio messaggio ora mostra l'email del mittente.
+- Rimosso il dict fisso non più usato; le push reali si vedono solo su build nativa/PWA con push abilitate.
+- Verificato: POST /contact → appare in /admin/messages con email e source.
