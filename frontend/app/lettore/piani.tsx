@@ -85,27 +85,22 @@ export default function ReadingPlans() {
           )}
           {notEnrolled.map((p, i) => (
             <Animated.View key={p.id} entering={FadeInDown.delay(i * 40)}>
-              <PressableScale testID={`plan-${p.id}`} style={styles.card} onPress={() => router.push(`/lettore/piano/${p.id}`)}>
-                <View style={styles.coverWrap}>
+              <PressableScale testID={`plan-${p.id}`} style={styles.myRow} onPress={() => router.push(`/lettore/piano/${p.id}`)}>
+                <View style={styles.thumb}>
                   {p.cover ? (
                     <Image source={{ uri: p.cover }} style={StyleSheet.absoluteFill} contentFit="cover" />
                   ) : (
-                    <View style={[StyleSheet.absoluteFill, styles.coverEmpty]}><Ionicons name="book" size={40} color="rgba(255,255,255,0.5)" /></View>
+                    <View style={[StyleSheet.absoluteFill, styles.coverEmpty]}><Ionicons name="book" size={24} color="rgba(255,255,255,0.5)" /></View>
                   )}
-                  <LinearGradient colors={["rgba(10,17,40,0.05)", "rgba(10,17,40,0.85)"]} style={StyleSheet.absoluteFill} />
-                  <View style={styles.coverTopRow}>
-                    <View />
-                    <PressableScale testID={`plan-share-${p.id}`} onPress={() => setSharePlan(p)} hitSlop={8} style={styles.shareIconDark}><Ionicons name="share-social" size={16} color={colors.white} /></PressableScale>
-                  </View>
-                  <Text style={styles.coverTitle} numberOfLines={2}>{p.title}</Text>
                 </View>
-                <View style={styles.cardBody}>
-                  {!!p.subtitle && <Text style={styles.cardSub} numberOfLines={2}>{p.subtitle}</Text>}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.myRowTitle} numberOfLines={2}>{p.title}</Text>
                   <View style={styles.metaRow}>
                     <View style={styles.pill}><Ionicons name="calendar-outline" size={12} color={colors.onBrandTertiary} /><Text style={styles.pillText}>{p.duration_days} giorni</Text></View>
                     {!!p.category && <View style={styles.pill}><Text style={styles.pillText}>{p.category}</Text></View>}
                   </View>
                 </View>
+                <PressableScale testID={`plan-share-${p.id}`} onPress={() => setSharePlan(p)} hitSlop={8} style={styles.shareIconLight}><Ionicons name="share-social" size={18} color={colors.muted} /></PressableScale>
               </PressableScale>
             </Animated.View>
           ))}

@@ -26,7 +26,7 @@ export default function ResetPassword() {
       setStep("reset");
     } catch (e: any) {
       const msg = String(e?.message || "");
-      setError(msg && !msg.includes("<") && msg.length < 160 ? msg : "Impossibile inviare l'email in questo momento. Riprova più tardi.");
+      setError(msg && !msg.includes("<") && msg.length < 160 ? msg : "Si è verificato un problema. Riprova più tardi.");
     } finally { setBusy(false); }
   };
 

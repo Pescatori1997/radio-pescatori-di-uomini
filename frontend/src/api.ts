@@ -173,14 +173,28 @@ async function request(path: string, options: RequestInit = {}, auth = false) {
     ...(options.headers as Record<string, string>),
   };
   if (auth) Object.assign(headers, await authHeaders());
-  const res = await fetch(`${BASE}/api${path}`, { ...options, headers });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}/api${path}`, { ...options, headers });
+  } catch {
+    // Network unreachable / DNS / offline
+    throw new Error("Nessuna connessione al server. Controlla la rete e riprova.");
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    let detail = text;
+    let detail: string | undefined;
     try {
       detail = JSON.parse(text).detail;
     } catch {}
-    throw new Error(detail || `Errore ${res.status}`);
+    // Gateway / infra errors return an HTML page (no JSON detail): the backend was
+    // momentarily unreachable/restarting — surface that instead of a misleading message.
+    if (!detail) {
+      if (res.status === 502 || res.status === 503 || res.status === 504) {
+        throw new Error("Server momentaneamente non raggiungibile. Riprova tra qualche secondo.");
+      }
+      throw new Error(`Errore ${res.status}`);
+    }
+    throw new Error(detail);
   }
   return absolutizeImages(await res.json());
 }

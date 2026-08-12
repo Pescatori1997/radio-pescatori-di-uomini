@@ -398,3 +398,10 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 
 ## Piani biblici: lista "I miei piani" compatta (2026-06)
 - `app/lettore/piani.tsx`: sezione "I miei piani" convertita da card grandi 16:9 a righe compatte (thumbnail quadrata 76px a sinistra + titolo + barra progresso + share), per ridurre lo scroll. Aggiunti stili myRow/thumb/doneBadgeSm/myRowTitle/progressTrackSm/progressFillSm/progressTextSm/shareIconLight. La lista "Piani disponibili" (discover) è rimasta invariata come richiesto.
+
+## Fixed (2026-06, session fork — Reset password "Impossibile inviare l'email")
+- SINTOMO: la schermata "Password dimenticata" mostrava SEMPRE "Impossibile inviare l'email in questo momento" all'utente.
+- CAUSA REALE: NON era l'email. Il backend nel fork restituiva momentaneamente 502 Bad Gateway (reload/avvio); `request()` in api.ts e reset-password.tsx mascheravano QUALSIASI risposta HTML/gateway con il messaggio generico dell'email → fuorviante. `EMERGENT_EMAIL_KEY` è valida e l'endpoint Resend accetta (202 → delivered:true).
+- FIX: `src/api.ts` `request()` ora distingue: fetch fallita → "Nessuna connessione al server..."; 502/503/504 → "Server momentaneamente non raggiungibile. Riprova tra qualche secondo."; altrimenti usa il detail JSON reale. `reset-password.tsx` fallback generico neutro ("Si è verificato un problema...").
+- Verificato: POST /api/auth/forgot-password → 200 {delivered:true} via localhost e URL preview; Resend 202.
+- NOTA: su build DEPLOYATA serve `EMERGENT_EMAIL_KEY` nei secrets del deployment, altrimenti l'invio fallisce in produzione.
