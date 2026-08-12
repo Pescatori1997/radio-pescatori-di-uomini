@@ -1673,6 +1673,7 @@ async def me_achievements(authorization: Optional[str] = Header(None)):
     counts = await _user_metric_counts(uid)
     manual = {r["achievement_id"]: r for r in await db.user_achievements.find({"user_id": uid}, {"_id": 0}).to_list(500)}
     out = []
+    newly_earned = []
     for a in defs:
         metric = a.get("metric", "manual")
         cnt = counts.get(metric, 0)
@@ -1681,23 +1682,39 @@ async def me_achievements(authorization: Optional[str] = Header(None)):
             earned = a["id"] in manual
             earned_at = manual.get(a["id"], {}).get("earned_at")
         else:
-            earned = cnt >= (a.get("threshold") or 1)
-            if earned:
-                rec = manual.get(a["id"])
-                if rec:
-                    earned_at = rec.get("earned_at")
-                else:
-                    earned_at = now_utc().isoformat()
-                    await db.user_achievements.update_one(
-                        {"user_id": uid, "achievement_id": a["id"]},
-                        {"$setOnInsert": {"user_id": uid, "achievement_id": a["id"], "earned_at": earned_at, "auto": True}},
-                        upsert=True)
+            rec = manual.get(a["id"])
+            if rec:
+                # Once earned, a medal is permanent — never revoked even if the
+                # underlying count later drops (e.g. the user un-highlights verses).
+                earned = True
+                earned_at = rec.get("earned_at")
+            elif cnt >= (a.get("threshold") or 1):
+                earned = True
+                earned_at = now_utc().isoformat()
+                res = await db.user_achievements.update_one(
+                    {"user_id": uid, "achievement_id": a["id"]},
+                    {"$setOnInsert": {"user_id": uid, "achievement_id": a["id"], "earned_at": earned_at, "auto": True}},
+                    upsert=True)
+                if res.upserted_id is not None:
+                    newly_earned.append(a)
         a2 = dict(a)
         a2["earned"] = earned
         a2["earned_at"] = earned_at
         a2["count"] = cnt
-        a2["progress"] = (100 if earned else 0) if metric == "manual" else min(100, int(cnt * 100 / (a.get("threshold") or 1)))
+        a2["progress"] = 100 if earned else (0 if metric == "manual" else min(100, int(cnt * 100 / (a.get("threshold") or 1))))
         out.append(a2)
+    # Fire a personal push for each medal unlocked in this pass (once only:
+    # guarded by the immutable $setOnInsert record above).
+    for a in newly_earned:
+        try:
+            await notify_user(
+                uid,
+                "🏅 Nuovo traguardo sbloccato!",
+                f"Hai ottenuto la medaglia \"{a.get('title', '')}\". Il tuo cammino continua!",
+                action_url="/traguardi",
+            )
+        except Exception as e:
+            logger.warning("Achievement push non inviata: %s", e)
     return {"settings": settings, "achievements": out, "counts": counts, "earned_count": sum(1 for x in out if x["earned"])}
 
 
@@ -3507,6 +3524,23 @@ async def notify_admins(title: str, message: str, action_url: Optional[str] = No
         "action_url": action_url, "recipients": len(ids), "status": "sent", "created_at": now_utc(),
     })
     return len(ids)
+
+
+async def notify_user(uid: str, title: str, message: str, action_url: Optional[str] = None) -> None:
+    """Send a personal push (native + web) to a single user. Never raises."""
+    if not uid:
+        return
+    data = {"title": title, "message": message}
+    if action_url:
+        data["action_url"] = action_url
+    try:
+        await send_push([uid], data, idempotency_key=new_id("ntf"))
+    except Exception as e:
+        logger.warning("User push non inviata (%s): %s", uid, e)
+    try:
+        await send_web_push([uid], data)
+    except Exception as e:
+        logger.warning("User web push non inviata (%s): %s", uid, e)
 
 
 # ---- Web Push (PWA / VAPID) — standard self-hosted push for the installed web app ----

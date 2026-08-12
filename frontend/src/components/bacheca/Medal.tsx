@@ -58,8 +58,8 @@ export default function Medal({
       </View>
 
       {/* medal disc */}
-      <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
-        {earned && <View style={[styles.glow, { width: size + 14, height: size + 14, borderRadius: (size + 14) / 2, backgroundColor: t.glow }]} />}
+      <View style={{ width: size + 14, height: size + 14, alignItems: "center", justifyContent: "center" }}>
+        {earned && <View style={[styles.glow, StyleSheet.absoluteFillObject, { borderRadius: (size + 14) / 2, backgroundColor: t.glow }]} />}
         <View style={[styles.ring, { width: size, height: size, borderRadius: size / 2, borderColor: earned ? t.edge : "#4B5563" }]}>
           <LinearGradient
             colors={earned ? t.ring : ["#9AA3AF", "#5B6472"]}

@@ -78,8 +78,8 @@ export default function MedalDetailOverlay({ a, onClose }: { a: Achievement; onC
             <Animated.View style={[styles.faceWrap, frontStyle]}>
               <Face>
                 <View style={[styles.catPill, { backgroundColor: t.edge }]}><Text style={styles.catPillText}>{a.category}</Text></View>
-                <View style={{ alignItems: "center", marginTop: 10 }}>
-                  {earned && <View style={[styles.bigGlow, { backgroundColor: t.glow, width: W * 0.72, height: W * 0.72, borderRadius: W * 0.36 }]} />}
+                <View style={{ alignItems: "center", justifyContent: "center", marginTop: 10, width: W * 0.72, height: W * 0.72 }}>
+                  {earned && <View style={[styles.bigGlow, StyleSheet.absoluteFillObject, { backgroundColor: t.glow, borderRadius: W * 0.36 }]} />}
                   <View style={[styles.bigRing, { width: W * 0.62, height: W * 0.62, borderRadius: W * 0.31, borderColor: earned ? t.edge : "#9CA3AF" }]}>
                     <LinearGradient colors={earned ? t.ring : ["#B6BDC8", "#6B7280"]} start={{ x: 0.2, y: 0 }} end={{ x: 0.8, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: W * 0.31 }]} />
                     <View style={[styles.bigDisc, { width: inner, height: inner, borderRadius: inner / 2 }]}>
@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
   },
   catPill: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 999 },
   catPillText: { color: "#FFF9EC", fontSize: 11, fontWeight: "800", letterSpacing: 0.6 },
-  bigGlow: { position: "absolute", top: 6 },
+  bigGlow: { position: "absolute" },
   bigRing: { alignItems: "center", justifyContent: "center", borderWidth: 4, overflow: "hidden", shadowColor: "#000", shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 8 } },
   bigDisc: { backgroundColor: "#FFF", alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "rgba(0,0,0,0.1)" },
   lockBig: { backgroundColor: "rgba(20,20,25,0.4)", alignItems: "center", justifyContent: "center" },
