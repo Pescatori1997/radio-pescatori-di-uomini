@@ -36,6 +36,7 @@ const NAV = [
   { key: "prayer", label: "Richieste di Preghiera", icon: "hands-pray", route: "/admin/prayers", perm: "prayers" },
   { key: "messages", label: "Messaggi & Testimonianze", icon: "message-text", route: "/admin/messages", perm: "messages" },
   { key: "donations", label: "Donazioni", icon: "gift", route: "/admin/donations", perm: null },
+  { key: "donate_config", label: "Sostieni il Progetto", icon: "hand-heart", route: "/admin/donate-config", perm: null },
   { key: "finance", label: "Trasparenza Economica", icon: "chart-box", route: "/admin/finance", perm: "finance" },
   { key: "notifications", label: "Notifiche", icon: "bell-ring", route: "/admin/notifications", perm: null },
   { key: "reports", label: "Segnalazioni", icon: "message-alert", route: "/admin/reports", perm: null },

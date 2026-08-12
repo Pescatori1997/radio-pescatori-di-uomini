@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Platform, ActivityIndicator, Alert } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -7,14 +7,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as WebBrowser from "expo-web-browser";
 import { api } from "@/src/api";
 import PressableScale from "@/src/components/PressableScale";
+import { DEFAULT_DONATE, mergeDonate, DonateConfig } from "@/src/donateConfig";
 import { colors, spacing, radius } from "@/src/theme";
-
-const PRESETS = [5, 10, 25, 50, 100];
-const MONTHLY = [
-  { plan: "5", label: "5€", desc: "Un piccolo gesto costante" },
-  { plan: "10", label: "10€", desc: "Il sostegno più scelto" },
-  { plan: "20", label: "20€", desc: "Aiuti a crescere la missione" },
-];
 
 function appOrigin(): string {
   if (Platform.OS === "web" && typeof window !== "undefined") return window.location.origin;
@@ -24,12 +18,21 @@ function appOrigin(): string {
 export default function Donate() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [amount, setAmount] = useState<number>(10);
+  const [cfg, setCfg] = useState<DonateConfig>(DEFAULT_DONATE);
+  const [amount, setAmount] = useState<number>(DEFAULT_DONATE.default_amount);
   const [custom, setCustom] = useState("");
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [subLoading, setSubLoading] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.settings().then((s: any) => {
+      const merged = mergeDonate(s?.donate_config);
+      setCfg(merged);
+      setAmount(merged.default_amount);
+    }).catch(() => {});
+  }, []);
 
   const effectiveAmount = custom ? parseFloat(custom.replace(",", ".")) : amount;
   const valid = !!effectiveAmount && effectiveAmount >= 1 && effectiveAmount <= 5000;
@@ -87,17 +90,15 @@ export default function Donate() {
         <LinearGradient colors={[colors.navy, colors.navySoft]} style={[styles.hero, { paddingTop: insets.top + spacing.md }]}>
           <Pressable testID="donate-back" onPress={() => router.back()} hitSlop={12}><Ionicons name="arrow-back" size={24} color={colors.white} /></Pressable>
           <View style={styles.heartCircle}><Ionicons name="gift" size={34} color={colors.white} /></View>
-          <Text style={styles.title}>Sostieni Pescatori di Uomini</Text>
-          <Text style={styles.subtitle}>Un progetto senza scopo di lucro, sostenuto dalle offerte.</Text>
+          <Text style={styles.title}>{cfg.title}</Text>
+          <Text style={styles.subtitle}>{cfg.subtitle}</Text>
         </LinearGradient>
 
-        <Text style={styles.body}>
-          Ogni contenuto, ogni diretta e ogni podcast sono resi possibili grazie alla generosità di chi crede in questa missione. Il tuo sostegno ci permette di continuare ad annunciare il Vangelo.
-        </Text>
+        <Text style={styles.body}>{cfg.body}</Text>
 
-        <Text style={styles.sectionTitle}>Scegli un importo</Text>
+        <Text style={styles.sectionTitle}>{cfg.amounts_title}</Text>
         <View style={styles.amounts}>
-          {PRESETS.map((a) => {
+          {cfg.presets.map((a) => {
             const active = !custom && amount === a;
             return (
               <Pressable key={a} testID={`donate-${a}`} onPress={() => selectPreset(a)} style={[styles.amountChip, active && styles.amountChipActive]}>
@@ -120,7 +121,7 @@ export default function Donate() {
           />
         </View>
 
-        <Text style={styles.sectionTitle}>Il tuo messaggio (facoltativo)</Text>
+        <Text style={styles.sectionTitle}>{cfg.message_title}</Text>
         <TextInput
           testID="donate-name"
           value={name}
@@ -149,18 +150,19 @@ export default function Donate() {
         </PressableScale>
         <View style={styles.secureRow}>
           <Ionicons name="lock-closed" size={13} color={colors.muted} />
-          <Text style={styles.note}>Pagamento sicuro con Stripe. Nessun dato della carta viene salvato.</Text>
+          <Text style={styles.note}>{cfg.secure_note}</Text>
         </View>
 
+        {cfg.monthly_enabled && cfg.monthly_plans.length > 0 && (
         <View style={styles.monthlyCard}>
           <View style={styles.monthlyHeader}>
             <View style={styles.monthlyIcon}><Ionicons name="repeat" size={20} color={colors.white} /></View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.monthlyTitle}>Sostieni la radio ogni mese</Text>
-              <Text style={styles.monthlySub}>Con una piccola offerta mensile ci aiuti a pianificare e a portare avanti la missione con continuità. Puoi annullare quando vuoi.</Text>
+              <Text style={styles.monthlyTitle}>{cfg.monthly_title}</Text>
+              <Text style={styles.monthlySub}>{cfg.monthly_sub}</Text>
             </View>
           </View>
-          {MONTHLY.map((m) => (
+          {cfg.monthly_plans.map((m) => (
             <PressableScale
               key={m.plan}
               testID={`donate-monthly-${m.plan}`}
@@ -178,6 +180,7 @@ export default function Donate() {
             </PressableScale>
           ))}
         </View>
+        )}
       </ScrollView>
     </View>
   );

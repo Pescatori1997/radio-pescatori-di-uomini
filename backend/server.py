@@ -2440,6 +2440,7 @@ class GeneralSettings(BaseModel):
     section_visibility: Optional[Dict[str, bool]] = None
     # Home layout personalization: ordered list of { key, width, size }.
     home_layout: Optional[List[Dict[str, Any]]] = None
+    donate_config: Optional[Dict[str, Any]] = None
 
 
 # Canonical toggleable sections. Everything defaults ON except Merchandising,
@@ -2643,16 +2644,27 @@ if STRIPE_API_KEY:
     stripe_sdk.api_key = STRIPE_API_KEY
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 
-# Monthly donation plans (EUR/month) -> Stripe recurring prices, provisioned lazily & idempotently.
-MONTHLY_PLANS = {"5": 500, "10": 1000, "20": 2000}
+# Monthly donation plans -> Stripe recurring prices, provisioned lazily & idempotently.
+# Any euro amount is accepted (admin-configurable); the price is derived from the plan.
 _price_cache: Dict[str, str] = {}
+
+
+def _plan_cents(plan: str) -> int:
+    try:
+        return int(round(float(str(plan).replace(",", ".")) * 100))
+    except Exception:
+        return 0
 
 
 async def _get_or_create_monthly_price(plan: str) -> str:
     """Return the Stripe Price ID for a monthly plan, creating Product+Price once (idempotent via lookup_key)."""
     if plan in _price_cache:
         return _price_cache[plan]
-    lookup = f"pdu_monthly_{plan}"
+    cents = _plan_cents(plan)
+    if cents < 100 or cents > 500000:
+        raise HTTPException(status_code=400, detail="Importo mensile non valido")
+    safe = re.sub(r"[^0-9a-zA-Z]", "_", str(plan))
+    lookup = f"pdu_monthly_{safe}"
 
     def _work():
         found = stripe_sdk.Price.list(lookup_keys=[lookup], active=True, limit=1)
@@ -2660,7 +2672,7 @@ async def _get_or_create_monthly_price(plan: str) -> str:
             return found.data[0].id
         product = stripe_sdk.Product.create(name=f"Sostegno mensile €{plan}/mese - Pescatori di Uomini")
         price = stripe_sdk.Price.create(
-            product=product.id, unit_amount=MONTHLY_PLANS[plan], currency="eur",
+            product=product.id, unit_amount=cents, currency="eur",
             recurring={"interval": "month"}, lookup_key=lookup,
         )
         return price.id
@@ -2892,7 +2904,7 @@ async def create_subscription_checkout(body: SubscribeIn, request: Request,
                                        authorization: Optional[str] = Header(None)):
     if not STRIPE_API_KEY:
         raise HTTPException(status_code=503, detail="Donazioni non configurate")
-    if body.plan not in MONTHLY_PLANS:
+    if _plan_cents(body.plan) < 100 or _plan_cents(body.plan) > 500000:
         raise HTTPException(status_code=400, detail="Piano non valido")
     user = await get_optional_user(authorization)
     origin = body.origin_url.rstrip("/")
@@ -2923,7 +2935,7 @@ async def create_subscription_checkout(body: SubscribeIn, request: Request,
         "id": new_id("don"), "session_id": session.id,
         "user_id": user["user_id"] if user else None,
         "donor_email": body.donor_email or (user.get("email") if user else None),
-        "amount": MONTHLY_PLANS[body.plan] / 100, "currency": "eur",
+        "amount": _plan_cents(body.plan) / 100, "currency": "eur",
         "frequency": "monthly", "plan": body.plan,
         "payment_status": "initiated", "status": "open", "processed": False,
         "created_at": now_utc(), "updated_at": now_utc(),

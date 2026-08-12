@@ -361,3 +361,10 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - API frontend: crewRanks, adminCrewRanks, adminCreateRank/EditRank/DeleteRank.
 - Default seed: gradi "Responsabili"(1) e "Collaboratori"(2); Luigi Volpe → Responsabili (modificabili/eliminabili dall'admin).
 - Verificato: griglia render (tile foto+nome+ruolo), round-trip API gradi completo.
+
+## Sostieni il Progetto configurabile da Admin (2026-06)
+- `src/donateConfig.ts`: DEFAULT_DONATE + mergeDonate. Campi: title, subtitle, body, amounts_title, presets[], default_amount, message_title, secure_note, monthly_enabled, monthly_title, monthly_sub, monthly_plans[{plan,label,desc}].
+- `app/donate.tsx`: legge la config da `api.settings().donate_config` (merge coi default) e la usa per TUTTI i testi/importi/piani mensili. Nessun valore hardcoded.
+- Admin: nuova pagina `app/admin/donate-config.tsx` ("Sostieni il Progetto" nel menu) per modificare tutto; salva via `adminUpdateSettings({donate_config})`. Gestione piani mensili dinamici (aggiungi/elimina, importo/etichetta/descrizione).
+- Backend: `donate_config` aggiunto a GeneralSettings (servito da /settings e /admin/settings). Piani mensili Stripe ora derivati da qualunque importo (`_plan_cents`), non più dal dict fisso MONTHLY_PLANS (rimosso). `_get_or_create_monthly_price` e `/donations/subscribe` aggiornati con validazione €1–€5000.
+- Verificato: pagina donate riflette config personalizzata (titolo/testi/presets/default/mensili) via screenshot; lettura da /settings pubblico.
