@@ -115,7 +115,7 @@ export default function SettingsScreen() {
             </>
           )}
         </View>
-        <Text style={styles.note}>Timoteo ti aiuta a trovare contenuti, navigare nell&apos;app e studiare la Bibbia. Trovi la lampada in basso a destra in ogni schermata.</Text>
+        <Text style={styles.note}>Timoteo ti aiuta a trovare contenuti, navigare nell&apos;app e studiare la Bibbia.</Text>
       </ScrollView>
 
       <CitySearchModal visible={pickCity} onClose={() => setPickCity(false)} onSelect={selectCity} />

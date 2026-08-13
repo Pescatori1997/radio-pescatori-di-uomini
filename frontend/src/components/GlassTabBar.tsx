@@ -13,7 +13,7 @@ const ICONS: Record<string, { on: keyof typeof Ionicons.glyphMap; off: keyof typ
   meditazioni: { on: "book", off: "book-outline" },
   news: { on: "newspaper", off: "newspaper-outline" },
   palinsesto: { on: "calendar", off: "calendar-outline" },
-  profilo: { on: "person", off: "person-outline" },
+  profilo: { on: "menu", off: "menu-outline" },
 };
 
 function TabItem({ label, icon, focused, onPress, onLongPress }: {

@@ -437,3 +437,7 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 ## Timoteo — snap al bordo destro su desktop (2026-06, session fork)
 - BUG: la pallina di Timoteo si attaccava solo al lato sinistro; a destra non arrivava. Causa: dopo il passaggio a desktop full-width, `SCREEN_W` era ancora limitato a `MAX_CONTENT_WIDTH` (640) → `maxX≈580`, cioè il centro dello schermo su monitor grandi, non il bordo destro reale.
 - FIX: `Timoteo.tsx` ora usa `useWindowDimensions()` (larghezza/altezza reali, reattive) al posto di `Dimensions.get()` clampato a MAX_CONTENT_WIDTH. Rimosso import MAX_CONTENT_WIDTH/Dimensions. Aggiunto effetto che ricalcola i bounds e ri-snappa la bolla al bordo più vicino quando cambia la risoluzione (resize desktop). Verificato: su viewport 1440px la bolla si posiziona a x≈1386 (bordo destro reale).
+
+## Ritocchi UI (2026-06, session fork)
+- Impostazioni > Timoteo: rimossa la frase finale "Trovi la lampada in basso a destra in ogni schermata." (resta "Timoteo ti aiuta a trovare contenuti, navigare nell'app e studiare la Bibbia.").
+- Ultima tab rinominata da "Profilo" a "Altro" con icona ☰ (menu). Aggiornati: (tabs)/_layout.tsx (title), GlassTabBar (ICONS.profilo → menu/menu-outline), GlobalTabBar (label "Altro", icon menu-outline). La route resta /profilo.

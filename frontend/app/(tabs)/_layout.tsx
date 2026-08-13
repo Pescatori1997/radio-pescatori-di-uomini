@@ -24,7 +24,7 @@ export default function TabsLayout() {
         <Tabs.Screen name="meditazioni" options={{ title: "Meditazioni", ...hide("meditazioni") }} />
         <Tabs.Screen name="news" options={{ title: "Notizie", ...hide("news") }} />
         <Tabs.Screen name="palinsesto" options={{ title: "Palinsesto", ...hide("palinsesto") }} />
-        <Tabs.Screen name="profilo" options={{ title: "Profilo" }} />
+        <Tabs.Screen name="profilo" options={{ title: "Altro" }} />
       </Tabs>
       <MiniPlayer bottom={tabBarHeight + 8} />
     </View>

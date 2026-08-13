@@ -16,7 +16,7 @@ const ITEMS: { name: string; label: string; route: string; icon: keyof typeof Io
   { name: "meditazioni", label: "Meditazioni", route: "/meditazioni", icon: "book-outline", section: "meditazioni" },
   { name: "news", label: "Notizie", route: "/news", icon: "newspaper-outline", section: "news" },
   { name: "palinsesto", label: "Palinsesto", route: "/palinsesto", icon: "calendar-outline", section: "palinsesto" },
-  { name: "profilo", label: "Profilo", route: "/profilo", icon: "person-outline" },
+  { name: "profilo", label: "Altro", route: "/profilo", icon: "menu-outline" },
 ];
 
 // Roots where the app bottom bar must NOT appear (the tabs group renders its own
