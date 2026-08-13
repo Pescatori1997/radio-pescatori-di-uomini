@@ -427,3 +427,9 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - `DesktopFrame` non applica più il letterbox navy: rende sempre a piena larghezza (bg bianco) su qualsiasi viewport. Rimossa la logica `wide`/`frameWide`/`outerWide` e gli import inutilizzati (useWindowDimensions/Platform). Struttura a 2 View invariata (nessun remount al resize).
 - `MAX_CONTENT_WIDTH` (640) resta esportato e usato SOLO dal player Meditazioni per centrare il video verticale su sfondo nero (stile Instagram) — corretto anche a schermo pieno.
 - Verificato su viewport 1440px: nessuna barra blu, hero/card/tab bar a piena larghezza. Tradeoff accettato dall'utente: layout a colonna singola può apparire un po' "largo" sui monitor grandi.
+
+## Pannello Admin — sidebar responsive + collapse (2026-06, session fork)
+- Richiesta utente: la barra laterale sinistra del pannello admin deve sparire/apparire in base alla risoluzione.
+- FIX: il breakpoint (>=900px) era calcolato una sola volta con `Dimensions.get()` → non reagiva al resize. Ora usa `useWindowDimensions()` → la sidebar passa automaticamente tra rail fisso (desktop) e drawer a scomparsa (mobile/narrow) quando cambia la risoluzione/finestra.
+- Aggiunto anche il collapse manuale su desktop: pulsante header "‹" nasconde la sidebar (contenuto a piena larghezza) e diventa "☰" per riaprirla. Su schermi stretti il "☰" apre il drawer overlay (comportamento esistente, ora reattivo).
+- Verificato su 1440px: sidebar visibile + collapse funzionante; contenuto full-width dopo il collapse.

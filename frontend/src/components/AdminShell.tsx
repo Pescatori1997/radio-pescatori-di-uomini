@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView, Dimensions } from "react-native";
+import { View, Text, StyleSheet, Pressable, ScrollView, useWindowDimensions } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -55,10 +55,16 @@ export default function AdminShell({ title, activeKey, children }: { title: stri
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const [role, setRole] = useState<string | null>(null);
   const [perms, setPerms] = useState<string[]>([]);
   const [unread, setUnread] = useState(0);
-  const wide = Dimensions.get("window").width >= 900;
+  // Reactive breakpoint: the sidebar auto-switches between a fixed rail (wide
+  // screens) and a slide-in drawer (narrow) as the window/resolution changes.
+  const { width } = useWindowDimensions();
+  const wide = width >= 900;
+  // On wide screens the fixed sidebar can be collapsed on demand to free space.
+  const showFixedSidebar = wide && !collapsed;
 
   useEffect(() => {
     let cancelled = false;
@@ -129,15 +135,18 @@ export default function AdminShell({ title, activeKey, children }: { title: stri
   );
 
   return (
-    <View style={[styles.root, { flexDirection: wide ? "row" : "column" }]}>
-      {wide && <Sidebar />}
+    <View style={[styles.root, { flexDirection: showFixedSidebar ? "row" : "column" }]}>
+      {showFixedSidebar && <Sidebar />}
       <View style={{ flex: 1 }}>
         <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
-          {!wide && (
-            <Pressable testID="admin-menu" onPress={() => setOpen(true)} hitSlop={10} style={styles.menuBtn}>
-              <Ionicons name="menu" size={24} color={colors.white} />
-            </Pressable>
-          )}
+          <Pressable
+            testID="admin-menu"
+            onPress={() => (wide ? setCollapsed((c) => !c) : setOpen(true))}
+            hitSlop={10}
+            style={styles.menuBtn}
+          >
+            <Ionicons name={wide && !collapsed ? "chevron-back" : "menu"} size={24} color={colors.white} />
+          </Pressable>
           <Text style={styles.headerTitle}>{title}</Text>
           <Pressable testID="admin-bell" onPress={() => router.push("/admin/inbox" as any)} hitSlop={10} style={styles.bell}>
             <Ionicons name="notifications-outline" size={24} color={colors.white} />
