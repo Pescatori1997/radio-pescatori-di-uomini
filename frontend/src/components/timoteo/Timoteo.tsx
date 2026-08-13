@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, Pressable, ScrollView, TextInput, ActivityIndicator,
-  KeyboardAvoidingView, Platform, StyleSheet, Dimensions,
+  KeyboardAvoidingView, Platform, StyleSheet, useWindowDimensions,
   Animated as RNAnimated, PanResponder,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -15,7 +15,6 @@ import { useAuth } from "@/src/context/AuthContext";
 import { usePlayer } from "@/src/context/PlayerContext";
 import { buildGreeting, getGreetingPrefs } from "./greeting";
 import { colors, spacing, radius } from "@/src/theme";
-import { MAX_CONTENT_WIDTH } from "@/src/components/DesktopFrame";
 
 const TIMOTEO_IMG = require("@/assets/images/timoteo.png");
 const FAB_SIZE = 48; // small, unobtrusive bubble
@@ -88,9 +87,9 @@ export default function Timoteo() {
   const abortRef = useRef<null | (() => void)>(null);
 
   // --- Small draggable bubble (works on every page, no scroll conflict) ---
-  const _win = Dimensions.get("window");
-  const SCREEN_W = Platform.OS === "web" ? Math.min(_win.width, MAX_CONTENT_WIDTH) : _win.width;
-  const SCREEN_H = _win.height;
+  // Use the FULL window width so the bubble can snap to the real right edge on
+  // desktop (the app is full-width now — no centered column anymore).
+  const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
   const [fabReady, setFabReady] = useState(false);
   // Animated opacity so the bubble can smoothly dim while reading and brighten
   // on touch. Kept on the JS driver to match the pan transform (also JS-driven).
@@ -131,6 +130,24 @@ export default function Timoteo() {
       setFabReady(true);
     })();
   }, [insets.top, insets.bottom]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keep the drag bounds in sync with the viewport size (e.g. desktop window
+  // resize) and re-snap the bubble to the nearest edge so it can always reach
+  // the real right edge after a resolution change.
+  useEffect(() => {
+    if (!fabReady) return;
+    const b = {
+      minX: 8, maxX: SCREEN_W - FAB_SIZE - 8,
+      minY: insets.top + 8, maxY: SCREEN_H - FAB_SIZE - insets.bottom - 8,
+    };
+    boundsRef.current = b;
+    const center = Math.min(Math.max(cur.current.x, b.minX), b.maxX) + FAB_SIZE / 2;
+    const x = center < SCREEN_W / 2 ? b.minX : b.maxX;
+    const y = Math.min(Math.max(cur.current.y, b.minY), b.maxY);
+    pan.setValue({ x, y });
+    cur.current = { x, y };
+    AsyncStorage.setItem(POS_KEY, JSON.stringify({ x, y })).catch(() => {});
+  }, [SCREEN_W, SCREEN_H, insets.top, insets.bottom, fabReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const panResponder = useRef(
     PanResponder.create({

@@ -433,3 +433,7 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - FIX: il breakpoint (>=900px) era calcolato una sola volta con `Dimensions.get()` → non reagiva al resize. Ora usa `useWindowDimensions()` → la sidebar passa automaticamente tra rail fisso (desktop) e drawer a scomparsa (mobile/narrow) quando cambia la risoluzione/finestra.
 - Aggiunto anche il collapse manuale su desktop: pulsante header "‹" nasconde la sidebar (contenuto a piena larghezza) e diventa "☰" per riaprirla. Su schermi stretti il "☰" apre il drawer overlay (comportamento esistente, ora reattivo).
 - Verificato su 1440px: sidebar visibile + collapse funzionante; contenuto full-width dopo il collapse.
+
+## Timoteo — snap al bordo destro su desktop (2026-06, session fork)
+- BUG: la pallina di Timoteo si attaccava solo al lato sinistro; a destra non arrivava. Causa: dopo il passaggio a desktop full-width, `SCREEN_W` era ancora limitato a `MAX_CONTENT_WIDTH` (640) → `maxX≈580`, cioè il centro dello schermo su monitor grandi, non il bordo destro reale.
+- FIX: `Timoteo.tsx` ora usa `useWindowDimensions()` (larghezza/altezza reali, reattive) al posto di `Dimensions.get()` clampato a MAX_CONTENT_WIDTH. Rimosso import MAX_CONTENT_WIDTH/Dimensions. Aggiunto effetto che ricalcola i bounds e ri-snappa la bolla al bordo più vicino quando cambia la risoluzione (resize desktop). Verificato: su viewport 1440px la bolla si posiziona a x≈1386 (bordo destro reale).
