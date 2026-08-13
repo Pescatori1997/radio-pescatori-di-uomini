@@ -10,7 +10,7 @@ import { api } from "@/src/api";
 import PressableScale from "@/src/components/PressableScale";
 import { colors, spacing, radius } from "@/src/theme";
 
-const ROLES = ["Speaker", "Conduttore", "Tecnico del suono", "Redazione", "Social & Comunicazione", "Preghiera", "Altro"];
+const ROLES = ["Speaker", "Conduttore", "Tecnico del suono", "Redazione", "Social & Comunicazione", "Altro"];
 
 function Field({ label, children, required }: any) {
   return (
