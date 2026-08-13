@@ -8,9 +8,14 @@ import { api } from "@/src/api";
 import { DAYS, romeNow } from "@/src/utils/onair";
 import { colors, spacing, radius } from "@/src/theme";
 
-/** Vertical scale: pixels per hour. The whole day is a real 24h chronological scale. */
-const HOUR_H = 120;
-const DAY_H = 24 * HOUR_H;
+/** Vertical scale. Scheduled programs use a real proportional scale; the empty
+ * gaps between them (e.g. long night hours) are heavily COMPRESSED so the day
+ * fits with minimal scrolling while keeping the timeline look intact. */
+const ACTIVE_PPM = 1.4;   // px per minute inside scheduled programs (~84px/hour)
+const GAP_PPM = 0.14;     // px per minute inside empty gaps (compressed)
+const GAP_MIN = 26;       // min height for any empty gap
+const GAP_MAX = 62;       // cap so long empty gaps never waste space
+const HOUR_LABEL_MIN_GAP = 30; // hide hour labels that would overlap (in gaps)
 const LABEL_W = 44;      // left hour-labels column
 const SPINE_X = 52;      // x position of the vertical timeline line
 const CARD_LEFT = 64;    // where program cards begin
@@ -21,6 +26,45 @@ function toMin(hm: string): number {
   if (!hm) return 0;
   const [h, m] = hm.split(":").map((n) => parseInt(n, 10));
   return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
+}
+
+type Seg = { t0: number; t1: number; y0: number; y1: number; active: boolean };
+
+function mergeIntervals(iv: [number, number][]): [number, number][] {
+  const sorted = iv.filter(([a, b]) => b > a).sort((a, b) => a[0] - b[0]);
+  const out: [number, number][] = [];
+  for (const [a, b] of sorted) {
+    const last = out[out.length - 1];
+    if (last && a <= last[1]) last[1] = Math.max(last[1], b);
+    else out.push([a, b]);
+  }
+  return out;
+}
+
+/** Build a piecewise time→y scale: normal inside programs, compressed in gaps. */
+function buildScale(covered: [number, number][]): { segs: Seg[]; total: number } {
+  const segs: Seg[] = [];
+  let t = 0, y = 0;
+  const push = (t0: number, t1: number, active: boolean) => {
+    if (t1 <= t0) return;
+    const dur = t1 - t0;
+    const hgt = active ? dur * ACTIVE_PPM : Math.min(GAP_MAX, Math.max(GAP_MIN, dur * GAP_PPM));
+    segs.push({ t0, t1, y0: y, y1: y + hgt, active });
+    y += hgt;
+  };
+  for (const [a, b] of covered) { push(t, a, false); push(a, b, true); t = b; }
+  push(t, 1440, false);
+  return { segs, total: y };
+}
+
+function yOf(segs: Seg[], min: number): number {
+  for (const s of segs) {
+    if (min <= s.t1) {
+      const f = s.t1 > s.t0 ? (min - s.t0) / (s.t1 - s.t0) : 0;
+      return s.y0 + f * (s.y1 - s.y0);
+    }
+  }
+  return segs.length ? segs[segs.length - 1].y1 : 0;
 }
 
 /** Only real programs, positioned at their own time. Empty gaps stay empty
@@ -73,8 +117,34 @@ export default function Palinsesto() {
   const dayPrograms = useMemo(() => programs.filter((p) => (p.weekdays || []).includes(day)), [programs, day]);
   const slots = useMemo(() => buildSlots(dayPrograms), [dayPrograms]);
 
+  // Piecewise scale: proportional inside programs, compressed in empty gaps.
+  const scale = useMemo(
+    () => buildScale(mergeIntervals(slots.map((s) => [toMin(s.start), toMin(s.end)] as [number, number]))),
+    [slots]
+  );
+  const yAt = useCallback((min: number) => yOf(scale.segs, min), [scale]);
+  const TOTAL_H = scale.total;
+
   const nowMin = toMin(now.hm);
-  const cursorTop = (nowMin / 60) * HOUR_H;
+  const cursorTop = yAt(nowMin);
+
+  // Hour labels placed through the compressed scale; skip those that would
+  // overlap (i.e. multiple hours collapsed inside a compressed gap).
+  const hourTicks = useMemo(() => {
+    const ticks: { h: number; y: number }[] = [];
+    let lastY = -999;
+    for (let h = 0; h <= 24; h++) {
+      const y = yAt(h * 60);
+      if (y - lastY >= HOUR_LABEL_MIN_GAP) { ticks.push({ h, y }); lastY = y; }
+    }
+    return ticks;
+  }, [yAt]);
+
+  // Compressed empty gaps worth marking on the spine (>= 45 min).
+  const gapMarks = useMemo(
+    () => scale.segs.filter((s) => !s.active && s.t1 - s.t0 >= 45),
+    [scale]
+  );
 
   // Index of the slot currently on air (only for today)
   const liveIdx = useMemo(() => {
@@ -90,8 +160,6 @@ export default function Palinsesto() {
       scrollRef.current?.scrollTo({ y: Math.max(0, cursorTop - 220), animated: false });
     });
   }, [isToday, loading, cursorTop]);
-
-  const hours = Array.from({ length: 25 }, (_, h) => h);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
@@ -115,10 +183,10 @@ export default function Palinsesto() {
           contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: 180, maxWidth: isWide ? 720 : undefined, width: "100%", alignSelf: "center" }}
           showsVerticalScrollIndicator={false}
         >
-          <View style={[styles.timeline, { height: DAY_H + 16 }]}>
-            {/* Hour grid: labels + subtle lines every hour */}
-            {hours.map((h) => (
-              <View key={`hr-${h}`} style={[styles.hourRow, { top: h * HOUR_H }]} pointerEvents="none">
+          <View style={[styles.timeline, { height: TOTAL_H + 16 }]}>
+            {/* Hour grid: labels + subtle lines (compressed scale) */}
+            {hourTicks.map(({ h, y }) => (
+              <View key={`hr-${h}`} style={[styles.hourRow, { top: y }]} pointerEvents="none">
                 <Text style={styles.hourLabel}>{`${String(h).padStart(2, "0")}:00`}</Text>
                 <View style={styles.hourLine} />
               </View>
@@ -127,12 +195,19 @@ export default function Palinsesto() {
             {/* Vertical spine */}
             <View style={styles.spine} />
 
+            {/* Compressed empty-gap markers (dashed) so skipped time reads clearly */}
+            {gapMarks.map((s, i) => (
+              <View key={`gap-${i}`} style={[styles.gapMark, { top: s.y0, height: s.y1 - s.y0 }]} pointerEvents="none">
+                <View style={styles.gapDash} />
+              </View>
+            ))}
+
             {/* Program slots, positioned proportionally to their time */}
             {slots.map((s, i) => {
               const startMin = toMin(s.start);
               const endMin = toMin(s.end);
-              const top = (startMin / 60) * HOUR_H;
-              const h = Math.max(28, ((endMin - startMin) / 60) * HOUR_H - GAP);
+              const top = yAt(startMin);
+              const h = Math.max(28, yAt(endMin) - yAt(startMin) - GAP);
               const compact = h < 92;
               const live = i === liveIdx;
               const p = s.data;
@@ -234,6 +309,8 @@ const styles = StyleSheet.create({
 
   timeline: { position: "relative" },
   spine: { position: "absolute", left: SPINE_X, top: 0, bottom: 0, width: 2, backgroundColor: colors.border, borderRadius: 1 },
+  gapMark: { position: "absolute", left: SPINE_X - 2, width: 6, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
+  gapDash: { flex: 1, borderLeftWidth: 2, borderColor: colors.border, borderStyle: "dashed", opacity: 0.9 },
 
   hourRow: { position: "absolute", left: 0, right: 0, height: 0, flexDirection: "row", alignItems: "center" },
   hourLabel: { position: "absolute", left: 0, top: -7, width: LABEL_W, textAlign: "right", color: colors.muted, fontSize: 11, fontWeight: "700" },

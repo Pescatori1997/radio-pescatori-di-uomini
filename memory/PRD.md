@@ -441,3 +441,8 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 ## Ritocchi UI (2026-06, session fork)
 - Impostazioni > Timoteo: rimossa la frase finale "Trovi la lampada in basso a destra in ogni schermata." (resta "Timoteo ti aiuta a trovare contenuti, navigare nell'app e studiare la Bibbia.").
 - Ultima tab rinominata da "Profilo" a "Altro" con icona ☰ (menu). Aggiornati: (tabs)/_layout.tsx (title), GlassTabBar (ICONS.profilo → menu/menu-outline), GlobalTabBar (label "Altro", icon menu-outline). La route resta /profilo.
+
+## Palinsesto — timeline compressa (meno scroll) (2026-06, session fork)
+- Richiesta utente: la timeline 24h scrollava troppo (ore notturne vuote occupavano tantissimo spazio; scala fissa 120px/ora = 2880px).
+- Soluzione: scala TEMPO→Y a tratti (piecewise) in `palinsesto.tsx`. I programmi usano una scala proporzionale (ACTIVE_PPM=1.4px/min ≈84px/ora); gli spazi VUOTI tra i programmi sono fortemente compressi (GAP_PPM=0.14, min 26 / max 62px), quindi la notte non spreca schermo. `buildScale(mergeIntervals(...))` + `yOf()`. Etichette orarie posizionate tramite yAt() e "diradate" (min gap 30px) per non accavallarsi nei gap compressi. Aggiunti marcatori tratteggiati sui gap >=45min. Cursore "ora", auto-scroll e modale invariati. Aspetto della timeline preservato.
+- Verificato: giorno vuoto → timeline minima (nessuno scroll); giorno con 3 programmi (Mer) → sta quasi tutto in una schermata, programmi proporzionati e leggibili.
