@@ -6,7 +6,7 @@ import { api } from "@/src/api";
 import { useSettings } from "@/src/context/SettingsContext";
 import AdminShell from "@/src/components/AdminShell";
 import PressableScale from "@/src/components/PressableScale";
-import { AInput, ASwitch } from "@/src/components/adminForm";
+import { AInput, ASwitch, AImagePicker } from "@/src/components/adminForm";
 import { colors, spacing, radius } from "@/src/theme";
 
 // Toggleable site sections (must match SECTION_DEFAULTS keys in the backend).
@@ -49,6 +49,7 @@ export default function AdminSettings() {
       about_card2_title: d.about_card2_title || "", about_card2_text: d.about_card2_text || "",
       about_card3_title: d.about_card3_title || "", about_card3_text: d.about_card3_text || "",
       about_quote: d.about_quote || "",
+      about_image: d.about_image || "",
       section_visibility: d.section_visibility || {},
     })).catch(() => {}).finally(() => setLoading(false));
   }, []);
@@ -83,6 +84,7 @@ export default function AdminSettings() {
           <AInput testID="set-about" label="Descrizione breve" value={f.about_short} onChangeText={(v: string) => set("about_short", v)} multiline />
 
           <Text style={styles.section}>Pagina "Chi Siamo"</Text>
+          <AImagePicker testID="set-about-image" label="Foto di copertina" value={f.about_image} onChange={(v: string) => set("about_image", v)} aspect={[16, 9]} />
           <AInput testID="set-about-title" label="Titolo" value={f.about_title} onChangeText={(v: string) => set("about_title", v)} />
           <AInput testID="set-about-verse" label="Sottotitolo / Versetto" value={f.about_verse} onChangeText={(v: string) => set("about_verse", v)} multiline />
           <AInput testID="set-about-description" label="Descrizione principale" value={f.about_description} onChangeText={(v: string) => set("about_description", v)} multiline />

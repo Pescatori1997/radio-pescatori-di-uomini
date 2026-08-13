@@ -28,6 +28,7 @@ IMG_FIELDS = {
     "meditations": ("thumbnail",),
     "reading_plans": ("cover",),
     "contents": ("thumbnail",),
+    "settings": ("about_image",),
     "programs": (),  # arrays handled specially below
 }
 

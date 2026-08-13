@@ -49,7 +49,7 @@ export default function About() {
     <View style={styles.container}>
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 40 }} showsVerticalScrollIndicator={false}>
         <View style={styles.hero}>
-          <Image source={{ uri: "https://images.unsplash.com/photo-1438232992991-995b7058bbb3?w=940&q=80" }} style={StyleSheet.absoluteFill} contentFit="cover" />
+          <Image source={s.about_image ? { uri: s.about_image } : { uri: "https://images.unsplash.com/photo-1438232992991-995b7058bbb3?w=940&q=80" }} style={StyleSheet.absoluteFill} contentFit="cover" />
           <LinearGradient colors={["rgba(10,17,40,0.5)", "rgba(10,17,40,0.95)"]} style={StyleSheet.absoluteFill} />
           <Pressable testID="about-back" onPress={() => router.back()} style={[styles.backBtn, { top: insets.top + spacing.sm }]} hitSlop={12}>
             <Ionicons name="arrow-back" size={22} color={colors.white} />

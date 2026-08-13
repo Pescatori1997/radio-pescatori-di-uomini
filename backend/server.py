@@ -1847,6 +1847,10 @@ async def get_testimonies():
 async def get_public_settings():
     doc = await db.settings.find_one({"_id": "general"}) or {}
     doc.pop("_id", None)
+    # Serve the "Chi Siamo" hero photo as a light, cacheable URL instead of the
+    # heavy inline base64 (which would bloat every /settings fetch on startup).
+    if imageopt.is_data_uri(doc.get("about_image")):
+        doc["about_image"] = imageopt.img_url("settings", "general", "about_image", doc["about_image"])
     return _with_section_defaults(doc)
 
 
@@ -2468,6 +2472,7 @@ class GeneralSettings(BaseModel):
     about_card3_title: Optional[str] = None
     about_card3_text: Optional[str] = None
     about_quote: Optional[str] = None
+    about_image: Optional[str] = None
     # Section visibility toggles (admin decides what appears on the site).
     section_visibility: Optional[Dict[str, bool]] = None
     # Home layout personalization: ordered list of { key, width, size }.
@@ -6240,7 +6245,7 @@ async def serve_image(coll: str, doc_id: str, field: str, i: Optional[int] = Non
     image, so caches refresh automatically."""
     if not imageopt.field_allowed(coll, field):
         raise HTTPException(status_code=404, detail="Not found")
-    doc = await db[coll].find_one({"id": doc_id})
+    doc = await db[coll].find_one({"id": doc_id}) or await db[coll].find_one({"_id": doc_id})
     if not doc:
         raise HTTPException(status_code=404, detail="Not found")
     val = imageopt.resolve_image(doc, coll, field, i)
