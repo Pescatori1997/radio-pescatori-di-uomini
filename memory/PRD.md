@@ -421,3 +421,9 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Backend: aggiunto campo `about_image` a GeneralSettings (persistito via PUT /admin/settings). `/api/settings` pubblico serve la foto come URL leggero/cacheable `/api/img/settings/general/about_image?v=<hash>` (imageopt) invece del base64 pesante → nessun appesantimento del fetch /settings usato allo startup. `imageopt.IMG_FIELDS` esteso con `settings: (about_image,)`; `serve_image` ora fa fallback lookup per `_id` (il doc settings usa `_id:"general"`, non `id`). Admin GET `/admin/settings` continua a restituire il base64 completo per l'editor.
 - Frontend: Admin > Impostazioni > "Pagina Chi Siamo" ora ha `AImagePicker` "Foto di copertina" (16:9, base64). Pagina pubblica `about.tsx` usa `s.about_image` se presente, altrimenti fallback all'immagine di default.
 - Verificato E2E: PUT base64 → /settings ritorna URL /api/img → l'URL serve i byte PNG (200). Admin GET ritorna base64. Cleanup → fallback default.
+
+## Desktop a schermo pieno (2026-06, session fork)
+- Richiesta utente: su PC l'app deve essere a SCHERMO PIENO (niente barre blu laterali; la colonna 640px era troppo piccola). Mobile/PWA-mobile invariati.
+- `DesktopFrame` non applica più il letterbox navy: rende sempre a piena larghezza (bg bianco) su qualsiasi viewport. Rimossa la logica `wide`/`frameWide`/`outerWide` e gli import inutilizzati (useWindowDimensions/Platform). Struttura a 2 View invariata (nessun remount al resize).
+- `MAX_CONTENT_WIDTH` (640) resta esportato e usato SOLO dal player Meditazioni per centrare il video verticale su sfondo nero (stile Instagram) — corretto anche a schermo pieno.
+- Verificato su viewport 1440px: nessuna barra blu, hero/card/tab bar a piena larghezza. Tradeoff accettato dall'utente: layout a colonna singola può apparire un po' "largo" sui monitor grandi.
