@@ -58,7 +58,7 @@ export default function Equipaggio() {
           <MaterialCommunityIcons name="anchor" size={20} color={colors.brandSecondary} />
           <Text style={styles.headerTitle}>{"L'Equipaggio"}</Text>
         </View>
-        <View style={{ width: 120 }} />
+        <View style={{ width: 40 }} />
       </View>
 
       {loading ? (

@@ -2473,6 +2473,7 @@ class GeneralSettings(BaseModel):
     about_card3_text: Optional[str] = None
     about_quote: Optional[str] = None
     about_image: Optional[str] = None
+    nav_items: Optional[List[str]] = None
     # Section visibility toggles (admin decides what appears on the site).
     section_visibility: Optional[Dict[str, bool]] = None
     # Home layout personalization: ordered list of { key, width, size }.

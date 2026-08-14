@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import { api } from "@/src/api";
@@ -7,6 +7,7 @@ import { useSettings } from "@/src/context/SettingsContext";
 import AdminShell from "@/src/components/AdminShell";
 import PressableScale from "@/src/components/PressableScale";
 import { AInput, ASwitch, AImagePicker } from "@/src/components/adminForm";
+import { NAV_CATALOG, DEFAULT_NAV } from "@/src/components/navConfig";
 import { colors, spacing, radius } from "@/src/theme";
 
 // Toggleable site sections (must match SECTION_DEFAULTS keys in the backend).
@@ -50,6 +51,7 @@ export default function AdminSettings() {
       about_card3_title: d.about_card3_title || "", about_card3_text: d.about_card3_text || "",
       about_quote: d.about_quote || "",
       about_image: d.about_image || "",
+      nav_items: Array.isArray(d.nav_items) && d.nav_items.length ? d.nav_items.filter((k: string) => NAV_CATALOG.some((c) => c.key === k)) : [...DEFAULT_NAV],
       section_visibility: d.section_visibility || {},
     })).catch(() => {}).finally(() => setLoading(false));
   }, []);
@@ -57,6 +59,17 @@ export default function AdminSettings() {
 
   const toggleSection = (key: string, val: boolean) =>
     setF((p: any) => ({ ...p, section_visibility: { ...(p.section_visibility || {}), [key]: val } }));
+
+  // --- Bottom navigation bar config ---
+  const navAdd = (key: string) => setF((p: any) => ({ ...p, nav_items: [...(p.nav_items || []), key] }));
+  const navRemove = (i: number) => setF((p: any) => ({ ...p, nav_items: (p.nav_items || []).filter((_: any, idx: number) => idx !== i) }));
+  const navMove = (i: number, dir: -1 | 1) => setF((p: any) => {
+    const arr = [...(p.nav_items || [])];
+    const j = i + dir;
+    if (j < 0 || j >= arr.length) return p;
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    return { ...p, nav_items: arr };
+  });
 
   const save = async () => {
     setBusy(true); setMsg("");
@@ -96,8 +109,41 @@ export default function AdminSettings() {
           <AInput testID="set-about-c3-text" label="Scheda 3 · Testo" value={f.about_card3_text} onChangeText={(v: string) => set("about_card3_text", v)} multiline />
           <AInput testID="set-about-quote" label="Citazione finale" value={f.about_quote} onChangeText={(v: string) => set("about_quote", v)} multiline />
 
+          <Text style={styles.section}>Barra di navigazione (in basso)</Text>
+          <Text style={styles.hint}>Scegli quali sezioni mostrare nella barra in basso, in che ordine e quante. Usa ↑ ↓ per riordinare e ✕ per rimuovere. Aggiungi nuove sezioni dall'elenco sotto. Se metti molte voci, la barra scorrerà orizzontalmente.</Text>
+          {(f.nav_items || []).map((key: string, i: number) => {
+            const c = NAV_CATALOG.find((x) => x.key === key);
+            if (!c) return null;
+            return (
+              <View key={`${key}-${i}`} style={styles.navRow}>
+                <Ionicons name={c.iconOn as any} size={18} color={colors.brandPrimary} />
+                <Text style={styles.navLabel}>{c.label}</Text>
+                <Pressable testID={`nav-up-${key}`} onPress={() => navMove(i, -1)} disabled={i === 0} style={[styles.navBtn, i === 0 && styles.navBtnOff]} hitSlop={6}>
+                  <Ionicons name="chevron-up" size={18} color={i === 0 ? colors.muted : colors.white} />
+                </Pressable>
+                <Pressable testID={`nav-down-${key}`} onPress={() => navMove(i, 1)} disabled={i === (f.nav_items.length - 1)} style={[styles.navBtn, i === (f.nav_items.length - 1) && styles.navBtnOff]} hitSlop={6}>
+                  <Ionicons name="chevron-down" size={18} color={i === (f.nav_items.length - 1) ? colors.muted : colors.white} />
+                </Pressable>
+                <Pressable testID={`nav-remove-${key}`} onPress={() => navRemove(i)} style={[styles.navBtn, styles.navBtnDanger]} hitSlop={6}>
+                  <Ionicons name="close" size={18} color={colors.white} />
+                </Pressable>
+              </View>
+            );
+          })}
+          {(f.nav_items || []).length === 0 && <Text style={styles.hint}>Nessuna voce selezionata: la barra userà quelle predefinite.</Text>}
+          <Text style={[styles.hint, { marginTop: spacing.sm }]}>Aggiungi sezione:</Text>
+          <View style={styles.chipWrap}>
+            {NAV_CATALOG.filter((c) => !(f.nav_items || []).includes(c.key)).map((c) => (
+              <Pressable key={c.key} testID={`nav-add-${c.key}`} onPress={() => navAdd(c.key)} style={styles.chip}>
+                <Ionicons name={c.icon as any} size={15} color={colors.brandPrimary} />
+                <Text style={styles.chipText}>{c.label}</Text>
+                <Ionicons name="add" size={15} color={colors.muted} />
+              </Pressable>
+            ))}
+          </View>
+
           <Text style={styles.section}>Visibilità sezioni</Text>
-          <Text style={styles.hint}>Decidi cosa mostrare sul sito. Spegnendo una voce, sparisce ovunque (menu, Home e barra in basso).</Text>
+          <Text style={styles.hint}>Decidi cosa mostrare sul sito. Spegnendo una voce, sparisce da menu e Home. La barra in basso si configura nella sezione qui sopra.</Text>
           {SECTIONS.map((s) => (
             <ASwitch
               key={s.key}
@@ -125,4 +171,12 @@ const styles = StyleSheet.create({
   msg: { color: colors.brandSecondary, fontSize: 14, textAlign: "center", marginVertical: spacing.md },
   btn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, paddingVertical: spacing.md, borderRadius: radius.pill, backgroundColor: colors.brandPrimary, marginTop: spacing.lg },
   btnText: { color: colors.white, fontSize: 16, fontWeight: "800" },
+  navRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.navy, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border + "44", paddingVertical: 10, paddingHorizontal: spacing.md, marginBottom: spacing.sm },
+  navLabel: { flex: 1, color: colors.white, fontSize: 15, fontWeight: "700" },
+  navBtn: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.brandPrimary },
+  navBtnOff: { backgroundColor: colors.border + "33" },
+  navBtnDanger: { backgroundColor: colors.error },
+  chipWrap: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: 4 },
+  chip: { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 8, paddingHorizontal: spacing.md, borderRadius: radius.pill, backgroundColor: colors.navy, borderWidth: 1, borderColor: colors.border + "44" },
+  chipText: { color: colors.white, fontSize: 13, fontWeight: "700" },
 });
