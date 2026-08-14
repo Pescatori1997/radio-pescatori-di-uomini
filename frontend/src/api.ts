@@ -490,6 +490,7 @@ export const api = {
     request("/admin/notifications/send", { method: "POST", body: JSON.stringify(body) }, true),
   adminNotificationsLog: () => request("/admin/notifications", {}, true),
   adminNotificationAudience: () => request("/admin/notifications/audience", {}, true),
+  adminWebpushStats: () => request("/admin/webpush/stats", {}, true),
   // reports / feedback
   createReport: (body: { category: string; title: string; description: string; screenshot?: string | null; video?: string | null }) =>
     request("/reports", { method: "POST", body: JSON.stringify(body) }, true),

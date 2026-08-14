@@ -31,14 +31,15 @@ export default function AdminNotifications() {
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [audience, setAudience] = useState<Record<string, number>>({});
+  const [webStats, setWebStats] = useState<{ total_devices: number; registered_users: number; guest_devices: number } | null>(null);
   const [log, setLog] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(() => {
-    Promise.all([api.adminNotificationAudience(), api.adminNotificationsLog()])
-      .then(([a, l]) => { setAudience(a); setLog(l); })
+    Promise.all([api.adminNotificationAudience(), api.adminNotificationsLog(), api.adminWebpushStats().catch(() => null)])
+      .then(([a, l, w]) => { setAudience(a); setLog(l); setWebStats(w); })
       .catch(() => {})
       .finally(() => { setLoading(false); setRefreshing(false); });
   }, []);
@@ -99,6 +100,15 @@ export default function AdminNotifications() {
           </View>
           <Text style={styles.audience}>Destinatari iscritti: {audience[category] ?? 0} utenti</Text>
 
+          <View style={styles.infoBox}>
+            <Ionicons name="phone-portrait-outline" size={16} color={colors.brandPrimary} />
+            <Text style={styles.infoText}>
+              <Text style={{ color: colors.white, fontWeight: "800" }}>Dispositivi web (PWA / PC): {webStats?.total_devices ?? 0}</Text>
+              {"\n"}Account registrati: {webStats?.registered_users ?? 0} · Ospiti: {webStats?.guest_devices ?? 0}.
+              {"\n"}Un collaboratore riceve le notifiche sul PC solo se il suo dispositivo compare qui. Se non compare, deve aprire l'app (con login), andare in Impostazioni → Notifiche e premere "Attiva" + "Consenti" nel browser.
+            </Text>
+          </View>
+
           <Pressable testID="notif-send" style={[styles.sendBtn, sending && { opacity: 0.6 }]} onPress={send} disabled={sending}>
             {sending ? <ActivityIndicator color={colors.white} /> : (<><Ionicons name="send" size={17} color={colors.white} /><Text style={styles.sendText}>Invia notifica</Text></>)}
           </Pressable>
@@ -115,7 +125,7 @@ export default function AdminNotifications() {
               <View style={[styles.dot, { backgroundColor: n.status === "sent" ? colors.success : colors.warning }]} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.logTitle} numberOfLines={1}>{n.title}</Text>
-                <Text style={styles.logMeta}>{fmt(n.created_at)} · {n.recipients} destinatari · {n.status === "sent" ? "Inviata" : "In attesa (build)"}</Text>
+                <Text style={styles.logMeta}>{fmt(n.created_at)} · {n.recipients} destinatari{typeof n.web_delivered === "number" ? ` · ${n.web_delivered} web` : ""} · {n.status === "sent" ? "Inviata" : "In attesa (build)"}</Text>
               </View>
             </View>
           ))}
