@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useState, useRef } from "react";
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -25,9 +25,14 @@ export default function PlanDetail() {
   const [sharePlanOpen, setSharePlanOpen] = useState(false);
   const [shareDay, setShareDay] = useState<any>(null);
   const [w, setW] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
+  const dayY = useRef<Record<number, number>>({});
+  const didResume = useRef(false);
 
   const load = useCallback(() => {
     if (!id) return;
+    didResume.current = false;
+    dayY.current = {};
     setLoading(true);
     api.readingPlan(id).then((p: any) => { setPlan(p); setEnrollment(p.enrollment || null); })
       .catch(() => {}).finally(() => setLoading(false));
@@ -39,6 +44,16 @@ export default function PlanDetail() {
   const duration = plan?.duration_days || (plan?.days?.length ?? 0);
   const percent = duration ? Math.round((done.size / duration) * 100) : 0;
   const enrolled = !!enrollment;
+
+  // First not-yet-completed day → where we resume to on reopen.
+  const resumeDay = (plan?.days || []).map((d: any) => d.day).find((d: number) => !done.has(d));
+  const maybeResume = (day: number, y: number) => {
+    dayY.current[day] = y;
+    if (didResume.current) return;
+    if (done.size === 0 || !resumeDay || day !== resumeDay) return;
+    didResume.current = true;
+    requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: false }));
+  };
 
   const requireLogin = () => {
     alertMessage("Accedi per continuare", "Crea un account gratuito per iniziare i piani di lettura e salvare i tuoi progressi.");
@@ -112,7 +127,7 @@ export default function PlanDetail() {
         )}
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollRef} contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         {!!plan.description && <Text style={styles.desc}>{plan.description}</Text>}
 
         {!enrolled && (
@@ -127,7 +142,7 @@ export default function PlanDetail() {
         {(plan.days || []).map((d: any, i: number) => {
           const isDone = done.has(d.day);
           return (
-            <Animated.View key={d.day} entering={FadeInDown.delay(i * 25)} style={[styles.dayCard, isDone && styles.dayCardDone]}>
+            <Animated.View key={d.day} entering={FadeInDown.delay(i * 25)} onLayout={(e) => maybeResume(d.day, e.nativeEvent.layout.y)} style={[styles.dayCard, isDone && styles.dayCardDone]}>
               <View style={styles.dayHeader}>
                 <View style={[styles.dayBadge, isDone && styles.dayBadgeDone]}><Text style={[styles.dayBadgeText, isDone && { color: colors.white }]}>{d.day}</Text></View>
                 <View style={{ flex: 1 }}>

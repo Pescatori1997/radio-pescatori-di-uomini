@@ -483,3 +483,7 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Feedback utente: il palinsesto era troppo scuro (non i colori del sito) e mancava la vera timeline 24h (mostrava solo l'orario dei programmi).
 - FIX colori: palinsesto.tsx e programma/[slug].tsx ora usano il tema chiaro dell'app (colors.surface/onSurface/brandPrimary/muted/border; LIVE=colors.error). La hero del dettaglio resta con overlay scuro + testo bianco sopra l'immagine, il resto chiaro.
 - FIX timeline: ora render di TUTTE le 24 ore (00:00→23:00) con pill orario + spine continua; i programmi vengono agganciati all'ora di inizio (floor(start/60)); ora corrente evidenziata (pill blu). On-air card con bordo rosso + badge + progress. Verificato: 00:00/12:00/22:00 presenti, scroll continuo.
+
+## Notizie compatte + Piani ripresa (2026-06)
+- Notizie: card della lista trasformate in righe compatte (miniatura 76x76 + categoria + titolo 2 righe + estratto 2 righe + link "Leggi di più ›") stile Piani Biblici; tap apre /news/[id]. Banner "In primo piano" invariato in cima.
+- Piani Biblici (app/lettore/piano/[id].tsx): alla riapertura scrolla automaticamente al primo giorno NON completato (resumeDay = primo day non in completed_days), via onLayout delle day card + scrollRef.scrollTo (una sola volta per apertura, solo se ci sono progressi). Verificato news via screenshot; ripresa piano da validare con un piano reale con progressi parziali.

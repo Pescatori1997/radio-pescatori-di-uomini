@@ -76,14 +76,17 @@ export default function NewsScreen() {
           }
           ListEmptyComponent={<Text style={styles.empty}>Nessuna notizia trovata</Text>}
           renderItem={({ item }) => (
-            <Pressable testID={`news-card-${item.id}`} style={[styles.card, { aspectRatio: cardAspect }]} onPress={() => router.push(`/news/${item.id}`)}>
-              <Image source={{ uri: item.image }} style={styles.img} contentFit="cover" />
-              <LinearGradient colors={["transparent", "rgba(10,17,40,0.92)"]} style={styles.scrim} />
-              <View style={styles.badge}><Text style={styles.badgeText}>{item.category}</Text></View>
-              <View style={styles.textBox}>
-                <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
-                <Text style={styles.excerpt} numberOfLines={2}>{item.excerpt}</Text>
-                {item.reading_time ? <Text style={styles.rt}>{item.reading_time} min di lettura</Text> : null}
+            <Pressable testID={`news-card-${item.id}`} style={styles.row} onPress={() => router.push(`/news/${item.id}`)}>
+              {item.image ? (
+                <Image source={{ uri: item.image }} style={styles.rowThumb} contentFit="cover" />
+              ) : (
+                <View style={[styles.rowThumb, styles.rowThumbEmpty]}><Ionicons name="newspaper-outline" size={24} color={colors.brandPrimary} /></View>
+              )}
+              <View style={styles.rowBody}>
+                {!!item.category && <Text style={styles.rowCat}>{String(item.category).toUpperCase()}</Text>}
+                <Text style={styles.rowTitle} numberOfLines={2}>{item.title}</Text>
+                {!!item.excerpt && <Text style={styles.rowExcerpt} numberOfLines={2}>{item.excerpt}</Text>}
+                <Text style={styles.readMore}>Leggi di più ›</Text>
               </View>
             </Pressable>
           )}
@@ -113,6 +116,14 @@ const styles = StyleSheet.create({
   bannerTitle: { color: colors.white, fontSize: 22, fontWeight: "800" },
   bannerMeta: { color: colors.brandSecondary, fontSize: 13, marginTop: spacing.xs },
   card: { width: "100%", borderRadius: radius.lg, overflow: "hidden", backgroundColor: colors.navy },
+  row: { flexDirection: "row", gap: spacing.md, backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.sm, borderWidth: 1, borderColor: colors.border, alignItems: "center" },
+  rowThumb: { width: 76, height: 76, borderRadius: radius.md },
+  rowThumbEmpty: { backgroundColor: colors.brandPrimary + "14", alignItems: "center", justifyContent: "center" },
+  rowBody: { flex: 1 },
+  rowCat: { color: colors.brandPrimary, fontSize: 10.5, fontWeight: "800", letterSpacing: 0.6, marginBottom: 2 },
+  rowTitle: { color: colors.onSurface, fontSize: 15, fontWeight: "800", lineHeight: 19 },
+  rowExcerpt: { color: colors.muted, fontSize: 12.5, marginTop: 2, lineHeight: 16 },
+  readMore: { color: colors.brandPrimary, fontSize: 12.5, fontWeight: "800", marginTop: 4 },
   img: { ...StyleSheet.absoluteFillObject },
   scrim: { ...StyleSheet.absoluteFillObject },
   badge: { position: "absolute", top: spacing.md, left: spacing.md, backgroundColor: colors.brandPrimary, paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.sm },
