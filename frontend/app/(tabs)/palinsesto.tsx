@@ -73,11 +73,21 @@ export default function Palinsesto() {
     const endMin = p.end_time && p.end_time <= p.start_time ? toMin(p.end_time) + 1440 : toMin(p.end_time || p.start_time);
     const nowMin = toMin(now.hm);
     const pct = live && endMin > startMin ? Math.min(1, Math.max(0, (nowMin - startMin) / (endMin - startMin))) : 0;
-    const img = imgUri(p.images && p.images[0]);
+    const photos = ((p.presenters || []).map((pr: any) => imgUri(pr?.image)).filter(Boolean)) as string[];
+    if (photos.length === 0) { const f = imgUri(p.images && p.images[0]); if (f) photos.push(f); }
+    const shown = photos.slice(0, 3);
     return (
       <Pressable key={p.id} testID={`prog-${p.id}`} onPress={() => router.push(`/programma/${p.slug || p.id}` as any)} style={[styles.card, live && styles.cardLive]}>
-        <View style={styles.thumbWrap}>
-          {img ? <Image source={{ uri: img }} style={styles.thumb} contentFit="cover" /> : <View style={[styles.thumb, styles.thumbEmpty]}><Ionicons name="mic" size={24} color={ACCENT} /></View>}
+        <View style={[styles.thumbWrap, shown.length > 1 && { width: 60 + (shown.length - 1) * 22 }]}>
+          {shown.length === 0 ? (
+            <View style={[styles.thumb, styles.thumbEmpty]}><Ionicons name="mic" size={24} color={ACCENT} /></View>
+          ) : shown.length === 1 ? (
+            <Image source={{ uri: shown[0] }} style={styles.thumb} contentFit="cover" />
+          ) : (
+            shown.map((uri, idx) => (
+              <Image key={idx} source={{ uri }} style={[styles.stackAvatar, { left: idx * 22, zIndex: 10 - idx }]} contentFit="cover" />
+            ))
+          )}
         </View>
         <View style={{ flex: 1 }}>
           {live && <View style={styles.liveBadge}><View style={styles.liveDot} /><Text style={styles.liveText}>IN ONDA</Text></View>}
@@ -169,8 +179,9 @@ const styles = StyleSheet.create({
 
   card: { flexDirection: "row", alignItems: "flex-start", gap: 12, backgroundColor: colors.surfaceSecondary, borderRadius: 16, padding: 10, marginBottom: 10, marginTop: 6, borderWidth: 1, borderColor: colors.border },
   cardLive: { borderColor: LIVE, borderWidth: 1.5, backgroundColor: LIVE + "0D" },
-  thumbWrap: { width: 60, height: 60, borderRadius: 12, overflow: "hidden" },
-  thumb: { width: 60, height: 60 },
+  thumbWrap: { width: 60, height: 60, borderRadius: 12 },
+  thumb: { width: 60, height: 60, borderRadius: 12 },
+  stackAvatar: { position: "absolute", top: 0, width: 60, height: 60, borderRadius: 30, borderWidth: 2, borderColor: colors.surfaceSecondary, backgroundColor: colors.surface },
   thumbEmpty: { backgroundColor: ACCENT + "14", alignItems: "center", justifyContent: "center" },
   liveBadge: { flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start", backgroundColor: LIVE, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, marginBottom: 4 },
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.white },

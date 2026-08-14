@@ -35,6 +35,11 @@ export default function ProgramDetail() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"episodes" | "info">("episodes");
   const [fav, setFav] = useState(false);
+  const [crew, setCrew] = useState<any[]>([]);
+
+  useEffect(() => {
+    api.crew().then((c: any[]) => setCrew(c || [])).catch(() => {});
+  }, []);
 
   useEffect(() => {
     api.programBySlug(String(slug)).then(setP).catch(() => setP(null)).finally(() => setLoading(false));
@@ -72,6 +77,12 @@ export default function ProgramDetail() {
   const hero = imgUri(p.hero_image) || imgUri(p.images?.[0]);
   const episodes = p.episodes || [];
   const presenters = (p.presenters || []).filter((x: any) => x && (x.name || x.image));
+  const crewIdFor = (name?: string): string | null => {
+    const n = (name || "").trim().toLowerCase();
+    if (!n) return null;
+    const found = crew.find((c: any) => (c.name || "").trim().toLowerCase() === n);
+    return found ? found.id : null;
+  };
   const lastEp = episodes[0];
   const scheduleLabel = `${(p.weekdays || []).join(", ")}${p.start_time ? ` · ore ${p.start_time}` : ""}`;
 
@@ -126,8 +137,9 @@ export default function ProgramDetail() {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presentersRow}>
               {presenters.map((pr: any, i: number) => {
                 const pi = imgUri(pr.image);
-                return (
-                  <View key={`${pr.name || i}`} style={styles.presenter}>
+                const cid = crewIdFor(pr.name);
+                const inner = (
+                  <>
                     {pi ? (
                       <Image source={{ uri: pi }} style={styles.presenterImg} contentFit="cover" />
                     ) : (
@@ -136,6 +148,21 @@ export default function ProgramDetail() {
                       </View>
                     )}
                     {!!pr.name && <Text style={styles.presenterName} numberOfLines={2}>{pr.name}</Text>}
+                    {!!cid && (
+                      <View style={styles.bioLink}>
+                        <Ionicons name="person-circle-outline" size={12} color={ACCENT} />
+                        <Text style={styles.bioLinkText}>Bio</Text>
+                      </View>
+                    )}
+                  </>
+                );
+                return cid ? (
+                  <Pressable key={`${pr.name || i}`} style={styles.presenter} onPress={() => router.push(`/equipaggio/${cid}` as any)}>
+                    {inner}
+                  </Pressable>
+                ) : (
+                  <View key={`${pr.name || i}`} style={styles.presenter}>
+                    {inner}
                   </View>
                 );
               })}
@@ -235,6 +262,8 @@ const styles = StyleSheet.create({
   presenterImg: { width: 76, height: 76, borderRadius: 38, backgroundColor: colors.surfaceSecondary, borderWidth: 2, borderColor: colors.border },
   presenterImgEmpty: { alignItems: "center", justifyContent: "center", backgroundColor: ACCENT + "14", borderColor: ACCENT + "33" },
   presenterName: { color: TEXT, fontSize: 12.5, fontWeight: "700", textAlign: "center", marginTop: 8, lineHeight: 15 },
+  bioLink: { flexDirection: "row", alignItems: "center", gap: 2, marginTop: 4 },
+  bioLinkText: { color: ACCENT, fontSize: 11, fontWeight: "800" },
   tab: { flex: 1, paddingVertical: 10, borderRadius: 999, alignItems: "center" },
   tabActive: { backgroundColor: ACCENT },
   tabText: { color: TEXT, fontSize: 14, fontWeight: "800" },
