@@ -44,6 +44,7 @@ const NAV = [
   { key: "activity", label: "Registro Attività", icon: "history", route: "/admin/activity", perm: null },
   { key: "settings", label: "Impostazioni", icon: "cog", route: "/admin/settings", perm: null },
   { key: "home_layout", label: "Layout Home", icon: "view-dashboard", route: "/admin/home-layout", perm: null },
+  { key: "nav_icons", label: "Personalizzazione Navigazione", icon: "gesture-tap-button", route: "/admin/nav-icons", perm: null },
 ];
 
 const ADMIN = {

@@ -1,35 +1,65 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, StyleSheet, Platform, ScrollView } from "react-native";
+import { Image } from "expo-image";
 import { BlurView } from "expo-blur";
-import { Ionicons } from "@expo/vector-icons";
 import { useRouter, usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, interpolate, Easing } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors } from "@/src/theme";
-import { useNavItems, activeKeyForPath, NavCatalogItem } from "@/src/components/navConfig";
+import { useNavItems, activeKeyForPath, VectorIcon, ResolvedNavItem } from "@/src/components/navConfig";
+import NavAnim from "@/src/components/nav/NavAnim";
 
-function NavItem({ item, focused, width, onPress }: { item: NavCatalogItem; focused: boolean; width?: number; onPress: () => void }) {
+function NavItem({ item, focused, width, onPress }: { item: ResolvedNavItem; focused: boolean; width?: number; onPress: () => void }) {
   const p = useSharedValue(focused ? 1 : 0);
+  const [playToken, setPlayToken] = useState(0);
+  const [animBroken, setAnimBroken] = useState(false);
+  const [iconBroken, setIconBroken] = useState(false);
+  const [iconActiveBroken, setIconActiveBroken] = useState(false);
+  const prevFocused = useRef(focused);
+
   useEffect(() => {
     p.value = withTiming(focused ? 1 : 0, { duration: 240, easing: Easing.out(Easing.cubic) });
+    // Replay the (optional) animation each time this section is (re)selected.
+    if (focused && !prevFocused.current) setPlayToken((t) => t + 1);
+    prevFocused.current = focused;
   }, [focused]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const colorInactive = item.colorInactive || colors.muted;
+  const colorActive = item.colorActive || colors.brandPrimary;
+  const size = 24;
 
   const pillStyle = useAnimatedStyle(() => ({ opacity: p.value, transform: [{ scale: interpolate(p.value, [0, 1], [0.6, 1]) }] }));
   const dotStyle = useAnimatedStyle(() => ({ opacity: p.value, transform: [{ scaleX: p.value }] }));
-  const iconStyle = useAnimatedStyle(() => ({ transform: [{ translateY: interpolate(p.value, [0, 1], [0, -1]) }] }));
+  const iconStyle = useAnimatedStyle(() => ({ transform: [{ translateY: interpolate(p.value, [0, 1], [0, -1]) }, { scale: interpolate(p.value, [0, 1], [1, 1.08]) }] }));
+
+  const renderIcon = () => {
+    if (focused) {
+      if (item.animUrl && !animBroken) {
+        return <NavAnim url={item.animUrl} kind={item.animKind} size={size + 2} playToken={playToken} onError={() => setAnimBroken(true)} />;
+      }
+      if (item.iconActiveUrl && !iconActiveBroken) {
+        return <Image source={{ uri: item.iconActiveUrl }} style={{ width: size, height: size }} contentFit="contain" onError={() => setIconActiveBroken(true)} />;
+      }
+      return <VectorIcon family={item.family} name={item.iconOn} size={size} color={colorActive} />;
+    }
+    if (item.iconUrl && !iconBroken) {
+      return <Image source={{ uri: item.iconUrl }} style={{ width: size, height: size }} contentFit="contain" onError={() => setIconBroken(true)} />;
+    }
+    return <VectorIcon family={item.family} name={item.icon} size={size} color={colorInactive} />;
+  };
 
   return (
     <Pressable style={[styles.item, width ? { width } : { flex: 1 }]} onPress={onPress} hitSlop={6} accessibilityRole="tab" accessibilityState={{ selected: focused }}>
-      <Animated.View style={[styles.dot, dotStyle]} />
+      {item.indicator ? <Animated.View style={[styles.dot, dotStyle, { backgroundColor: colorActive }]} /> : null}
       <View style={styles.iconWrap}>
-        <Animated.View style={[styles.pill, pillStyle]} />
+        <Animated.View style={[styles.pill, pillStyle, { backgroundColor: colorActive + "1F" }]} />
         <Animated.View style={iconStyle}>
-          <Ionicons name={focused ? item.iconOn : item.icon} size={23} color={focused ? colors.brandPrimary : colors.muted} />
+          {renderIcon()}
         </Animated.View>
       </View>
       <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} allowFontScaling={false}
-        style={[styles.label, { color: focused ? colors.navy : colors.muted, fontWeight: focused ? "800" : "600" }]}>
+        style={[styles.label, { color: focused ? colors.navy : colorInactive, fontWeight: focused ? "800" : "600" }]}>
         {item.label}
       </Text>
     </Pressable>

@@ -1,0 +1,35 @@
+{
+  "summary": "Nav-icons admin customization feature — ALL GREEN backend+frontend. Backend: created /app/backend/tests/test_nav_config.py (7/7 PASSED, junitxml=/app/test_reports/pytest/iteration_45_nav_config.xml) — verified admin email login (pescatoridiuomini@outlook.it / Admin1234! returns session_token + role=administrator), GET /api/admin/settings, PUT /api/admin/settings correctly persists and round-trips nav_config (labels, color, colorActive, indicator, nested NavAsset objects with id/kind/mime/filename), and PUBLIC GET /api/settings exposes nav_config for the mobile bottom bar. Frontend (mobile viewport 390x844): admin logged in via email → /admin/nav-icons loaded without crash; whole-bar preview shown at top with Home (lighthouse MCI icon) / Podcast / Meditazioni / Notizie / Palinsesto / Altro; per-item config cards render with label input, two ColorField swatch rows + hex input, indicator ASwitch, and three NavAssetField upload buttons (Icona normale PNG/WebP, Icona attiva PNG/WebP, Animazione Lottie/GIF/WebP animato). Verified: (a) editing testID='label-index' to 'CasaTest18308' updates the top preview cell live, (b) tapping the preview 'Podcast' cell switches the active state (active color pill + indicator dot on top), (c) pressing testID='nav-icons-save' returns the success message 'Personalizzazione salvata ✓ Le modifiche sono già attive nell\\'app.', (d) after save, public /api/settings returns nav_config.index.label='CasaTest18308' with no auth, (e) the PUBLIC bottom bar on '/' and '/podcast' displays the new custom Home label with the lighthouse icon, (f) tapping Podcast in the public bottom bar navigates to /podcast, (g) tapping the custom Home label navigates back to /, (h) no red screen, no console errors, bar renders on both stack and tab screens. Test marker cleared via PUT /admin/settings {nav_config:{}} at the end.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_nav_config.py",
+    "/app/test_reports/pytest/iteration_45_nav_config.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "GeneralSettings.nav_config is Optional[Dict[str, Any]] (server.py:2562) — permissive by design, PUT accepts nested NavAsset objects verified by test_nav_config_accepts_asset_shape.",
+    "GET /api/settings (server.py:1894) is public and returns nav_config as-is; useNavItems in navConfig.tsx correctly resolves and falls back to catalog defaults when a per-key config is missing.",
+    "AppBottomBar.NavItem renderIcon has clean fallback chain: animation → active icon → vector icon (with iconBroken/iconActiveBroken/animBroken state), so a broken uploaded asset cannot break navigation.",
+    "Home default icon correctly uses MaterialCommunityIcons 'lighthouse'/'lighthouse-on' (navConfig.tsx:45).",
+    "ALLOWED_MEDIA_EXT (server.py:4008-4009) includes gif, webp, json, lottie; _optimize_image (server.py:4035) correctly skips is_animated / n_frames>1 so animated GIF/WebP are NOT flattened — matches the feature spec.",
+    "Minor (informational, not a blocker): several 'shadow*'/'textShadow*' deprecation warnings are logged by RN-Web on load (project-wide, not this feature) — safe to ignore for now."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_nav_config.py (new)"
+  ],
+  "success_rate": {"backend": "100% (7/7 pytest passed)", "frontend": "100% (admin nav-icons load + label edit + preview tap + save + public bottom-bar reflection + navigation regression all verified on 390x844)"},
+  "seed_data_creation": "No permanent seed data added. A transient nav_config marker (label=CasaTest18308 on 'index') was written to verify public reflection, then cleared with PUT /api/admin/settings {nav_config:{}} so the live app shows the default labels again.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Admin email/password login (pescatoridiuomini@outlook.it / Admin1234!) is confirmed working in the preview pod. The test file test_nav_config.py falls back to ADMINTESTTOKEN123 if the well-known passwords ever stop working. File upload flow via DocumentPicker was intentionally NOT automated (browser file dialog) — upload buttons render and are visible; the rest of the config (label/colors/indicator/nested NavAsset payload accepted by PUT) is fully covered.",
+  "rca_of_issue": "N/A — feature works as specified."
+}

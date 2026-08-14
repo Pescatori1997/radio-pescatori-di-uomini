@@ -2558,6 +2558,8 @@ class GeneralSettings(BaseModel):
     # Home layout personalization: ordered list of { key, width, size }.
     home_layout: Optional[List[Dict[str, Any]]] = None
     donate_config: Optional[Dict[str, Any]] = None
+    # Per-item bottom-navigation customization (labels, colors, custom icons & animations).
+    nav_config: Optional[Dict[str, Any]] = None
 
 
 # Canonical toggleable sections. Everything defaults ON except Merchandising,
@@ -4003,10 +4005,15 @@ def _media_type_from_mime(mime: str) -> str:
 ALLOWED_MEDIA_EXT = {
     "mp3", "wav", "m4a", "aac", "ogg", "flac",           # audio
     "mp4", "mov", "m4v", "webm",                          # video
-    "jpg", "jpeg", "png", "webp",                         # image
+    "jpg", "jpeg", "png", "webp", "gif",                  # image (gif = animated)
+    "json", "lottie",                                     # animated icons (Lottie)
     "pdf",                                                # documents
 }
-ALLOWED_MEDIA_MIME_PREFIX = ("audio/", "video/", "image/", "application/pdf")
+ALLOWED_MEDIA_MIME_PREFIX = (
+    "audio/", "video/", "image/", "application/pdf",
+    "application/json", "application/octet-stream",       # Lottie .json / .lottie
+    "text/plain",                                          # some pickers report .json as text/plain
+)
 
 
 def _validate_media(filename: str, mime: str):
@@ -4019,10 +4026,14 @@ def _validate_media(filename: str, mime: str):
 
 
 def _optimize_image(path: Path) -> tuple:
-    """Resize (max 1600px) + convert images to WebP for performance. Returns (new_path, mime, filename)."""
+    """Resize (max 1600px) + convert images to WebP for performance. Returns (new_path, mime, filename).
+    Animated images (GIF / animated WebP / APNG) are left untouched so the animation is preserved."""
     try:
         from PIL import Image as _PImage
         img = _PImage.open(path)
+        # Never flatten animated images — that would destroy the animation.
+        if getattr(img, "is_animated", False) or getattr(img, "n_frames", 1) > 1:
+            return path, None, None
         img = img.convert("RGBA") if img.mode in ("P", "LA") else img.convert("RGB") if img.mode != "RGB" else img
         w, h = img.size
         if max(w, h) > 1600:

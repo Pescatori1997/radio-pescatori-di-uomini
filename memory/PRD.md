@@ -491,3 +491,10 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 ## Fix foto Palinsesto (2026-06)
 - BUG: le foto dei programmi (card timeline e hero pagina programma) non si vedevano. Causa: p.images[0]/p.hero_image sono già URL /api/img assoluti (imageopt + absolutizeImages), ma venivano ri-passati a mediaUrl() → URL rotto (BASE/api/media/https://...).
 - FIX: helper imgUri() in palinsesto.tsx e programma/[slug].tsx → usa il valore così com'è se è già http/​/api/​/data:, altrimenti mediaUrl(id). Verificato: card mostra la miniatura, fallback icona microfono se nessuna foto.
+
+## Bottom Navigation — Personalizzazione icone & animazioni (giugno 2026)
+- Nuova schermata Admin `/admin/nav-icons` ("Personalizzazione Navigazione"): per ogni voce della barra si configurano nome, colore icona normale/attiva, indicatore/onda on-off, icona statica personalizzata (PNG/WebP), icona attiva e animazione opzionale (Lottie .json / GIF / WebP animato) riprodotta UNA volta alla selezione. Anteprima live per singolo asset e dell'intera barra.
+- Storage: `settings.nav_config` (per-key). Applicato live via context, nessun deploy necessario. Asset caricati con chunked upload (GridFS media); il backend accetta json/lottie/gif e NON appiattisce immagini animate (`_optimize_image` salta gli animati).
+- Home ora usa il faro (MaterialCommunityIcons lighthouse) come icona di default.
+- Fallback: file animato/icona corrotti -> icona statica; asset mancante -> icona vettoriale predefinita.
+- File: `app/admin/nav-icons.tsx`, `src/components/navConfig.tsx`, `src/components/AppBottomBar.tsx`, `src/components/nav/NavAnim.{web,native}.tsx`. Lib aggiunte: lottie-react-native (native), lottie-react (web).
