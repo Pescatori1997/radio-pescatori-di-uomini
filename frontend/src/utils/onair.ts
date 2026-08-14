@@ -18,6 +18,25 @@ export function romeNow(): { idx: number; hm: string } {
   }
 }
 
+/** Info for a day at `offset` days from today, in Italian (Europe/Rome) time.
+ * idx = weekday index (0=Mon) used to filter weekly programs; dateLabel like
+ * "Venerdì 14 Agosto". */
+export function romeDay(offset = 0): { idx: number; weekday: string; dateLabel: string } {
+  const d = new Date(Date.now() + offset * 86400000);
+  let idx: number;
+  let dateLabel: string;
+  try {
+    const wd = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Rome", weekday: "long" }).format(d);
+    idx = WD_MAP[wd] ?? ((d.getDay() + 6) % 7);
+    dateLabel = new Intl.DateTimeFormat("it-IT", { timeZone: "Europe/Rome", weekday: "long", day: "numeric", month: "long" }).format(d);
+  } catch {
+    idx = (d.getDay() + 6) % 7;
+    dateLabel = DAYS[idx];
+  }
+  dateLabel = dateLabel.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
+  return { idx, weekday: DAYS[idx], dateLabel };
+}
+
 /** True if a normalized program is on air right now (Italian time). */
 export function isOnAir(p: any): boolean {
   if (!p || p.active === false) return false;

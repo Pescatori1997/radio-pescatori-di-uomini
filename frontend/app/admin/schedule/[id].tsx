@@ -11,6 +11,12 @@ import { colors, spacing, radius } from "@/src/theme";
 
 const DAYS = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"];
 const COLORS = ["", "#E11D48", "#F97316", "#EAB308", "#22C55E", "#0EA5E9", "#6366F1", "#A855F7"];
+const TYPES = [
+  { k: "live", l: "🔴 Live", c: "#E11D48" },
+  { k: "recorded", l: "🔵 Registrato", c: "#0EA5E9" },
+  { k: "music", l: "🟣 Musica", c: "#A855F7" },
+  { k: "reflection", l: "🟢 Riflessione", c: "#22C55E" },
+];
 
 export default function ProgramEditor() {
   const insets = useSafeAreaInsets();
@@ -20,7 +26,7 @@ export default function ProgramEditor() {
   const [f, setF] = useState<any>({
     title: "", start_time: "", end_time: "",
     weekdays: initDay ? [initDay] : [], presenters: [{ name: "", image: "" }],
-    description: "", color: "", active: true,
+    description: "", color: "", active: true, type: "recorded",
   });
   const [loading, setLoading] = useState(!isNew);
   const [busy, setBusy] = useState(false);
@@ -35,6 +41,7 @@ export default function ProgramEditor() {
           title: p.title || "", start_time: p.start_time || "", end_time: p.end_time || "",
           weekdays: p.weekdays || [], presenters: (p.presenters && p.presenters.length ? p.presenters : [{ name: "", image: "" }]),
           description: p.description || "", color: p.color || "", active: p.active !== false,
+          type: p.type && p.type !== "regular" ? p.type : "recorded",
         });
       }).catch(() => {}).finally(() => setLoading(false));
     }
@@ -55,7 +62,7 @@ export default function ProgramEditor() {
     const payload = {
       title: f.title, start_time: f.start_time, end_time: f.end_time,
       weekdays: f.weekdays, presenters, images, description: f.description,
-      color: f.color, active: f.active, type: "regular",
+      color: f.color, active: f.active, type: f.type || "recorded",
     };
     try {
       if (isNew) { await api.adminCreateProgram(payload); router.back(); }
@@ -108,6 +115,15 @@ export default function ProgramEditor() {
 
         <AInput testID="prog-desc" label="Descrizione" value={f.description} onChangeText={(v: string) => set("description", v)} multiline />
 
+        <Text style={styles.label}>Tipo di contenuto</Text>
+        <View style={styles.dayRow}>
+          {TYPES.map((t) => (
+            <Pressable key={t.k} testID={`prog-type-${t.k}`} onPress={() => set("type", t.k)} style={[styles.typeChip, f.type === t.k && { backgroundColor: t.c, borderColor: t.c }]}>
+              <Text style={[styles.typeText, f.type === t.k && { color: colors.white }]}>{t.l}</Text>
+            </Pressable>
+          ))}
+        </View>
+
         <Text style={styles.label}>Colore programma</Text>
         <View style={styles.dayRow}>
           {COLORS.map((c) => (
@@ -152,6 +168,8 @@ const styles = StyleSheet.create({
   dayChip: { paddingHorizontal: spacing.md, paddingVertical: 8, borderRadius: radius.pill, backgroundColor: ADMIN.card, borderWidth: 1, borderColor: ADMIN.border },
   dayChipActive: { backgroundColor: colors.white, borderColor: colors.white },
   dayText: { color: ADMIN.muted, fontSize: 13, fontWeight: "700" },
+  typeChip: { paddingHorizontal: spacing.md, paddingVertical: 8, borderRadius: radius.pill, backgroundColor: ADMIN.card, borderWidth: 1, borderColor: ADMIN.border },
+  typeText: { color: colors.white, fontSize: 13, fontWeight: "700" },
   dayTextActive: { color: colors.navy, fontWeight: "800" },
   presenterCard: { backgroundColor: ADMIN.card, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md, borderWidth: 1, borderColor: ADMIN.border },
   presenterHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.sm },

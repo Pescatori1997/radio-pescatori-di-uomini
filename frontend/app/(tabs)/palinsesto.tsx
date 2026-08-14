@@ -1,91 +1,56 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, useWindowDimensions, Platform, Modal } from "react-native";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, useWindowDimensions, Platform, Modal, Animated, Linking } from "react-native";
 import { Image } from "expo-image";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/src/api";
-import { DAYS, romeNow } from "@/src/utils/onair";
+import { DAYS, romeNow, romeDay, isOnAir } from "@/src/utils/onair";
 import { colors, spacing, radius } from "@/src/theme";
 
-/** Vertical scale. Scheduled programs use a real proportional scale; the empty
- * gaps between them (e.g. long night hours) are heavily COMPRESSED so the day
- * fits with minimal scrolling while keeping the timeline look intact. */
-const ACTIVE_PPM = 1.4;   // px per minute inside scheduled programs (~84px/hour)
-const GAP_PPM = 0.14;     // px per minute inside empty gaps (compressed)
-const GAP_MIN = 26;       // min height for any empty gap
-const GAP_MAX = 62;       // cap so long empty gaps never waste space
-const HOUR_LABEL_MIN_GAP = 30; // hide hour labels that would overlap (in gaps)
-const LABEL_W = 44;      // left hour-labels column
-const SPINE_X = 52;      // x position of the vertical timeline line
-const CARD_LEFT = 64;    // where program cards begin
-const GAP = 4;           // vertical gap between stacked cards
+const C_TEXT = colors.onSurface;
+const C_CARD = colors.surfaceSecondary;
 
-/** "HH:MM" -> minutes from 00:00 (00:00→0, 24:00→1440). */
+/** Horizontal 24h broadcast timeline. Data is fully dynamic (api.programs()),
+ * so any change made by an admin is reflected automatically. */
+const PPM = 2.2;                 // px per minute
+const DAY_W = 24 * 60 * PPM;     // full-day track width
+const SIDE_PAD = 16;
+const RULER_H = 30;
+const LANE_TOP = RULER_H + 26;   // leaves room for the "SEI QUI" pill
+const BLOCK_H = 120;
+const TRACK_H = LANE_TOP + BLOCK_H + 12;
+
+/** Content types → legend colours/labels (coherent with the app palette). */
+const TYPES: Record<string, { label: string; color: string; icon: any; emoji: string }> = {
+  live:       { label: "LIVE",        color: "#E11D48", icon: "radio-outline",         emoji: "🔴" },
+  recorded:   { label: "REGISTRATO",  color: "#0EA5E9", icon: "recording-outline",     emoji: "🔵" },
+  music:      { label: "MUSICA",      color: "#A855F7", icon: "musical-notes-outline", emoji: "🟣" },
+  reflection: { label: "RIFLESSIONE", color: "#22C55E", icon: "book-outline",          emoji: "🟢" },
+};
+const LEGEND = ["live", "recorded", "music", "reflection"];
+
+function typeOf(p: any): string {
+  const t = String(p?.type || "").toLowerCase();
+  return TYPES[t] ? t : "recorded"; // "regular"/empty → REGISTRATO
+}
+
 function toMin(hm: string): number {
   if (!hm) return 0;
   const [h, m] = hm.split(":").map((n) => parseInt(n, 10));
   return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
 }
 
-type Seg = { t0: number; t1: number; y0: number; y1: number; active: boolean };
-
-function mergeIntervals(iv: [number, number][]): [number, number][] {
-  const sorted = iv.filter(([a, b]) => b > a).sort((a, b) => a[0] - b[0]);
-  const out: [number, number][] = [];
-  for (const [a, b] of sorted) {
-    const last = out[out.length - 1];
-    if (last && a <= last[1]) last[1] = Math.max(last[1], b);
-    else out.push([a, b]);
-  }
-  return out;
-}
-
-/** Build a piecewise time→y scale: normal inside programs, compressed in gaps. */
-function buildScale(covered: [number, number][]): { segs: Seg[]; total: number } {
-  const segs: Seg[] = [];
-  let t = 0, y = 0;
-  const push = (t0: number, t1: number, active: boolean) => {
-    if (t1 <= t0) return;
-    const dur = t1 - t0;
-    const hgt = active ? dur * ACTIVE_PPM : Math.min(GAP_MAX, Math.max(GAP_MIN, dur * GAP_PPM));
-    segs.push({ t0, t1, y0: y, y1: y + hgt, active });
-    y += hgt;
-  };
-  for (const [a, b] of covered) { push(t, a, false); push(a, b, true); t = b; }
-  push(t, 1440, false);
-  return { segs, total: y };
-}
-
-function yOf(segs: Seg[], min: number): number {
-  for (const s of segs) {
-    if (min <= s.t1) {
-      const f = s.t1 > s.t0 ? (min - s.t0) / (s.t1 - s.t0) : 0;
-      return s.y0 + f * (s.y1 - s.y0);
-    }
-  }
-  return segs.length ? segs[segs.length - 1].y1 : 0;
-}
-
-/** Only real programs, positioned at their own time. Empty gaps stay empty
- * (no "Radio H24" filler cards): the timeline shows just the scheduled shows. */
-function buildSlots(programs: any[]) {
-  return programs
-    .filter((p) => p.active !== false && p.start_time && p.end_time)
-    .map((p) => ({ type: "program", start: p.start_time, end: p.end_time <= p.start_time ? "24:00" : p.end_time, data: p, id: p.id }))
-    .sort((a, b) => a.start.localeCompare(b.start));
-}
-
-function Avatars({ presenters, images, color }: { presenters: any[]; images: string[]; color?: string }) {
-  const pics = (images && images.length ? images : (presenters || []).map((p) => p.image)).filter(Boolean);
+function Avatars({ presenters, images, color, size = 40 }: any) {
+  const pics = (images && images.length ? images : (presenters || []).map((p: any) => p.image)).filter(Boolean);
   const accent = color || colors.brandPrimary;
   if (!pics.length) {
-    return <View style={[styles.avatar, styles.avatarEmpty, { borderColor: accent }]}><Ionicons name="mic" size={20} color={accent} /></View>;
+    return <View style={[styles.avatar, styles.avatarEmpty, { width: size, height: size, borderRadius: size / 2, borderColor: accent }]}><Ionicons name="mic" size={size * 0.45} color={accent} /></View>;
   }
   return (
-    <View style={styles.avatarStack}>
+    <View style={{ flexDirection: "row" }}>
       {pics.slice(0, 3).map((uri: string, i: number) => (
-        <Image key={i} source={{ uri }} style={[styles.avatar, { marginLeft: i === 0 ? 0 : -14, borderColor: colors.surface, zIndex: 10 - i }]} contentFit="cover" />
+        <Image key={i} source={{ uri }} style={[styles.avatar, { width: size, height: size, borderRadius: size / 2, marginLeft: i === 0 ? 0 : -size * 0.32, borderColor: colors.surface, zIndex: 10 - i }]} contentFit="cover" />
       ))}
     </View>
   );
@@ -93,201 +58,238 @@ function Avatars({ presenters, images, color }: { presenters: any[]; images: str
 
 export default function Palinsesto() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
   const [programs, setPrograms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(romeNow());
-  const [day, setDay] = useState(DAYS[romeNow().idx]);
+  const [offset, setOffset] = useState(0); // days from today
+  const [selected, setSelected] = useState<any>(null);
   const scrollRef = useRef<ScrollView>(null);
   const didScroll = useRef(false);
-  const [selected, setSelected] = useState<any>(null);
+  const pulse = useRef(new Animated.Value(0)).current;
 
   useFocusEffect(
     useCallback(() => {
       setNow(romeNow());
       api.programs().then((list: any[]) => setPrograms(list || [])).catch(() => {}).finally(() => setLoading(false));
-      // Update the live cursor every minute so it tracks the real clock.
-      const t = setInterval(() => setNow(romeNow()), 60000);
+      const t = setInterval(() => setNow(romeNow()), 30000);
       return () => clearInterval(t);
     }, [])
   );
 
-  const isToday = day === DAYS[now.idx];
-  const dayPrograms = useMemo(() => programs.filter((p) => (p.weekdays || []).includes(day)), [programs, day]);
-  const slots = useMemo(() => buildSlots(dayPrograms), [dayPrograms]);
+  // Subtle "on-air" pulse loop.
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1100, useNativeDriver: false }),
+        Animated.timing(pulse, { toValue: 0, duration: 1100, useNativeDriver: false }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
 
-  // Piecewise scale: proportional inside programs, compressed in empty gaps.
-  const scale = useMemo(
-    () => buildScale(mergeIntervals(slots.map((s) => [toMin(s.start), toMin(s.end)] as [number, number]))),
-    [slots]
-  );
-  const yAt = useCallback((min: number) => yOf(scale.segs, min), [scale]);
-  const TOTAL_H = scale.total;
+  const dayInfo = useMemo(() => romeDay(offset), [offset]);
+  const isToday = offset === 0;
 
+  const dayPrograms = useMemo(() => {
+    return (programs || [])
+      .filter((p) => p.active !== false && p.start_time && p.end_time && (p.weekdays || []).includes(dayInfo.weekday))
+      .map((p) => ({ ...p, _start: toMin(p.start_time), _end: p.end_time <= p.start_time ? 1440 : toMin(p.end_time) }))
+      .sort((a, b) => a._start - b._start);
+  }, [programs, dayInfo.weekday]);
+
+  const liveProg = useMemo(() => (isToday ? dayPrograms.find((p) => isOnAir(p)) : null), [isToday, dayPrograms, now.hm]);
   const nowMin = toMin(now.hm);
-  const cursorTop = yAt(nowMin);
+  const cursorLeft = nowMin * PPM;
 
-  // Hour labels placed through the compressed scale; skip those that would
-  // overlap (i.e. multiple hours collapsed inside a compressed gap).
-  const hourTicks = useMemo(() => {
-    const ticks: { h: number; y: number }[] = [];
-    let lastY = -999;
-    for (let h = 0; h <= 24; h++) {
-      const y = yAt(h * 60);
-      if (y - lastY >= HOUR_LABEL_MIN_GAP) { ticks.push({ h, y }); lastY = y; }
-    }
-    return ticks;
-  }, [yAt]);
-
-  // Compressed empty gaps worth marking on the spine (>= 45 min).
-  const gapMarks = useMemo(
-    () => scale.segs.filter((s) => !s.active && s.t1 - s.t0 >= 45),
-    [scale]
-  );
-
-  // Index of the slot currently on air (only for today)
-  const liveIdx = useMemo(() => {
-    if (!isToday) return -1;
-    return slots.findIndex((s) => s.start <= now.hm && now.hm < s.end);
-  }, [slots, isToday, now.hm]);
-
-  // Auto-scroll so the current-time cursor is visible when viewing today.
   const onContentReady = useCallback(() => {
     if (didScroll.current || !isToday || loading) return;
     didScroll.current = true;
     requestAnimationFrame(() => {
-      scrollRef.current?.scrollTo({ y: Math.max(0, cursorTop - 220), animated: false });
+      scrollRef.current?.scrollTo({ x: Math.max(0, cursorLeft - width / 3), animated: false });
     });
-  }, [isToday, loading, cursorTop]);
+  }, [isToday, loading, cursorLeft, width]);
+
+  // reset auto-scroll when switching day
+  useEffect(() => { didScroll.current = false; }, [offset]);
+
+  const hours = Array.from({ length: 9 }, (_, i) => i * 3); // 0,3,...,24
+
+  const glowOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.85] });
+
+  const openListen = (p: any, live: boolean) => {
+    if (p.stream_url) { Linking.openURL(p.stream_url).catch(() => {}); return; }
+    router.push("/live");
+    setSelected(null);
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
+      {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
-        <Text style={styles.h1}>Palinsesto</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow} style={styles.chipsScroll}>
-          {DAYS.map((d) => (
-            <Pressable key={d} testID={`day-chip-${d}`} onPress={() => setDay(d)} style={[styles.chip, day === d && styles.chipActive]}>
-              <Text style={[styles.chipText, day === d && styles.chipTextActive]}>{d.slice(0, 3)}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
+        <Text style={styles.kicker}>PALINSESTO</Text>
+        <Text style={styles.date}>{dayInfo.dateLabel}</Text>
+
+        {/* Day navigation: ‹ Ieri · Oggi · Domani › */}
+        <View style={styles.nav}>
+          <Pressable testID="day-prev" onPress={() => setOffset((o) => o - 1)} style={styles.navBtn} hitSlop={8}>
+            <Ionicons name="chevron-back" size={18} color={colors.white} />
+            <Text style={styles.navText}>Ieri</Text>
+          </Pressable>
+          <Pressable testID="day-today" onPress={() => setOffset(0)} style={[styles.todayBtn, isToday && styles.todayBtnActive]} hitSlop={8}>
+            <Text style={[styles.todayText, isToday && styles.todayTextActive]}>Oggi</Text>
+          </Pressable>
+          <Pressable testID="day-next" onPress={() => setOffset((o) => o + 1)} style={styles.navBtn} hitSlop={8}>
+            <Text style={styles.navText}>Domani</Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.white} />
+          </Pressable>
+        </View>
       </View>
 
       {loading ? (
         <View style={styles.center}><ActivityIndicator color={colors.brandPrimary} size="large" /></View>
       ) : (
-        <ScrollView
-          ref={scrollRef}
-          onContentSizeChange={onContentReady}
-          contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: 180, maxWidth: isWide ? 720 : undefined, width: "100%", alignSelf: "center" }}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={[styles.timeline, { height: TOTAL_H + 16 }]}>
-            {/* Hour grid: labels + subtle lines (compressed scale) */}
-            {hourTicks.map(({ h, y }) => (
-              <View key={`hr-${h}`} style={[styles.hourRow, { top: y }]} pointerEvents="none">
-                <Text style={styles.hourLabel}>{`${String(h).padStart(2, "0")}:00`}</Text>
-                <View style={styles.hourLine} />
-              </View>
-            ))}
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 160 }}>
+          {/* Horizontal timeline */}
+          <ScrollView
+            ref={scrollRef}
+            horizontal
+            showsHorizontalScrollIndicator
+            onContentSizeChange={onContentReady}
+            contentContainerStyle={{ width: DAY_W + SIDE_PAD * 2, paddingHorizontal: SIDE_PAD, paddingTop: spacing.md }}
+            style={styles.timelineScroll}
+          >
+            <View style={{ width: DAY_W, height: TRACK_H }}>
+              {/* hour grid + ruler */}
+              {hours.map((h) => {
+                const left = h * 60 * PPM;
+                return (
+                  <View key={`h-${h}`} style={[styles.gridCol, { left }]} pointerEvents="none">
+                    <Text style={[styles.hourLabel, h === 24 && { transform: [{ translateX: -34 }] }]}>{`${String(h).padStart(2, "0")}:00`}</Text>
+                    <View style={styles.gridLine} />
+                  </View>
+                );
+              })}
 
-            {/* Vertical spine */}
-            <View style={styles.spine} />
+              {/* baseline under the ruler */}
+              <View style={[styles.baseline, { top: RULER_H }]} pointerEvents="none" />
 
-            {/* Compressed empty-gap markers (dashed) so skipped time reads clearly */}
-            {gapMarks.map((s, i) => (
-              <View key={`gap-${i}`} style={[styles.gapMark, { top: s.y0, height: s.y1 - s.y0 }]} pointerEvents="none">
-                <View style={styles.gapDash} />
-              </View>
-            ))}
-
-            {/* Program slots, positioned proportionally to their time */}
-            {slots.map((s, i) => {
-              const startMin = toMin(s.start);
-              const endMin = toMin(s.end);
-              const top = yAt(startMin);
-              const h = Math.max(28, yAt(endMin) - yAt(startMin) - GAP);
-              const compact = h < 92;
-              const live = i === liveIdx;
-              const p = s.data;
-              const accent = p.color || colors.brandPrimary;
-              const liveShadow = live ? (Platform.select({ web: { boxShadow: `0 0 16px ${colors.error}55` } as any, default: { shadowColor: colors.error, shadowOpacity: 0.5, shadowRadius: 12, shadowOffset: { width: 0, height: 0 }, elevation: 8 } }) as any) : null;
-
-              return (
-                <View key={s.id} testID={`slot-${s.id}`} style={[styles.slot, { top, height: h }]}>
-                  <Pressable style={[styles.card, live && [styles.cardLive, { borderColor: colors.error }, liveShadow], !live && { borderColor: accent + "44" }]} onPress={() => setSelected({ p, start: s.start, end: s.end, live })}>
-                    <Avatars presenters={p.presenters} images={p.images} color={p.color} />
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      {live && (
-                        <View style={[styles.liveBadge, { backgroundColor: colors.error }]}><Text style={styles.liveText}>🔴 ORA IN ONDA</Text></View>
-                      )}
-                      <Text style={styles.name} numberOfLines={1}>{p.title}</Text>
-                      {!!p.host && !compact && (
-                        <View style={styles.hostRow}><Ionicons name="mic-outline" size={13} color={accent} /><Text style={styles.host} numberOfLines={1}>{p.host}</Text></View>
-                      )}
-                      <Text style={styles.range}>{s.start} – {s.end}</Text>
-                      {!compact && !!p.description && (
-                        <Text style={styles.desc} numberOfLines={h > 150 ? 3 : 2}>{p.description}</Text>
-                      )}
-                      {!compact && !!p.description && (
-                        <Text style={styles.readMore}>Tocca per leggere di più</Text>
-                      )}
-                    </View>
-                  </Pressable>
+              {/* empty-day hint */}
+              {dayPrograms.length === 0 && (
+                <View style={[styles.emptyHint, { top: LANE_TOP + BLOCK_H / 2 - 20 }]} pointerEvents="none">
+                  <Ionicons name="radio-outline" size={20} color={colors.muted} />
+                  <Text style={styles.emptyText}>Nessun programma in griglia · Radio H24 in diretta</Text>
                 </View>
-              );
-            })}
+              )}
 
-            {/* Single real-time cursor — only for today. Slides along the 24h scale.
-             * When no program is on air, it shows the "Diretta Radio" live status. */}
-            {isToday && (
-              <View style={[styles.cursor, { top: cursorTop }]} pointerEvents="none" testID="now-cursor">
-                <View style={styles.cursorPill}><Text style={styles.cursorPillText}>{now.hm}</Text></View>
-                <View style={styles.cursorDot} />
-                <View style={styles.cursorLine} />
-                {liveIdx < 0 && (
-                  <View style={styles.cursorLiveChip}><Text style={styles.cursorLiveText}>🔴 Diretta Radio</Text></View>
-                )}
+              {/* program blocks */}
+              {dayPrograms.map((p) => {
+                const tc = TYPES[typeOf(p)];
+                const left = p._start * PPM;
+                const w = Math.max(6, (p._end - p._start) * PPM - 4);
+                const live = !!liveProg && liveProg.id === p.id;
+                const wide = w >= 68;
+                return (
+                  <Pressable
+                    key={p.id}
+                    testID={`slot-${p.id}`}
+                    onPress={() => setSelected({ p, live })}
+                    style={[styles.block, { left, width: w, top: LANE_TOP, height: BLOCK_H, backgroundColor: tc.color + "1A", borderColor: live ? tc.color : tc.color + "55" }]}
+                  >
+                    <View style={[styles.blockAccent, { backgroundColor: tc.color }]} />
+                    {live && (
+                      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFillObject, styles.liveGlow, { borderColor: tc.color, opacity: glowOpacity }]} />
+                    )}
+                    {wide ? (
+                      <View style={styles.blockInner}>
+                        {live && <View style={[styles.onAir, { backgroundColor: tc.color }]}><Text style={styles.onAirText}>● IN ONDA</Text></View>}
+                        <Text style={[styles.blockTitle, live && { color: tc.color }]} numberOfLines={2}>{p.title}</Text>
+                        <Text style={styles.blockTime}>{p.start_time} – {p.end_time}</Text>
+                        {!!p.host && w >= 120 && <Text style={styles.blockHost} numberOfLines={1}>{p.host}</Text>}
+                      </View>
+                    ) : (
+                      <View style={styles.blockNarrow}><Ionicons name={tc.icon} size={16} color={tc.color} /></View>
+                    )}
+                  </Pressable>
+                );
+              })}
+
+              {/* SEI QUI cursor (only for today) */}
+              {isToday && (
+                <View style={[styles.cursor, { left: cursorLeft, height: TRACK_H }]} pointerEvents="none" testID="now-cursor">
+                  <View style={styles.cursorPill}><Text style={styles.cursorPillText}>🔴 SEI QUI</Text></View>
+                  <View style={styles.cursorLine} />
+                </View>
+              )}
+            </View>
+          </ScrollView>
+
+          {/* Legend */}
+          <View style={[styles.legend, isWide && { justifyContent: "center" }]}>
+            {LEGEND.map((k) => (
+              <View key={k} style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: TYPES[k].color }]} />
+                <Text style={styles.legendText}>{TYPES[k].label}</Text>
               </View>
-            )}
+            ))}
           </View>
+
+          {/* On-air quick banner */}
+          {isToday && (
+            <Pressable style={styles.nowBanner} onPress={() => (liveProg ? setSelected({ p: liveProg, live: true }) : router.push("/live"))}>
+              <View style={[styles.nowDot, { backgroundColor: colors.error }]} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.nowLabel}>ORA IN ONDA · {now.hm}</Text>
+                <Text style={styles.nowTitle} numberOfLines={1}>{liveProg ? liveProg.title : "Diretta Radio · Pescatori di Uomini"}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+            </Pressable>
+          )}
         </ScrollView>
       )}
 
-      {/* Program detail modal — full title, presenters, time and complete description */}
+      {/* Program detail modal */}
       <Modal visible={!!selected} transparent animationType="slide" onRequestClose={() => setSelected(null)}>
         <Pressable style={styles.backdrop} onPress={() => setSelected(null)}>
           <Pressable style={styles.sheet} onPress={() => {}}>
             <View style={styles.sheetHandle} />
-            {selected && (
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + spacing.lg }}>
-                {selected.live && (
-                  <View style={[styles.liveBadge, { backgroundColor: colors.error, marginBottom: spacing.sm }]}><Text style={styles.liveText}>🔴 ORA IN ONDA</Text></View>
-                )}
-                <View style={styles.sheetHeader}>
-                  <Avatars presenters={selected.p.presenters} images={selected.p.images} color={selected.p.color} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.sheetTitle}>{selected.p.title}</Text>
-                    <Text style={styles.sheetRange}>{selected.start} – {selected.end}</Text>
+            {selected && (() => {
+              const p = selected.p;
+              const tc = TYPES[typeOf(p)];
+              const live = selected.live;
+              return (
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + spacing.lg }}>
+                  <View style={[styles.typeTag, { backgroundColor: tc.color + "22", borderColor: tc.color }]}>
+                    <Ionicons name={tc.icon} size={13} color={tc.color} />
+                    <Text style={[styles.typeTagText, { color: tc.color }]}>{tc.label}</Text>
                   </View>
-                </View>
-                {!!selected.p.host && (
-                  <View style={styles.sheetHostRow}>
-                    <Ionicons name="mic" size={16} color={selected.p.color || colors.brandPrimary} />
-                    <Text style={styles.sheetHost}>{selected.p.host}</Text>
+                  {live && <View style={[styles.onAir, styles.onAirBig, { backgroundColor: tc.color }]}><Text style={styles.onAirText}>● IN ONDA</Text></View>}
+                  <View style={styles.sheetHeader}>
+                    <Avatars presenters={p.presenters} images={p.images} color={p.color} size={54} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.sheetTitle}>{p.title}</Text>
+                      <Text style={styles.sheetRange}>{p.start_time} – {p.end_time}</Text>
+                    </View>
                   </View>
-                )}
-                {!!selected.p.description ? (
-                  <Text style={styles.sheetDesc}>{selected.p.description}</Text>
-                ) : (
-                  <Text style={styles.sheetNoDesc}>Nessuna descrizione disponibile per questo programma.</Text>
-                )}
-                <Pressable testID="program-close" style={styles.closeBtn} onPress={() => setSelected(null)}>
-                  <Text style={styles.closeBtnText}>Chiudi</Text>
-                </Pressable>
-              </ScrollView>
-            )}
+                  {!!p.host && (
+                    <View style={styles.metaRow}><Ionicons name="mic-outline" size={16} color={colors.brandPrimary} /><Text style={styles.metaText}>{p.host}</Text></View>
+                  )}
+                  {!!p.description && <Text style={styles.sheetDesc}>{p.description}</Text>}
+                  {(live || p.stream_url) && (
+                    <Pressable testID="listen-btn" style={[styles.listenBtn, { backgroundColor: tc.color }]} onPress={() => openListen(p, live)}>
+                      <Ionicons name="play" size={18} color={colors.white} />
+                      <Text style={styles.listenText}>{live ? "Ascolta la diretta" : "Ascolta ora"}</Text>
+                    </Pressable>
+                  )}
+                  <Pressable style={styles.closeBtn} onPress={() => setSelected(null)}>
+                    <Text style={styles.closeText}>Chiudi</Text>
+                  </Pressable>
+                </ScrollView>
+              );
+            })()}
           </Pressable>
         </Pressable>
       </Modal>
@@ -295,62 +297,72 @@ export default function Palinsesto() {
   );
 }
 
-const AV = 44;
 const styles = StyleSheet.create({
-  header: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
-  h1: { fontSize: 30, fontWeight: "800", color: colors.onSurface, marginBottom: spacing.md },
-  chipsScroll: { marginHorizontal: -spacing.lg },
-  chipsRow: { gap: spacing.sm, paddingHorizontal: spacing.lg },
-  chip: { height: 36, minWidth: 52, paddingHorizontal: spacing.md, borderRadius: radius.pill, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  chipActive: { backgroundColor: colors.navy },
-  chipText: { color: colors.onSurfaceSecondary, fontSize: 13, fontWeight: "700" },
-  chipTextActive: { color: colors.white },
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  header: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border + "66" },
+  kicker: { color: colors.brandPrimary, fontSize: 12, fontWeight: "900", letterSpacing: 2 },
+  date: { color: C_TEXT, fontSize: 24, fontWeight: "900", marginTop: 2 },
+  nav: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.md },
+  navBtn: { flexDirection: "row", alignItems: "center", gap: 2, paddingVertical: 8, paddingHorizontal: spacing.md, borderRadius: radius.pill, backgroundColor: C_CARD, borderWidth: 1, borderColor: colors.border },
+  navText: { color: C_TEXT, fontSize: 13, fontWeight: "800" },
+  todayBtn: { paddingVertical: 8, paddingHorizontal: spacing.lg, borderRadius: radius.pill, backgroundColor: C_CARD, borderWidth: 1, borderColor: colors.border },
+  todayBtnActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
+  todayText: { color: C_TEXT, fontSize: 13, fontWeight: "900" },
+  todayTextActive: { color: colors.white },
 
-  timeline: { position: "relative" },
-  spine: { position: "absolute", left: SPINE_X, top: 0, bottom: 0, width: 2, backgroundColor: colors.border, borderRadius: 1 },
-  gapMark: { position: "absolute", left: SPINE_X - 2, width: 6, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
-  gapDash: { flex: 1, borderLeftWidth: 2, borderColor: colors.border, borderStyle: "dashed", opacity: 0.9 },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 60 },
+  timelineScroll: { backgroundColor: colors.surface },
 
-  hourRow: { position: "absolute", left: 0, right: 0, height: 0, flexDirection: "row", alignItems: "center" },
-  hourLabel: { position: "absolute", left: 0, top: -7, width: LABEL_W, textAlign: "right", color: colors.muted, fontSize: 11, fontWeight: "700" },
-  hourLine: { position: "absolute", left: CARD_LEFT, right: 0, height: 1, backgroundColor: colors.border + "55" },
+  gridCol: { position: "absolute", top: 0, bottom: 0, width: 1 },
+  hourLabel: { position: "absolute", top: 4, left: 4, color: colors.muted, fontSize: 11, fontWeight: "800" },
+  gridLine: { position: "absolute", top: RULER_H, bottom: 12, left: 0, width: 1, backgroundColor: colors.border + "55" },
+  baseline: { position: "absolute", left: 0, right: 0, height: 2, backgroundColor: colors.border + "88", borderRadius: 1 },
 
-  slot: { position: "absolute", left: CARD_LEFT, right: 0, overflow: "hidden" },
-  card: { flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.sm, borderWidth: 1, borderColor: "transparent", overflow: "hidden" },
-  cardLive: { borderWidth: 2 },
-  avatar: { width: AV, height: AV, borderRadius: AV / 2, borderWidth: 2, backgroundColor: colors.navy },
-  avatarEmpty: { alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceTertiary },
-  avatarStack: { flexDirection: "row", alignItems: "center" },
+  emptyHint: { position: "absolute", left: 0, right: 0, alignItems: "center", gap: 6 },
+  emptyText: { color: colors.muted, fontSize: 13, fontWeight: "700" },
 
-  liveBadge: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.pill, marginBottom: 3 },
-  liveText: { color: colors.white, fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
-  name: { color: colors.onSurface, fontSize: 15, fontWeight: "800" },
-  hostRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
-  host: { color: colors.onSurfaceTertiary, fontSize: 13, fontWeight: "600", flex: 1 },
-  range: { color: colors.muted, fontSize: 12, marginTop: 2, fontWeight: "600" },
-  desc: { color: colors.onSurfaceSecondary, fontSize: 12, marginTop: 4, lineHeight: 16 },
-  readMore: { color: colors.brandPrimary, fontSize: 11, fontWeight: "700", marginTop: 3 },
+  block: { position: "absolute", borderRadius: radius.md, borderWidth: 1.5, overflow: "hidden" },
+  blockAccent: { position: "absolute", left: 0, top: 0, bottom: 0, width: 5 },
+  liveGlow: { borderRadius: radius.md, borderWidth: 2.5 },
+  blockInner: { flex: 1, paddingVertical: spacing.sm, paddingLeft: 14, paddingRight: 10, justifyContent: "center" },
+  blockNarrow: { flex: 1, alignItems: "center", justifyContent: "center", paddingLeft: 4 },
+  blockTitle: { color: C_TEXT, fontSize: 14, fontWeight: "900", lineHeight: 18 },
+  blockTime: { color: colors.muted, fontSize: 11.5, fontWeight: "700", marginTop: 4 },
+  blockHost: { color: colors.muted, fontSize: 11, marginTop: 2 },
+  onAir: { alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill, marginBottom: 6 },
+  onAirBig: { marginBottom: spacing.sm },
+  onAirText: { color: colors.white, fontSize: 10, fontWeight: "900", letterSpacing: 0.5 },
 
-  backdrop: { flex: 1, backgroundColor: "rgba(6,10,26,0.6)", justifyContent: "flex-end" },
-  sheet: { backgroundColor: colors.surface, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: spacing.lg, maxHeight: "80%" },
-  sheetHandle: { width: 44, height: 5, borderRadius: 3, backgroundColor: colors.border, alignSelf: "center", marginBottom: spacing.lg },
-  sheetHeader: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-  sheetTitle: { color: colors.onSurface, fontSize: 20, fontWeight: "800" },
-  sheetRange: { color: colors.muted, fontSize: 14, fontWeight: "600", marginTop: 2 },
-  sheetHostRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: spacing.md },
-  sheetHost: { color: colors.onSurfaceSecondary, fontSize: 15, fontWeight: "700" },
-  sheetDesc: { color: colors.onSurfaceSecondary, fontSize: 15, lineHeight: 23, marginTop: spacing.lg },
-  sheetNoDesc: { color: colors.muted, fontSize: 14, fontStyle: "italic", marginTop: spacing.lg },
-  closeBtn: { backgroundColor: colors.navy, paddingVertical: spacing.md, borderRadius: radius.pill, alignItems: "center", marginTop: spacing.xl },
-  closeBtnText: { color: colors.white, fontSize: 16, fontWeight: "800" },
+  cursor: { position: "absolute", top: 0, width: 2, alignItems: "center" },
+  cursorPill: { backgroundColor: colors.error, paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill, transform: [{ translateX: 0 }], zIndex: 5 },
+  cursorPillText: { color: colors.white, fontSize: 10, fontWeight: "900", letterSpacing: 0.5 },
+  cursorLine: { flex: 1, width: 2, backgroundColor: colors.error, marginTop: 2 },
 
-  // Real-time cursor
-  cursor: { position: "absolute", left: 0, right: 0, height: 18, marginTop: -9, flexDirection: "row", alignItems: "center", zIndex: 50 },
-  cursorPill: { width: LABEL_W, height: 18, borderRadius: 5, backgroundColor: colors.error, alignItems: "center", justifyContent: "center" },
-  cursorPillText: { color: colors.white, fontSize: 11, fontWeight: "800" },
-  cursorDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: colors.error, marginLeft: SPINE_X - LABEL_W - 6, borderWidth: 2, borderColor: colors.surface },
-  cursorLine: { flex: 1, height: 2, backgroundColor: colors.error, marginLeft: 2 },
-  cursorLiveChip: { position: "absolute", right: 0, top: -20, flexDirection: "row", alignItems: "center", backgroundColor: colors.error, paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill },
-  cursorLiveText: { color: colors.white, fontSize: 10, fontWeight: "800", letterSpacing: 0.3 },
+  legend: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: 6 },
+  legendDot: { width: 12, height: 12, borderRadius: 6 },
+  legendText: { color: colors.muted, fontSize: 12, fontWeight: "800", letterSpacing: 0.4 },
+
+  nowBanner: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginHorizontal: spacing.lg, padding: spacing.md, borderRadius: radius.lg, backgroundColor: C_CARD, borderWidth: 1, borderColor: colors.border },
+  nowDot: { width: 12, height: 12, borderRadius: 6 },
+  nowLabel: { color: colors.error, fontSize: 11, fontWeight: "900", letterSpacing: 0.6 },
+  nowTitle: { color: C_TEXT, fontSize: 15, fontWeight: "800", marginTop: 2 },
+
+  avatar: { borderWidth: 2 },
+  avatarEmpty: { alignItems: "center", justifyContent: "center", backgroundColor: C_CARD },
+
+  backdrop: { flex: 1, backgroundColor: "rgba(4,10,24,0.55)", justifyContent: "flex-end" },
+  sheet: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.lg, maxHeight: "82%" },
+  sheetHandle: { alignSelf: "center", width: 44, height: 5, borderRadius: 3, backgroundColor: colors.border, marginBottom: spacing.md },
+  typeTag: { flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill, borderWidth: 1, marginBottom: spacing.sm },
+  typeTagText: { fontSize: 11, fontWeight: "900", letterSpacing: 0.6 },
+  sheetHeader: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginBottom: spacing.md },
+  sheetTitle: { color: C_TEXT, fontSize: 20, fontWeight: "900" },
+  sheetRange: { color: colors.brandPrimary, fontSize: 14, fontWeight: "800", marginTop: 2 },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: spacing.sm },
+  metaText: { color: C_TEXT, fontSize: 14, fontWeight: "700" },
+  sheetDesc: { color: colors.muted, fontSize: 14, lineHeight: 21, marginTop: 4, marginBottom: spacing.md },
+  listenBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, paddingVertical: spacing.md, borderRadius: radius.pill, marginTop: spacing.sm },
+  listenText: { color: colors.white, fontSize: 16, fontWeight: "900" },
+  closeBtn: { alignItems: "center", paddingVertical: spacing.md, marginTop: spacing.sm },
+  closeText: { color: colors.muted, fontSize: 15, fontWeight: "700" },
 });
