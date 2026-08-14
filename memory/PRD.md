@@ -487,3 +487,7 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 ## Notizie compatte + Piani ripresa (2026-06)
 - Notizie: card della lista trasformate in righe compatte (miniatura 76x76 + categoria + titolo 2 righe + estratto 2 righe + link "Leggi di più ›") stile Piani Biblici; tap apre /news/[id]. Banner "In primo piano" invariato in cima.
 - Piani Biblici (app/lettore/piano/[id].tsx): alla riapertura scrolla automaticamente al primo giorno NON completato (resumeDay = primo day non in completed_days), via onLayout delle day card + scrollRef.scrollTo (una sola volta per apertura, solo se ci sono progressi). Verificato news via screenshot; ripresa piano da validare con un piano reale con progressi parziali.
+
+## Fix foto Palinsesto (2026-06)
+- BUG: le foto dei programmi (card timeline e hero pagina programma) non si vedevano. Causa: p.images[0]/p.hero_image sono già URL /api/img assoluti (imageopt + absolutizeImages), ma venivano ri-passati a mediaUrl() → URL rotto (BASE/api/media/https://...).
+- FIX: helper imgUri() in palinsesto.tsx e programma/[slug].tsx → usa il valore così com'è se è già http/​/api/​/data:, altrimenti mediaUrl(id). Verificato: card mostra la miniatura, fallback icona microfono se nessuna foto.

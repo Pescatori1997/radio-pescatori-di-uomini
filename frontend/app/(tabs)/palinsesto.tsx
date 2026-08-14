@@ -11,6 +11,12 @@ import { colors, spacing, radius } from "@/src/theme";
 const ACCENT = colors.brandPrimary;
 const LIVE = colors.error;
 
+function imgUri(v?: string): string | null {
+  if (!v) return null;
+  if (/^https?:\/\//i.test(v) || v.startsWith("/api/") || v.startsWith("data:")) return v;
+  return mediaUrl(v);
+}
+
 function toMin(hm: string): number {
   if (!hm) return 0;
   const [h, m] = hm.split(":").map((n) => parseInt(n, 10));
@@ -67,7 +73,7 @@ export default function Palinsesto() {
     const endMin = p.end_time && p.end_time <= p.start_time ? toMin(p.end_time) + 1440 : toMin(p.end_time || p.start_time);
     const nowMin = toMin(now.hm);
     const pct = live && endMin > startMin ? Math.min(1, Math.max(0, (nowMin - startMin) / (endMin - startMin))) : 0;
-    const img = p.images && p.images[0] ? mediaUrl(p.images[0]) : null;
+    const img = imgUri(p.images && p.images[0]);
     return (
       <Pressable key={p.id} testID={`prog-${p.id}`} onPress={() => router.push(`/programma/${p.slug || p.id}` as any)} style={[styles.card, live && styles.cardLive]}>
         <View style={styles.thumbWrap}>

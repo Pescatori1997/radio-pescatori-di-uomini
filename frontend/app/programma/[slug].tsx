@@ -13,6 +13,12 @@ const ACCENT = colors.brandPrimary;
 const LIVE = colors.error;
 const TEXT = colors.onSurface;
 
+function imgUri(v?: string): string | null {
+  if (!v) return null;
+  if (/^https?:\/\//i.test(v) || v.startsWith("/api/") || v.startsWith("data:")) return v;
+  return mediaUrl(v);
+}
+
 function fmtDate(s: string): string {
   if (!s) return "";
   const d = new Date(s);
@@ -63,7 +69,7 @@ export default function ProgramDetail() {
     </View>
   );
 
-  const hero = p.hero_image ? mediaUrl(p.hero_image) : (p.images?.[0] ? mediaUrl(p.images[0]) : null);
+  const hero = imgUri(p.hero_image) || imgUri(p.images?.[0]);
   const episodes = p.episodes || [];
   const lastEp = episodes[0];
   const scheduleLabel = `${(p.weekdays || []).join(", ")}${p.start_time ? ` · ore ${p.start_time}` : ""}`;
