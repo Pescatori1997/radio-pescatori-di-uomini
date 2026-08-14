@@ -113,22 +113,42 @@ def _normalize_program(d: dict) -> dict:
     if not images:
         images = [p["image"] for p in presenters if p.get("image")]
     host_str = ", ".join([p["name"] for p in presenters if p.get("name")])
+    import re as _re
+    slug = d.get("slug") or _re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-") or (d.get("id") or "")
+    episodes = d.get("episodes") or []
+    episodes = [{
+        "id": e.get("id") or "",
+        "title": e.get("title") or "",
+        "date": e.get("date") or "",
+        "duration_min": e.get("duration_min") or e.get("duration") or 0,
+        "description": e.get("description") or "",
+        "audio_url": e.get("audio_url") or "",
+    } for e in episodes if isinstance(e, dict)]
+    episodes.sort(key=lambda e: e.get("date") or "", reverse=True)
     return {
         "id": d.get("id"),
+        "slug": slug,
         "title": title,
         "name": title,
+        "subtitle": d.get("subtitle") or "",
+        "category": d.get("category") or "",
         "presenters": presenters,
         "host": host_str,
         "description": d.get("description") or "",
+        "long_description": d.get("long_description") or d.get("description") or "",
         "start_time": start,
         "time": start,
         "end_time": d.get("end_time") or "",
         "weekdays": weekdays,
         "images": images,
+        "hero_image": d.get("hero_image") or (images[0] if images else ""),
         "color": d.get("color") or "",
         "active": d.get("active", True),
         "type": d.get("type") or "regular",
         "date": d.get("date") or "",
+        "social": d.get("social") or {},
+        "contact_url": d.get("contact_url") or "",
+        "episodes": episodes,
     }
 
 
@@ -689,6 +709,16 @@ async def get_current_program():
     return None
 
 
+@api_router.get("/program/{slug}")
+async def get_program_detail(slug: str):
+    docs = await db.programs.find({}, {"_id": 0}).to_list(500)
+    for d in docs:
+        p = _normalize_program(d)
+        if p.get("slug") == slug or p.get("id") == slug:
+            return imageopt.lighten("programs", p)
+    raise HTTPException(status_code=404, detail="Programma non trovato")
+
+
 @api_router.get("/programs/day/{weekday}")
 async def get_programs_by_day(weekday: str):
     docs = await db.programs.find({}, {"_id": 0}).to_list(500)
@@ -905,6 +935,24 @@ async def favorite_ids(authorization: Optional[str] = Header(None)):
     user = await get_current_user(authorization)
     favs = await db.favorites.find({"user_id": user["user_id"]}, {"_id": 0, "podcast_id": 1}).to_list(500)
     return [f["podcast_id"] for f in favs]
+
+
+@api_router.get("/me/favorite-programs")
+async def favorite_program_ids(authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    favs = await db.program_favorites.find({"user_id": user["user_id"]}, {"_id": 0, "program_id": 1}).to_list(500)
+    return [f["program_id"] for f in favs]
+
+
+@api_router.post("/me/favorite-programs/{prog_id}")
+async def toggle_favorite_program(prog_id: str, authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    existing = await db.program_favorites.find_one({"user_id": user["user_id"], "program_id": prog_id})
+    if existing:
+        await db.program_favorites.delete_one({"_id": existing["_id"]})
+        return {"favorited": False}
+    await db.program_favorites.insert_one({"user_id": user["user_id"], "program_id": prog_id, "created_at": now_utc()})
+    return {"favorited": True}
 
 
 @api_router.post("/me/history/{podcast_id}")
@@ -2212,32 +2260,57 @@ class PresenterIn(BaseModel):
     image: Optional[str] = ""
 
 
+class EpisodeIn(BaseModel):
+    id: Optional[str] = ""
+    title: str = ""
+    date: Optional[str] = ""
+    duration_min: Optional[int] = 0
+    description: Optional[str] = ""
+    audio_url: Optional[str] = ""
+
+
 class ProgramIn(BaseModel):
     title: str
+    slug: Optional[str] = ""
+    subtitle: Optional[str] = ""
+    category: Optional[str] = ""
     start_time: str
     end_time: Optional[str] = ""
     weekdays: List[str] = []
     presenters: List[PresenterIn] = []
     description: Optional[str] = ""
+    long_description: Optional[str] = ""
     images: List[str] = []
+    hero_image: Optional[str] = ""
     color: Optional[str] = ""
     active: bool = True
     type: Optional[str] = "regular"
     date: Optional[str] = ""
+    social: Optional[dict] = None
+    contact_url: Optional[str] = ""
+    episodes: Optional[List[EpisodeIn]] = None
 
 
 class ProgramEdit(BaseModel):
     title: Optional[str] = None
+    slug: Optional[str] = None
+    subtitle: Optional[str] = None
+    category: Optional[str] = None
     start_time: Optional[str] = None
     end_time: Optional[str] = None
     weekdays: Optional[List[str]] = None
     presenters: Optional[List[PresenterIn]] = None
     description: Optional[str] = None
+    long_description: Optional[str] = None
     images: Optional[List[str]] = None
+    hero_image: Optional[str] = None
     color: Optional[str] = None
     active: Optional[bool] = None
     type: Optional[str] = None
     date: Optional[str] = None
+    social: Optional[dict] = None
+    contact_url: Optional[str] = None
+    episodes: Optional[List[EpisodeIn]] = None
 
 
 @api_router.get("/admin/programs")
@@ -2252,6 +2325,9 @@ async def admin_programs(admin=Depends(require_perm("schedule"))):
 async def admin_create_program(body: ProgramIn, admin=Depends(require_perm("schedule"))):
     doc = body.model_dump()
     doc["presenters"] = [p for p in doc.get("presenters", [])]
+    for e in (doc.get("episodes") or []):
+        if not e.get("id"):
+            e["id"] = new_id("ep")
     doc["id"] = new_id("prog")
     doc["created_at"] = now_utc()
     doc["updated_at"] = now_utc()
@@ -2264,6 +2340,9 @@ async def admin_create_program(body: ProgramIn, admin=Depends(require_perm("sche
 async def admin_edit_program(prog_id: str, body: ProgramEdit, admin=Depends(require_perm("schedule"))):
     updates = body.model_dump(exclude_unset=True)
     if updates:
+        for e in (updates.get("episodes") or []):
+            if not e.get("id"):
+                e["id"] = new_id("ep")
         updates["updated_at"] = now_utc()
         await db.programs.update_one({"id": prog_id}, {"$set": updates})
     await log_activity(admin, "ha aggiornato il palinsesto", "schedule", {"id": prog_id})

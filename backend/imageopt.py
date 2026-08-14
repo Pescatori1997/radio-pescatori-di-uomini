@@ -29,7 +29,7 @@ IMG_FIELDS = {
     "reading_plans": ("cover",),
     "contents": ("thumbnail",),
     "settings": ("about_image",),
-    "programs": (),  # arrays handled specially below
+    "programs": ("hero_image",),  # scalar; presenter/images arrays handled specially below
 }
 
 # Collections that carry image arrays.

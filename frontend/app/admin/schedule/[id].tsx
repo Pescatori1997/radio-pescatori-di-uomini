@@ -24,9 +24,11 @@ export default function ProgramEditor() {
   const { id, day: initDay } = useLocalSearchParams<{ id: string; day?: string }>();
   const isNew = id === "new";
   const [f, setF] = useState<any>({
-    title: "", start_time: "", end_time: "",
+    title: "", subtitle: "", category: "", start_time: "", end_time: "",
     weekdays: initDay ? [initDay] : [], presenters: [{ name: "", image: "" }],
-    description: "", color: "", active: true, type: "recorded",
+    description: "", long_description: "", hero_image: "", contact_url: "",
+    social: { facebook: "", instagram: "", youtube: "", website: "" },
+    episodes: [], color: "", active: true, type: "recorded",
   });
   const [loading, setLoading] = useState(!isNew);
   const [busy, setBusy] = useState(false);
@@ -38,9 +40,14 @@ export default function ProgramEditor() {
       api.adminPrograms().then((list: any[]) => {
         const p = list.find((x) => x.id === id);
         if (p) setF({
-          title: p.title || "", start_time: p.start_time || "", end_time: p.end_time || "",
+          title: p.title || "", subtitle: p.subtitle || "", category: p.category || "",
+          start_time: p.start_time || "", end_time: p.end_time || "",
           weekdays: p.weekdays || [], presenters: (p.presenters && p.presenters.length ? p.presenters : [{ name: "", image: "" }]),
-          description: p.description || "", color: p.color || "", active: p.active !== false,
+          description: p.description || "", long_description: p.long_description || "",
+          hero_image: p.hero_image || "", contact_url: p.contact_url || "",
+          social: { facebook: "", instagram: "", youtube: "", website: "", ...(p.social || {}) },
+          episodes: p.episodes || [],
+          color: p.color || "", active: p.active !== false,
           type: p.type && p.type !== "regular" ? p.type : "recorded",
         });
       }).catch(() => {}).finally(() => setLoading(false));
@@ -51,6 +58,10 @@ export default function ProgramEditor() {
   const setPresenter = (i: number, k: string, v: any) => set("presenters", f.presenters.map((p: any, idx: number) => idx === i ? { ...p, [k]: v } : p));
   const addPresenter = () => set("presenters", [...f.presenters, { name: "", image: "" }]);
   const removePresenter = (i: number) => set("presenters", f.presenters.filter((_: any, idx: number) => idx !== i));
+  const setSocial = (k: string, v: string) => set("social", { ...(f.social || {}), [k]: v });
+  const setEp = (i: number, k: string, v: any) => set("episodes", f.episodes.map((e: any, idx: number) => idx === i ? { ...e, [k]: v } : e));
+  const addEp = () => set("episodes", [...(f.episodes || []), { title: "", date: "", duration_min: 0, description: "", audio_url: "" }]);
+  const removeEp = (i: number) => set("episodes", f.episodes.filter((_: any, idx: number) => idx !== i));
 
   const save = async () => {
     if (!f.title?.trim()) { setMsg("Il titolo è obbligatorio"); return; }
@@ -59,9 +70,13 @@ export default function ProgramEditor() {
     setBusy(true); setMsg("");
     const presenters = f.presenters.filter((p: any) => p.name?.trim() || p.image);
     const images = presenters.map((p: any) => p.image).filter(Boolean);
+    const episodes = (f.episodes || []).filter((e: any) => e.title?.trim()).map((e: any) => ({ ...e, duration_min: Number(e.duration_min) || 0 }));
     const payload = {
-      title: f.title, start_time: f.start_time, end_time: f.end_time,
-      weekdays: f.weekdays, presenters, images, description: f.description,
+      title: f.title, subtitle: f.subtitle, category: f.category,
+      start_time: f.start_time, end_time: f.end_time,
+      weekdays: f.weekdays, presenters, images,
+      description: f.description, long_description: f.long_description,
+      hero_image: f.hero_image, contact_url: f.contact_url, social: f.social, episodes,
       color: f.color, active: f.active, type: f.type || "recorded",
     };
     try {
@@ -82,6 +97,8 @@ export default function ProgramEditor() {
       </View>
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: insets.bottom + 40 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <AInput testID="prog-title" label="Titolo programma *" value={f.title} onChangeText={(v: string) => set("title", v)} />
+        <AInput testID="prog-subtitle" label="Sottotitolo" value={f.subtitle} onChangeText={(v: string) => set("subtitle", v)} />
+        <AInput testID="prog-category" label="Categoria" value={f.category} onChangeText={(v: string) => set("category", v)} placeholder="Es. Riflessione, Musica..." />
         <View style={styles.timeRow}>
           <View style={{ flex: 1 }}><AInput testID="prog-start" label="Ora inizio * (HH:MM)" value={f.start_time} onChangeText={(v: string) => set("start_time", v)} placeholder="09:00" /></View>
           <View style={{ flex: 1 }}><AInput testID="prog-end" label="Ora fine (HH:MM)" value={f.end_time} onChangeText={(v: string) => set("end_time", v)} placeholder="11:00" /></View>
@@ -111,6 +128,35 @@ export default function ProgramEditor() {
         ))}
         <PressableScale testID="prog-add-presenter" style={styles.addBtn} onPress={addPresenter}>
           <Ionicons name="add" size={18} color={colors.brandPrimary} /><Text style={styles.addText}>Aggiungi conduttore</Text>
+        </PressableScale>
+
+        <Text style={styles.label}>Pagina programma</Text>
+        <AImagePicker testID="prog-hero" label="Immagine grande (hero della pagina)" value={f.hero_image} onChange={(v: string) => set("hero_image", v)} aspect={[3, 4]} />
+        <AInput testID="prog-long" label="Descrizione completa (tab Informazioni)" value={f.long_description} onChangeText={(v: string) => set("long_description", v)} multiline />
+        <AInput testID="prog-contact" label="Contatto (email o link)" value={f.contact_url} onChangeText={(v: string) => set("contact_url", v)} placeholder="email@... oppure https://..." />
+        <AInput testID="prog-fb" label="Facebook" value={f.social?.facebook} onChangeText={(v: string) => setSocial("facebook", v)} placeholder="https://facebook.com/..." />
+        <AInput testID="prog-ig" label="Instagram" value={f.social?.instagram} onChangeText={(v: string) => setSocial("instagram", v)} placeholder="https://instagram.com/..." />
+        <AInput testID="prog-yt" label="YouTube" value={f.social?.youtube} onChangeText={(v: string) => setSocial("youtube", v)} placeholder="https://youtube.com/..." />
+        <AInput testID="prog-web" label="Sito web" value={f.social?.website} onChangeText={(v: string) => setSocial("website", v)} placeholder="https://..." />
+
+        <Text style={styles.label}>Puntate (dalla più recente)</Text>
+        {(f.episodes || []).map((e: any, i: number) => (
+          <View key={i} style={styles.presenterCard}>
+            <View style={styles.presenterHead}>
+              <Text style={styles.presenterIdx}>Puntata {i + 1}</Text>
+              <Pressable testID={`prog-ep-remove-${i}`} onPress={() => removeEp(i)} hitSlop={10}><Ionicons name="trash-outline" size={18} color={colors.error} /></Pressable>
+            </View>
+            <AInput testID={`prog-ep-title-${i}`} label="Titolo" value={e.title} onChangeText={(v: string) => setEp(i, "title", v)} />
+            <View style={styles.timeRow}>
+              <View style={{ flex: 1 }}><AInput testID={`prog-ep-date-${i}`} label="Data (AAAA-MM-GG)" value={e.date} onChangeText={(v: string) => setEp(i, "date", v)} placeholder="2026-08-14" /></View>
+              <View style={{ flex: 1 }}><AInput testID={`prog-ep-dur-${i}`} label="Durata (min)" value={String(e.duration_min || "")} onChangeText={(v: string) => setEp(i, "duration_min", v.replace(/[^0-9]/g, ""))} keyboardType="number-pad" /></View>
+            </View>
+            <AInput testID={`prog-ep-audio-${i}`} label="Link audio (MP3/stream)" value={e.audio_url} onChangeText={(v: string) => setEp(i, "audio_url", v)} placeholder="https://..." />
+            <AInput testID={`prog-ep-desc-${i}`} label="Descrizione" value={e.description} onChangeText={(v: string) => setEp(i, "description", v)} multiline />
+          </View>
+        ))}
+        <PressableScale testID="prog-add-ep" style={styles.addBtn} onPress={addEp}>
+          <Ionicons name="add" size={18} color={colors.brandPrimary} /><Text style={styles.addText}>Aggiungi puntata</Text>
         </PressableScale>
 
         <AInput testID="prog-desc" label="Descrizione" value={f.description} onChangeText={(v: string) => set("description", v)} multiline />
