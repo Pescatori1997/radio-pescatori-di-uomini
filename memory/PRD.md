@@ -478,3 +478,8 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Ricorrenze: gestite via weekdays (un solo programma, più giorni). Mezzanotte: end<=start → +1440.
 - Verificato E2E: timeline verticale + selettore giorni (screenshot), pagina dettaglio (hero/azioni/tab/puntate), PATCH admin (subtitle/category/episodes con id/sort/social) → /program/{slug}, favorites toggle add/list/remove. Dati di test ripuliti.
 - NOTA: la riproduzione puntata apre l'URL audio (audioSrc) esternamente; integrazione col player in-app è un possibile step futuro.
+
+## Palinsesto v2.1 — colori del sito + timeline 24h continua (2026-06)
+- Feedback utente: il palinsesto era troppo scuro (non i colori del sito) e mancava la vera timeline 24h (mostrava solo l'orario dei programmi).
+- FIX colori: palinsesto.tsx e programma/[slug].tsx ora usano il tema chiaro dell'app (colors.surface/onSurface/brandPrimary/muted/border; LIVE=colors.error). La hero del dettaglio resta con overlay scuro + testo bianco sopra l'immagine, il resto chiaro.
+- FIX timeline: ora render di TUTTE le 24 ore (00:00→23:00) con pill orario + spine continua; i programmi vengono agganciati all'ora di inizio (floor(start/60)); ora corrente evidenziata (pill blu). On-air card con bordo rosso + badge + progress. Verificato: 00:00/12:00/22:00 presenti, scroll continuo.

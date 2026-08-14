@@ -1,17 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, useWindowDimensions } from "react-native";
+import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { api, mediaUrl } from "@/src/api";
 import { DAYS, romeNow, romeDay, isOnAir } from "@/src/utils/onair";
+import { colors, spacing, radius } from "@/src/theme";
 
-const DARK = "#05070D";
-const CARD = "#12151C";
-const GREEN = "#34D399";
-const WHITE = "#FFFFFF";
-const GREY = "#9098A6";
+const ACCENT = colors.brandPrimary;
+const LIVE = colors.error;
 
 function toMin(hm: string): number {
   if (!hm) return 0;
@@ -19,7 +17,6 @@ function toMin(hm: string): number {
   return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
 }
 
-/** Short chip label: Oggi / Domani / "Domenica 16/08". */
 function dayChipLabel(offset: number): string {
   if (offset === 0) return "Oggi";
   if (offset === 1) return "Domani";
@@ -37,7 +34,6 @@ function dayChipLabel(offset: number): string {
 export default function Palinsesto() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { width } = useWindowDimensions();
   const [programs, setPrograms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(romeNow());
@@ -63,15 +59,40 @@ export default function Palinsesto() {
   }, [programs, dayInfo.weekday]);
 
   const days = Array.from({ length: 14 }, (_, i) => i);
+  const hours = Array.from({ length: 24 }, (_, h) => h); // full 24h timeline
+
+  const renderCard = (p: any) => {
+    const live = isToday && isOnAir(p);
+    const startMin = toMin(p.start_time);
+    const endMin = p.end_time && p.end_time <= p.start_time ? toMin(p.end_time) + 1440 : toMin(p.end_time || p.start_time);
+    const nowMin = toMin(now.hm);
+    const pct = live && endMin > startMin ? Math.min(1, Math.max(0, (nowMin - startMin) / (endMin - startMin))) : 0;
+    const img = p.images && p.images[0] ? mediaUrl(p.images[0]) : null;
+    return (
+      <Pressable key={p.id} testID={`prog-${p.id}`} onPress={() => router.push(`/programma/${p.slug || p.id}` as any)} style={[styles.card, live && styles.cardLive]}>
+        <View style={styles.thumbWrap}>
+          {img ? <Image source={{ uri: img }} style={styles.thumb} contentFit="cover" /> : <View style={[styles.thumb, styles.thumbEmpty]}><Ionicons name="mic" size={24} color={ACCENT} /></View>}
+        </View>
+        <View style={{ flex: 1 }}>
+          {live && <View style={styles.liveBadge}><View style={styles.liveDot} /><Text style={styles.liveText}>IN ONDA</Text></View>}
+          <Text style={styles.cardTime}>{p.start_time}{p.end_time ? ` – ${p.end_time}` : ""}</Text>
+          <Text style={styles.title} numberOfLines={2}>{p.title}</Text>
+          {!!p.host && <Text style={styles.host} numberOfLines={1}>con {p.host}</Text>}
+          {!!p.subtitle && <Text style={styles.subtitle} numberOfLines={1}>{p.subtitle}</Text>}
+          {live && <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${pct * 100}%` }]} /></View>}
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={colors.muted} style={{ alignSelf: "center" }} />
+      </Pressable>
+    );
+  };
 
   return (
-    <View style={{ flex: 1, backgroundColor: DARK }}>
+    <View style={{ flex: 1, backgroundColor: colors.surface }}>
       <View style={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 6 }}>
         <Text style={styles.kicker}>PALINSESTO</Text>
         <Text style={styles.date}>{dayInfo.dateLabel}</Text>
       </View>
 
-      {/* Day selector */}
       <View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 10, gap: 10 }}>
           {days.map((o) => {
@@ -86,64 +107,30 @@ export default function Palinsesto() {
       </View>
 
       {loading ? (
-        <View style={styles.center}><ActivityIndicator color={GREEN} size="large" /></View>
-      ) : dayPrograms.length === 0 ? (
-        <View style={styles.center}>
-          <Ionicons name="radio-outline" size={30} color={GREY} />
-          <Text style={styles.empty}>Nessun programma in griglia per questo giorno.</Text>
-          <Text style={styles.emptySub}>Radio H24 sempre in diretta.</Text>
-        </View>
+        <View style={styles.center}><ActivityIndicator color={ACCENT} size="large" /></View>
       ) : (
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={{ paddingTop: 8, paddingBottom: insets.bottom + 120, paddingHorizontal: 16 }}
-          showsVerticalScrollIndicator={false}
-        >
-          {dayPrograms.map((p, i) => {
-            const live = isToday && isOnAir(p);
-            const startMin = toMin(p.start_time);
-            const endMin = p.end_time && p.end_time <= p.start_time ? toMin(p.end_time) + 1440 : toMin(p.end_time || p.start_time);
-            const nowMin = toMin(now.hm);
-            const pct = live && endMin > startMin ? Math.min(1, Math.max(0, (nowMin - startMin) / (endMin - startMin))) : 0;
-            const img = (p.images && p.images[0]) ? mediaUrl(p.images[0]) : null;
-            const last = i === dayPrograms.length - 1;
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: 8, paddingBottom: insets.bottom + 120, paddingHorizontal: 16 }} showsVerticalScrollIndicator={false}>
+          {dayPrograms.length === 0 && (
+            <View style={styles.emptyBanner}>
+              <Ionicons name="radio-outline" size={18} color={colors.muted} />
+              <Text style={styles.emptyText}>Nessun programma in griglia oggi · Radio H24 in diretta</Text>
+            </View>
+          )}
+          {hours.map((h) => {
+            const inHour = dayPrograms.filter((p) => Math.floor(toMin(p.start_time) / 60) === h);
+            const nowHour = isToday && Math.floor(toMin(now.hm) / 60) === h;
             return (
-              <View key={p.id} style={styles.row}>
-                {/* timeline spine */}
+              <View key={h} style={styles.hourRow}>
                 <View style={styles.spineCol}>
-                  {i > 0 && <View style={[styles.line, { top: 0, height: 30 }]} />}
-                  <View style={[styles.pill, live && styles.pillLive]}>
-                    <Text style={[styles.pillText, live && { color: DARK }]}>{p.start_time}</Text>
+                  <View style={styles.lineTop} />
+                  <View style={[styles.hourPill, nowHour && styles.hourPillNow]}>
+                    <Text style={[styles.hourText, nowHour && { color: colors.white }]}>{String(h).padStart(2, "0")}:00</Text>
                   </View>
-                  {!last && <View style={[styles.line, { top: 54, bottom: 0 }]} />}
+                  <View style={styles.lineBottom} />
                 </View>
-
-                {/* program card */}
-                <Pressable
-                  testID={`prog-${p.id}`}
-                  onPress={() => router.push(`/programma/${p.slug || p.id}` as any)}
-                  style={[styles.card, live && styles.cardLive]}
-                >
-                  <View style={styles.thumbWrap}>
-                    {img ? (
-                      <Image source={{ uri: img }} style={styles.thumb} contentFit="cover" />
-                    ) : (
-                      <View style={[styles.thumb, styles.thumbEmpty]}><Ionicons name="mic" size={26} color={GREEN} /></View>
-                    )}
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    {live && (
-                      <View style={styles.liveBadge}><View style={styles.liveDot} /><Text style={styles.liveText}>IN ONDA</Text></View>
-                    )}
-                    <Text style={styles.title} numberOfLines={2}>{p.title}</Text>
-                    {!!p.host && <Text style={styles.host} numberOfLines={1}>con {p.host}</Text>}
-                    {!!p.subtitle && <Text style={styles.subtitle} numberOfLines={1}>{p.subtitle}</Text>}
-                    {live && (
-                      <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${pct * 100}%` }]} /></View>
-                    )}
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={GREY} style={{ alignSelf: "center" }} />
-                </Pressable>
+                <View style={styles.hourContent}>
+                  {inHour.length === 0 ? <View style={styles.emptySlot} /> : inHour.map(renderCard)}
+                </View>
               </View>
             );
           })}
@@ -154,34 +141,38 @@ export default function Palinsesto() {
 }
 
 const styles = StyleSheet.create({
-  kicker: { color: GREEN, fontSize: 12, fontWeight: "900", letterSpacing: 2 },
-  date: { color: WHITE, fontSize: 22, fontWeight: "900", marginTop: 2 },
-  chip: { paddingHorizontal: 18, paddingVertical: 9, borderRadius: 999, borderWidth: 1.5, borderColor: "#2A2F3A", backgroundColor: "transparent" },
-  chipActive: { backgroundColor: GREEN, borderColor: GREEN },
-  chipText: { color: WHITE, fontSize: 14, fontWeight: "800" },
-  chipTextActive: { color: DARK },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 6, padding: 40 },
-  empty: { color: WHITE, fontSize: 15, fontWeight: "700", marginTop: 6 },
-  emptySub: { color: GREY, fontSize: 13 },
+  kicker: { color: ACCENT, fontSize: 12, fontWeight: "900", letterSpacing: 2 },
+  date: { color: colors.onSurface, fontSize: 22, fontWeight: "900", marginTop: 2 },
+  chip: { paddingHorizontal: 18, paddingVertical: 9, borderRadius: 999, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.surfaceSecondary },
+  chipActive: { backgroundColor: ACCENT, borderColor: ACCENT },
+  chipText: { color: colors.onSurface, fontSize: 14, fontWeight: "800" },
+  chipTextActive: { color: colors.white },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 40 },
+  emptyBanner: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: colors.border },
+  emptyText: { color: colors.muted, fontSize: 13, fontWeight: "600", flex: 1 },
 
-  row: { flexDirection: "row", minHeight: 96 },
-  spineCol: { width: 74, alignItems: "center" },
-  line: { position: "absolute", width: 2, backgroundColor: "#2A2F3A", left: 36 },
-  pill: { marginTop: 20, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1.5, borderColor: GREEN + "66", backgroundColor: DARK, zIndex: 2 },
-  pillLive: { backgroundColor: GREEN, borderColor: GREEN },
-  pillText: { color: GREEN, fontSize: 13, fontWeight: "900" },
+  hourRow: { flexDirection: "row", minHeight: 60 },
+  spineCol: { width: 66, alignItems: "center" },
+  lineTop: { width: 2, height: 16, backgroundColor: colors.border },
+  lineBottom: { width: 2, flex: 1, backgroundColor: colors.border, marginTop: 2 },
+  hourPill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.surface },
+  hourPillNow: { backgroundColor: ACCENT, borderColor: ACCENT },
+  hourText: { color: colors.muted, fontSize: 12.5, fontWeight: "800" },
+  hourContent: { flex: 1, paddingBottom: 8 },
+  emptySlot: { height: 44 },
 
-  card: { flex: 1, flexDirection: "row", alignItems: "flex-start", gap: 12, backgroundColor: CARD, borderRadius: 16, padding: 10, marginBottom: 16, marginTop: 8, borderWidth: 1, borderColor: "#1C212B" },
-  cardLive: { borderColor: GREEN, borderWidth: 1.5, backgroundColor: "#0E1A16" },
-  thumbWrap: { width: 64, height: 64, borderRadius: 12, overflow: "hidden" },
-  thumb: { width: 64, height: 64 },
-  thumbEmpty: { backgroundColor: "#0C1F18", alignItems: "center", justifyContent: "center" },
-  liveBadge: { flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start", backgroundColor: GREEN, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, marginBottom: 4 },
-  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: DARK },
-  liveText: { color: DARK, fontSize: 9.5, fontWeight: "900", letterSpacing: 0.5 },
-  title: { color: WHITE, fontSize: 16, fontWeight: "800", lineHeight: 20 },
-  host: { color: GREY, fontSize: 13, marginTop: 3 },
-  subtitle: { color: WHITE, fontSize: 12.5, marginTop: 2, opacity: 0.85 },
-  progressTrack: { height: 4, borderRadius: 2, backgroundColor: "#243027", marginTop: 8, overflow: "hidden" },
-  progressFill: { height: 4, borderRadius: 2, backgroundColor: GREEN },
+  card: { flexDirection: "row", alignItems: "flex-start", gap: 12, backgroundColor: colors.surfaceSecondary, borderRadius: 16, padding: 10, marginBottom: 10, marginTop: 6, borderWidth: 1, borderColor: colors.border },
+  cardLive: { borderColor: LIVE, borderWidth: 1.5, backgroundColor: LIVE + "0D" },
+  thumbWrap: { width: 60, height: 60, borderRadius: 12, overflow: "hidden" },
+  thumb: { width: 60, height: 60 },
+  thumbEmpty: { backgroundColor: ACCENT + "14", alignItems: "center", justifyContent: "center" },
+  liveBadge: { flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start", backgroundColor: LIVE, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, marginBottom: 4 },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.white },
+  liveText: { color: colors.white, fontSize: 9.5, fontWeight: "900", letterSpacing: 0.5 },
+  cardTime: { color: ACCENT, fontSize: 12, fontWeight: "800" },
+  title: { color: colors.onSurface, fontSize: 16, fontWeight: "800", lineHeight: 20, marginTop: 1 },
+  host: { color: colors.muted, fontSize: 13, marginTop: 3 },
+  subtitle: { color: colors.onSurface, fontSize: 12.5, marginTop: 2, opacity: 0.8 },
+  progressTrack: { height: 4, borderRadius: 2, backgroundColor: colors.border, marginTop: 8, overflow: "hidden" },
+  progressFill: { height: 4, borderRadius: 2, backgroundColor: LIVE },
 });

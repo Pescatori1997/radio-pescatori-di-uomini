@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Share, Linking, Platform } from "react-native";
+import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Share, Linking } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -7,12 +7,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { api, mediaUrl, audioSrc } from "@/src/api";
 import { useAuth } from "@/src/context/AuthContext";
+import { colors, radius } from "@/src/theme";
 
-const DARK = "#05070D";
-const CARD = "#12151C";
-const GREEN = "#34D399";
-const WHITE = "#FFFFFF";
-const GREY = "#9098A6";
+const ACCENT = colors.brandPrimary;
+const LIVE = colors.error;
+const TEXT = colors.onSurface;
 
 function fmtDate(s: string): string {
   if (!s) return "";
@@ -41,33 +40,26 @@ export default function ProgramDetail() {
   }, [user, p]);
 
   const shareUrl = `https://evangelic-stream.emergent.host/programma/${slug}`;
-
   const doShare = useCallback(async () => {
     try { await Share.share({ message: `${p?.title} · Pescatori di Uomini\n${shareUrl}`, url: shareUrl }); } catch {}
   }, [p, shareUrl]);
-
   const toggleFav = useCallback(async () => {
     if (!user) { router.push("/login" as any); return; }
     setFav((v) => !v);
     try { const r = await api.toggleFavoriteProgram(p.id); setFav(r.favorited); } catch { setFav((v) => !v); }
   }, [user, p, router]);
-
   const contact = useCallback(() => {
     const c = p?.contact_url || "";
-    if (c) { Linking.openURL(c.includes("@") && !c.startsWith("mailto") ? `mailto:${c}` : c).catch(() => {}); }
+    if (c) Linking.openURL(c.includes("@") && !c.startsWith("mailto") ? `mailto:${c}` : c).catch(() => {});
     else router.push("/contact" as any);
   }, [p, router]);
+  const playEpisode = useCallback((ep: any) => { if (ep?.audio_url) Linking.openURL(audioSrc(ep.audio_url)).catch(() => {}); }, []);
 
-  const playEpisode = useCallback((ep: any) => {
-    const url = ep?.audio_url;
-    if (url) Linking.openURL(audioSrc(url)).catch(() => {});
-  }, []);
-
-  if (loading) return <View style={[styles.screen, styles.center]}><ActivityIndicator color={GREEN} size="large" /></View>;
+  if (loading) return <View style={[styles.screen, styles.center]}><ActivityIndicator color={ACCENT} size="large" /></View>;
   if (!p) return (
     <View style={[styles.screen, styles.center, { paddingTop: insets.top }]}>
-      <Text style={{ color: WHITE }}>Programma non trovato.</Text>
-      <Pressable onPress={() => router.back()} style={styles.backChip}><Text style={{ color: GREEN, fontWeight: "800" }}>Indietro</Text></Pressable>
+      <Text style={{ color: TEXT }}>Programma non trovato.</Text>
+      <Pressable onPress={() => router.back()} style={styles.backChip}><Text style={{ color: ACCENT, fontWeight: "800" }}>Indietro</Text></Pressable>
     </View>
   );
 
@@ -79,13 +71,12 @@ export default function ProgramDetail() {
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 130 }} showsVerticalScrollIndicator={false}>
-        {/* Hero */}
         <View style={styles.hero}>
-          {hero ? <Image source={{ uri: hero }} style={StyleSheet.absoluteFill} contentFit="cover" /> : <View style={[StyleSheet.absoluteFill, { backgroundColor: "#0C1F18" }]} />}
-          <LinearGradient colors={["rgba(5,7,13,0.2)", "rgba(5,7,13,0.5)", DARK]} locations={[0, 0.55, 1]} style={StyleSheet.absoluteFill} />
+          {hero ? <Image source={{ uri: hero }} style={StyleSheet.absoluteFill} contentFit="cover" /> : <LinearGradient colors={[ACCENT, colors.navy]} style={StyleSheet.absoluteFill} />}
+          <LinearGradient colors={["rgba(10,17,40,0.15)", "rgba(10,17,40,0.55)", "rgba(10,17,40,0.9)"]} locations={[0, 0.5, 1]} style={StyleSheet.absoluteFill} />
           <View style={[styles.heroTop, { paddingTop: insets.top + 8 }]}>
-            <Pressable onPress={() => router.back()} hitSlop={10} style={styles.iconBtn}><Ionicons name="chevron-back" size={24} color={WHITE} /></Pressable>
-            <Pressable onPress={doShare} hitSlop={10} style={styles.iconBtn}><Ionicons name="share-social-outline" size={22} color={WHITE} /></Pressable>
+            <Pressable onPress={() => router.back()} hitSlop={10} style={styles.iconBtn}><Ionicons name="chevron-back" size={24} color="#fff" /></Pressable>
+            <Pressable onPress={doShare} hitSlop={10} style={styles.iconBtn}><Ionicons name="share-social-outline" size={22} color="#fff" /></Pressable>
           </View>
           <View style={styles.heroText}>
             {!!p.category && <Text style={styles.cat}>{String(p.category).toUpperCase()}</Text>}
@@ -95,36 +86,33 @@ export default function ProgramDetail() {
           </View>
         </View>
 
-        {/* Play last episode */}
         {lastEp ? (
           <Pressable style={styles.playBtn} onPress={() => playEpisode(lastEp)}>
-            <Ionicons name="play-circle" size={30} color={DARK} />
+            <Ionicons name="play-circle" size={30} color="#fff" />
             <Text style={styles.playText}>AVVIA ULTIMA PUNTATA</Text>
           </Pressable>
         ) : (
           <View style={[styles.playBtn, styles.playBtnOff]}>
-            <Ionicons name="alert-circle-outline" size={22} color={GREY} />
-            <Text style={[styles.playText, { color: GREY }]}>Nessuna puntata disponibile</Text>
+            <Ionicons name="alert-circle-outline" size={22} color={colors.muted} />
+            <Text style={[styles.playText, { color: colors.muted }]}>Nessuna puntata disponibile</Text>
           </View>
         )}
 
-        {/* Actions */}
         <View style={styles.actions}>
           <Pressable style={styles.action} onPress={contact}>
-            <View style={styles.actionCircle}><Ionicons name="mail-outline" size={20} color={WHITE} /></View>
+            <View style={styles.actionCircle}><Ionicons name="mail-outline" size={20} color={TEXT} /></View>
             <Text style={styles.actionLabel}>Contattaci</Text>
           </Pressable>
           <Pressable style={styles.action} onPress={toggleFav}>
-            <View style={[styles.actionCircle, fav && { backgroundColor: GREEN }]}><Ionicons name={fav ? "heart" : "heart-outline"} size={20} color={fav ? DARK : WHITE} /></View>
+            <View style={[styles.actionCircle, fav && { backgroundColor: ACCENT, borderColor: ACCENT }]}><Ionicons name={fav ? "heart" : "heart-outline"} size={20} color={fav ? "#fff" : TEXT} /></View>
             <Text style={styles.actionLabel}>{fav ? "Nei Preferiti" : "Aggiungi ai Preferiti"}</Text>
           </Pressable>
           <Pressable style={styles.action} onPress={doShare}>
-            <View style={styles.actionCircle}><Ionicons name="link-outline" size={20} color={WHITE} /></View>
+            <View style={styles.actionCircle}><Ionicons name="link-outline" size={20} color={TEXT} /></View>
             <Text style={styles.actionLabel}>Condividi</Text>
           </Pressable>
         </View>
 
-        {/* Tabs */}
         <View style={styles.tabs}>
           <Pressable style={[styles.tab, tab === "episodes" && styles.tabActive]} onPress={() => setTab("episodes")}>
             <Text style={[styles.tabText, tab === "episodes" && styles.tabTextActive]}>Le puntate</Text>
@@ -140,8 +128,8 @@ export default function ProgramDetail() {
               <Text style={styles.infoMuted}>Ancora nessuna puntata pubblicata.</Text>
             ) : episodes.map((ep: any) => (
               <View key={ep.id || ep.title} style={styles.epRow}>
-                <Pressable onPress={() => playEpisode(ep)} hitSlop={8} style={styles.epPlay}>
-                  <Ionicons name="play-circle-outline" size={30} color={ep.audio_url ? GREEN : GREY} />
+                <Pressable onPress={() => playEpisode(ep)} hitSlop={8}>
+                  <Ionicons name="play-circle" size={34} color={ep.audio_url ? ACCENT : colors.muted} />
                 </Pressable>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.epTitle} numberOfLines={2}>{ep.title}</Text>
@@ -149,7 +137,7 @@ export default function ProgramDetail() {
                   {!!ep.description && <Text style={styles.epDesc} numberOfLines={2}>{ep.description}</Text>}
                 </View>
                 <Pressable hitSlop={8} onPress={() => Share.share({ message: `${ep.title} · ${p.title}\n${shareUrl}` }).catch(() => {})}>
-                  <Ionicons name="share-social-outline" size={20} color={GREY} />
+                  <Ionicons name="share-social-outline" size={20} color={colors.muted} />
                 </Pressable>
               </View>
             ))}
@@ -167,7 +155,7 @@ export default function ProgramDetail() {
               <View style={styles.socialRow}>
                 {Object.entries(p.social).filter(([, v]) => !!v).map(([k, v]) => (
                   <Pressable key={k} style={styles.socialBtn} onPress={() => Linking.openURL(String(v)).catch(() => {})}>
-                    <Ionicons name={(k.includes("face") ? "logo-facebook" : k.includes("insta") ? "logo-instagram" : k.includes("you") ? "logo-youtube" : "globe-outline") as any} size={18} color={GREEN} />
+                    <Ionicons name={(k.includes("face") ? "logo-facebook" : k.includes("insta") ? "logo-instagram" : k.includes("you") ? "logo-youtube" : "globe-outline") as any} size={18} color={ACCENT} />
                     <Text style={styles.socialText}>{k}</Text>
                   </Pressable>
                 ))}
@@ -183,7 +171,7 @@ export default function ProgramDetail() {
 function InfoLine({ icon, label, value }: any) {
   return (
     <View style={styles.infoLine}>
-      <Ionicons name={icon} size={16} color={GREEN} />
+      <Ionicons name={icon} size={16} color={ACCENT} />
       <Text style={styles.infoLabel}>{label}:</Text>
       <Text style={styles.infoVal} numberOfLines={2}>{value}</Text>
     </View>
@@ -191,41 +179,40 @@ function InfoLine({ icon, label, value }: any) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: DARK },
+  screen: { flex: 1, backgroundColor: colors.surface },
   center: { alignItems: "center", justifyContent: "center", gap: 12 },
-  backChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: GREEN },
-  hero: { height: 420, justifyContent: "flex-end" },
+  backChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: ACCENT },
+  hero: { height: 400, justifyContent: "flex-end" },
   heroTop: { position: "absolute", top: 0, left: 0, right: 0, flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 12 },
   iconBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.35)", alignItems: "center", justifyContent: "center" },
   heroText: { padding: 20 },
-  cat: { color: GREEN, fontSize: 12, fontWeight: "900", letterSpacing: 1.5, marginBottom: 4 },
-  hTitle: { color: WHITE, fontSize: 32, fontWeight: "900", lineHeight: 36 },
-  hHost: { color: WHITE, fontSize: 16, opacity: 0.9, marginTop: 6 },
-  hSched: { color: GREY, fontSize: 14, marginTop: 4 },
-  playBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, marginHorizontal: 20, marginTop: 4, paddingVertical: 14, borderRadius: 999, backgroundColor: GREEN, borderWidth: 2, borderColor: GREEN },
-  playBtnOff: { backgroundColor: "transparent", borderColor: "#2A2F3A" },
-  playText: { color: DARK, fontSize: 16, fontWeight: "900", letterSpacing: 0.5 },
+  cat: { color: "#fff", fontSize: 12, fontWeight: "900", letterSpacing: 1.5, marginBottom: 4, opacity: 0.95 },
+  hTitle: { color: "#fff", fontSize: 30, fontWeight: "900", lineHeight: 34 },
+  hHost: { color: "#fff", fontSize: 16, opacity: 0.92, marginTop: 6 },
+  hSched: { color: "#fff", fontSize: 14, marginTop: 4, opacity: 0.8 },
+  playBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, marginHorizontal: 20, marginTop: 16, paddingVertical: 14, borderRadius: 999, backgroundColor: ACCENT },
+  playBtnOff: { backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border },
+  playText: { color: "#fff", fontSize: 16, fontWeight: "900", letterSpacing: 0.5 },
   actions: { flexDirection: "row", justifyContent: "space-around", marginTop: 20, paddingHorizontal: 20 },
   action: { alignItems: "center", gap: 6, flex: 1 },
-  actionCircle: { width: 52, height: 52, borderRadius: 26, backgroundColor: CARD, borderWidth: 1, borderColor: "#242A35", alignItems: "center", justifyContent: "center" },
-  actionLabel: { color: GREY, fontSize: 11.5, fontWeight: "700", textAlign: "center" },
-  tabs: { flexDirection: "row", margin: 20, backgroundColor: CARD, borderRadius: 999, padding: 4 },
+  actionCircle: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  actionLabel: { color: colors.muted, fontSize: 11.5, fontWeight: "700", textAlign: "center" },
+  tabs: { flexDirection: "row", margin: 20, backgroundColor: colors.surfaceSecondary, borderRadius: 999, padding: 4, borderWidth: 1, borderColor: colors.border },
   tab: { flex: 1, paddingVertical: 10, borderRadius: 999, alignItems: "center" },
-  tabActive: { backgroundColor: WHITE },
-  tabText: { color: WHITE, fontSize: 14, fontWeight: "800" },
-  tabTextActive: { color: DARK },
-  epRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#1C212B" },
-  epPlay: {},
-  epTitle: { color: WHITE, fontSize: 15, fontWeight: "800" },
-  epMeta: { color: GREY, fontSize: 12.5, marginTop: 3 },
-  epDesc: { color: GREY, fontSize: 12.5, marginTop: 3, opacity: 0.9 },
-  infoText: { color: "#D5DAE2", fontSize: 15, lineHeight: 23, marginBottom: 16 },
-  infoMuted: { color: GREY, fontSize: 14, paddingVertical: 20, textAlign: "center" },
+  tabActive: { backgroundColor: ACCENT },
+  tabText: { color: TEXT, fontSize: 14, fontWeight: "800" },
+  tabTextActive: { color: "#fff" },
+  epRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.border },
+  epTitle: { color: TEXT, fontSize: 15, fontWeight: "800" },
+  epMeta: { color: colors.muted, fontSize: 12.5, marginTop: 3 },
+  epDesc: { color: colors.muted, fontSize: 12.5, marginTop: 3 },
+  infoText: { color: TEXT, fontSize: 15, lineHeight: 23, marginBottom: 16 },
+  infoMuted: { color: colors.muted, fontSize: 14, paddingVertical: 20, textAlign: "center" },
   metaBlock: { gap: 10, marginBottom: 16 },
   infoLine: { flexDirection: "row", alignItems: "center", gap: 8 },
-  infoLabel: { color: GREY, fontSize: 13.5, fontWeight: "700" },
-  infoVal: { color: WHITE, fontSize: 13.5, flex: 1 },
+  infoLabel: { color: colors.muted, fontSize: 13.5, fontWeight: "700" },
+  infoVal: { color: TEXT, fontSize: 13.5, flex: 1 },
   socialRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  socialBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, backgroundColor: CARD, borderWidth: 1, borderColor: "#242A35" },
-  socialText: { color: WHITE, fontSize: 13, fontWeight: "700", textTransform: "capitalize" },
+  socialBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border },
+  socialText: { color: TEXT, fontSize: 13, fontWeight: "700", textTransform: "capitalize" },
 });
