@@ -71,6 +71,7 @@ export default function ProgramDetail() {
 
   const hero = imgUri(p.hero_image) || imgUri(p.images?.[0]);
   const episodes = p.episodes || [];
+  const presenters = (p.presenters || []).filter((x: any) => x && (x.name || x.image));
   const lastEp = episodes[0];
   const scheduleLabel = `${(p.weekdays || []).join(", ")}${p.start_time ? ` · ore ${p.start_time}` : ""}`;
 
@@ -118,6 +119,29 @@ export default function ProgramDetail() {
             <Text style={styles.actionLabel}>Condividi</Text>
           </Pressable>
         </View>
+
+        {presenters.length > 0 && (
+          <View style={styles.presentersWrap}>
+            <Text style={styles.presentersTitle}>{presenters.length > 1 ? "Conduttori" : "Conduttore"}</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presentersRow}>
+              {presenters.map((pr: any, i: number) => {
+                const pi = imgUri(pr.image);
+                return (
+                  <View key={`${pr.name || i}`} style={styles.presenter}>
+                    {pi ? (
+                      <Image source={{ uri: pi }} style={styles.presenterImg} contentFit="cover" />
+                    ) : (
+                      <View style={[styles.presenterImg, styles.presenterImgEmpty]}>
+                        <Ionicons name="person" size={28} color={ACCENT} />
+                      </View>
+                    )}
+                    {!!pr.name && <Text style={styles.presenterName} numberOfLines={2}>{pr.name}</Text>}
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
 
         <View style={styles.tabs}>
           <Pressable style={[styles.tab, tab === "episodes" && styles.tabActive]} onPress={() => setTab("episodes")}>
@@ -204,6 +228,13 @@ const styles = StyleSheet.create({
   actionCircle: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   actionLabel: { color: colors.muted, fontSize: 11.5, fontWeight: "700", textAlign: "center" },
   tabs: { flexDirection: "row", margin: 20, backgroundColor: colors.surfaceSecondary, borderRadius: 999, padding: 4, borderWidth: 1, borderColor: colors.border },
+  presentersWrap: { marginTop: 22, paddingLeft: 16 },
+  presentersTitle: { color: TEXT, fontSize: 17, fontWeight: "900", marginBottom: 12 },
+  presentersRow: { gap: 16, paddingRight: 16 },
+  presenter: { alignItems: "center", width: 84 },
+  presenterImg: { width: 76, height: 76, borderRadius: 38, backgroundColor: colors.surfaceSecondary, borderWidth: 2, borderColor: colors.border },
+  presenterImgEmpty: { alignItems: "center", justifyContent: "center", backgroundColor: ACCENT + "14", borderColor: ACCENT + "33" },
+  presenterName: { color: TEXT, fontSize: 12.5, fontWeight: "700", textAlign: "center", marginTop: 8, lineHeight: 15 },
   tab: { flex: 1, paddingVertical: 10, borderRadius: 999, alignItems: "center" },
   tabActive: { backgroundColor: ACCENT },
   tabText: { color: TEXT, fontSize: 14, fontWeight: "800" },

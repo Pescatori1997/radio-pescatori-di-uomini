@@ -17,7 +17,7 @@ export const NAV_CATALOG: NavCatalogItem[] = [
   { key: "meditazioni", label: "Meditazioni", route: "/meditazioni",   icon: "book-outline",               iconOn: "book" },
   { key: "news",        label: "Notizie",     route: "/news",          icon: "newspaper-outline",          iconOn: "newspaper" },
   { key: "palinsesto",  label: "Palinsesto",  route: "/palinsesto",    icon: "calendar-outline",           iconOn: "calendar" },
-  { key: "bibbia",      label: "Bibbia",      route: "/bibbia",        icon: "book-outline",               iconOn: "book" },
+  { key: "bibbia",      label: "Bibbia",      route: "/lettore",       icon: "book-outline",               iconOn: "book" },
   { key: "piani",       label: "Piani",       route: "/lettore/piani", icon: "list-outline",               iconOn: "list" },
   { key: "preghiera",   label: "Preghiera",   route: "/prayer",        icon: "heart-outline",              iconOn: "heart" },
   { key: "donazioni",   label: "Sostieni",    route: "/donate",        icon: "gift-outline",               iconOn: "gift" },

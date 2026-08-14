@@ -113,5 +113,5 @@ def field_allowed(coll: str, field: str) -> bool:
     if coll not in IMG_FIELDS:
         return False
     if coll == "programs":
-        return field in _PROGRAM_ARRAYS
+        return field in _PROGRAM_ARRAYS or field in IMG_FIELDS[coll]
     return field in IMG_FIELDS[coll]
