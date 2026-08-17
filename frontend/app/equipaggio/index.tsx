@@ -65,7 +65,7 @@ export default function Equipaggio() {
         <View style={styles.center}><ActivityIndicator color={colors.brandPrimary} size="large" /></View>
       ) : (
         <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: insets.bottom + 80 }} showsVerticalScrollIndicator={false}>
-          <Text style={styles.center}>Le persone che servono in Pescatori di Uomini. Tocca un volto per scoprire chi è.</Text>
+          <Text style={styles.intro} style={styles.center}>Le persone che servono in Pescatori di Uomini. Tocca un volto per scoprire chi è.</Text>
 
           {groups.map((g) => (
             <View key={g.key} style={{ marginBottom: spacing.lg }}>
