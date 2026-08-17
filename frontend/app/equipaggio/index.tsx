@@ -55,7 +55,7 @@ export default function Equipaggio() {
           <Ionicons name="arrow-back" size={22} color={colors.white} />
         </PressableScale>
         <View style={styles.titleRow}>
-          <MaterialCommunityIcons name="anchor" size={20} color={colors.brandSecondary} />
+          <MaterialCommunityIcons name="anchor" size={100} color={colors.brandSecondary} />
           <Text style={styles.headerTitle}>{"L'Equipaggio"}</Text>
         </View>
         <View style={{ width: 40 }} />
