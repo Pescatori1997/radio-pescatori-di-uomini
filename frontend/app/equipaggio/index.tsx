@@ -55,7 +55,7 @@ export default function Equipaggio() {
           <Ionicons name="arrow-back" size={22} color={colors.white} />
         </PressableScale>
         <View style={styles.titleRow}>
-          <MaterialCommunityIcons name="anchor" size={100} color={colors.brandSecondary} />
+          <MaterialCommunityIcons name="anchor" size={20} color={colors.brandSecondary} />
           <Text style={styles.headerTitle}>{"L'Equipaggio"}</Text>
         </View>
         <View style={{ width: 40 }} />
@@ -65,7 +65,7 @@ export default function Equipaggio() {
         <View style={styles.center}><ActivityIndicator color={colors.brandPrimary} size="large" /></View>
       ) : (
         <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: insets.bottom + 80 }} showsVerticalScrollIndicator={false}>
-          <Text style={styles.intro}>Le persone che servono in Pescatori di Uomini. Tocca un volto per scoprire chi è.</Text>
+          <Text style={styles.center}>Le persone che servono in Pescatori di Uomini. Tocca un volto per scoprire chi è.</Text>
 
           {groups.map((g) => (
             <View key={g.key} style={{ marginBottom: spacing.lg }}>
