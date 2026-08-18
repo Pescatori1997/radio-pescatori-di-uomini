@@ -99,7 +99,7 @@ export default function VerseOfDayCard() {
   };
   const openContext = () => router.push({ pathname: "/bibbia", params: { verseId: verse.id } } as any);
 
-  const cardH = Math.max(320, Math.min(size.w || 360, 400) * 1.02);
+  const cardH = Math.max(300, Math.min(size.w || 360, 380) * 0.9);
 
   return (
     <Animated.View entering={FadeInDown.duration(500)} style={styles.wrap} onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
@@ -130,7 +130,7 @@ export default function VerseOfDayCard() {
 
               <View style={styles.verseWrap}>
                 <Text style={styles.label}>VERSETTO DEL GIORNO</Text>
-                <Text style={styles.verseText} adjustsFontSizeToFit numberOfLines={8}>“{verse.text}”</Text>
+                <Text style={styles.verseText} adjustsFontSizeToFit numberOfLines={6} minimumFontScale={0.6}>“{verse.text}”</Text>
                 <View style={styles.refRow}>
                   <View style={styles.refLine} />
                   <Text style={styles.reference}>{verse.reference}</Text>
@@ -160,7 +160,7 @@ export default function VerseOfDayCard() {
             <View style={styles.backContent}>
               <View style={styles.brandRow}>
                 <View style={styles.medBadge}><Ionicons name="sparkles" size={15} color="#FDE68A" /></View>
-                <Text style={styles.label}>MEDITAZIONE DEL GIORNO</Text>
+                <Text style={[styles.label, { flex: 1 }]}>MEDITAZIONE DEL GIORNO</Text>
                 <PressableScale testID="verse-flip-back" style={styles.shareIcon} onPress={toggle}>
                   <Ionicons name="arrow-undo-outline" size={17} color={colors.white} />
                 </PressableScale>
@@ -233,8 +233,8 @@ const styles = StyleSheet.create({
   medBadge: { width: 30, height: 30, borderRadius: 15, backgroundColor: "rgba(251,191,36,0.18)", borderWidth: 1, borderColor: "rgba(251,191,36,0.4)", alignItems: "center", justifyContent: "center" },
 
   verseWrap: { flex: 1, justifyContent: "center" },
-  label: { color: "#FDE68A", fontSize: 11.5, fontWeight: "800", letterSpacing: 1.4, flex: 1 },
-  verseText: { color: colors.white, fontSize: 21, fontWeight: "700", fontStyle: "italic", lineHeight: 31, marginTop: spacing.md, letterSpacing: 0.2 },
+  label: { color: "#FDE68A", fontSize: 11.5, fontWeight: "800", letterSpacing: 1.4 },
+  verseText: { color: colors.white, fontSize: 27, fontWeight: "800", fontStyle: "italic", lineHeight: 37, marginTop: spacing.md, letterSpacing: 0.2 },
   refRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.lg },
   refLine: { width: 24, height: 2, borderRadius: 1, backgroundColor: colors.brandSecondary },
   reference: { color: colors.brandSecondary, fontSize: 15, fontWeight: "800" },
