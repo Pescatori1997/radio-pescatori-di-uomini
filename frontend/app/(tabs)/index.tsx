@@ -75,10 +75,10 @@ export default function Home() {
   const onListen = () => { router.push("/diretta"); };
 
   // ---- Section renderers (order/width/size come from the admin layout) ----
-  const sectionNode = (key: string): React.ReactNode => {
+  const sectionNode = (key: string, half = false): React.ReactNode => {
     switch (key) {
       case "meteo":
-        return <View style={styles.weatherWrap}><WeatherWidget /></View>;
+        return <View style={[styles.weatherWrap, half && styles.wrapHalf]}><WeatherWidget /></View>;
       case "community":
         return <CommunityStats />;
       case "podcast":
@@ -103,7 +103,7 @@ export default function Home() {
         return (
           <>
             <SectionHeader title={t("home_palinsesto")} onPress={() => router.push("/palinsesto")} />
-            <View style={{ paddingHorizontal: spacing.lg }}>
+            <View style={half ? undefined : { paddingHorizontal: spacing.lg }}>
               <PressableScale testID="home-onair" style={styles.onAirCard} onPress={() => router.push("/palinsesto")}>
                 {onAir ? (
                   <>
@@ -127,9 +127,9 @@ export default function Home() {
                 ) : (
                   <>
                     <View style={[styles.onAirAvatar, styles.onAirAvatarEmpty]}><Ionicons name="radio-outline" size={22} color={colors.muted} /></View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.onAirTitle}>Nessun programma in onda</Text>
-                      <Text style={styles.onAirHost}>Visualizza il palinsesto completo</Text>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={styles.onAirTitle} numberOfLines={2}>Nessun programma in onda</Text>
+                      <Text style={styles.onAirHost} numberOfLines={2}>Visualizza il palinsesto completo</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={20} color={colors.muted} />
                   </>
@@ -157,16 +157,16 @@ export default function Home() {
       case "prayer":
         return (
           <>
-            <Pressable testID="prayer-cta" style={styles.prayerCta} onPress={() => router.push("/prayer")}>
+            <Pressable testID="prayer-cta" style={[styles.prayerCta, half && styles.ctaHalf]} onPress={() => router.push("/prayer")}>
               <Ionicons name="heart" size={20} color={colors.brandPrimary} />
-              <Text style={styles.prayerCtaText}>Invia una richiesta di preghiera</Text>
+              <Text style={styles.prayerCtaText} numberOfLines={2}>Invia una richiesta di preghiera</Text>
               <Ionicons name="chevron-forward" size={18} color={colors.muted} />
             </Pressable>
-            <Pressable testID="prayer-board-cta" style={styles.boardCta} onPress={() => router.push("/prayer-board")}>
+            <Pressable testID="prayer-board-cta" style={[styles.boardCta, half && styles.ctaHalf]} onPress={() => router.push("/prayer-board")}>
               <View style={styles.boardIcon}><Ionicons name="heart" size={20} color={colors.white} /></View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.boardTitle}>Bacheca delle Richieste di Preghiera</Text>
-                <Text style={styles.boardSub}>Prega per i tuoi fratelli e sorelle</Text>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.boardTitle} numberOfLines={2}>Bacheca delle Richieste di Preghiera</Text>
+                <Text style={styles.boardSub} numberOfLines={2}>Prega per i tuoi fratelli e sorelle</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.7)" />
             </Pressable>
@@ -185,7 +185,7 @@ export default function Home() {
   };
 
   const renderSection = (cfg: HomeSectionCfg, half: boolean) => {
-    const node = half && cardInGrid[cfg.key] ? cardInGrid[cfg.key](true) : sectionNode(cfg.key);
+    const node = half && cardInGrid[cfg.key] ? cardInGrid[cfg.key](true) : sectionNode(cfg.key, half);
     const scale = scaleFor(cfg.width, cfg.size);
     return <ScaleBox scale={scale}>{node}</ScaleBox>;
   };
@@ -311,6 +311,8 @@ const styles = StyleSheet.create({
   nowTitle: { color: colors.white, fontSize: 26, fontWeight: "800", marginTop: 4, letterSpacing: -0.5 },
   nowArtist: { color: colors.muted, fontSize: 14, marginTop: 2 },
   weatherWrap: { paddingHorizontal: spacing.lg, marginTop: spacing.lg },
+  wrapHalf: { paddingHorizontal: 0, marginTop: 0 },
+  ctaHalf: { marginHorizontal: 0 },
   liveNowTitle: { color: colors.white, fontSize: 26, fontWeight: "800", marginTop: spacing.md, letterSpacing: -0.5 },
   liveNowSub: { color: colors.muted, fontSize: 14, marginTop: 4 },
   cta: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, backgroundColor: colors.white, paddingVertical: spacing.md, borderRadius: radius.pill, marginTop: spacing.lg, shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 6 },

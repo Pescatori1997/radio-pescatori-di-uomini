@@ -574,3 +574,11 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Problema: con Meteo a larghezza "Metà" su telefono, la card (layout orizzontale fisso: icona 56 + contenuto + chip ora) si schiacciava e "27°C"/"Min/Max" andavano a capo lettera per lettera.
 - Fix in `WeatherWidget.tsx`: misura la larghezza via `onLayout`; se < 240px passa a un layout COMPATTO verticale (icona centrata, città, temperatura, descrizione, min/max, ora) con `numberOfLines={1}` + `adjustsFontSizeToFit` sulla temperatura per non andare mai a capo. Layout orizzontale invariato quando c'è spazio (full width / desktop).
 - Verificato: a 151px la card compatta è pulita (34°C su una riga, Min 22° · Max 34°, ora). Retrocompatibile.
+
+## Robustezza sezioni Home in cella "Metà" (tutte) (2026-06/08)
+- Estesa a tutte le sezioni la robustezza già data al Meteo, così nessuna si rompe quando è a larghezza "Metà" su mobile.
+- `WhatsAppSection`: quando stretto (<300px) impila le 3 feature verticalmente (icona+label in riga), riduce il padding e azzera i margini laterali → niente più icone tagliate; titoli con numberOfLines.
+- `CommunityStats`: misura la larghezza; quando stretto (<240px) riduce margini/padding e i numeri (28→22), titolo numberOfLines=2.
+- `(tabs)/index.tsx`: `sectionNode(key, half)` — in cella metà azzera i doppi margini di meteo (`wrapHalf`), palinsesto (paddingHorizontal 0) e prayer (`ctaHalf`), e aggiunge `numberOfLines` a titoli/sottotitoli (palinsesto vuoto, bacheca preghiere) + `minWidth:0` per evitare wrapping lettera-per-lettera.
+- Verse/Showcase/Collaborators/Bible/Piani/Traguardi già adattavano (misurano larghezza o scroll orizzontale o hanno variante inGrid).
+- Verificato a mano (mobile 390px) con 6 sezioni impostate a "Metà": WhatsApp impilato pulito, Community compatta, Meteo compatto, nessun overflow/testo spezzato. Layout utente ripristinato dopo il test.

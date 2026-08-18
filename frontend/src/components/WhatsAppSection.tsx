@@ -60,9 +60,11 @@ export default function WhatsAppSection() {
     Linking.openURL(WHATSAPP_URL).catch(() => {});
   };
 
+  const narrow = size.w > 0 && size.w < 300;
+
   return (
-    <Animated.View entering={FadeInDown.duration(500)} style={styles.wrap}>
-      <View style={styles.panel} onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
+    <Animated.View entering={FadeInDown.duration(500)} style={[styles.wrap, narrow && styles.wrapNarrow]}>
+      <View style={[styles.panel, narrow && styles.panelNarrow]} onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
         {/* Ocean background */}
         <LinearGradient colors={["#0B3B63", "#0C2C51", "#0A1128"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
         {size.w > 0 && (
@@ -83,21 +85,21 @@ export default function WhatsAppSection() {
             <Ionicons name="logo-whatsapp" size={24} color={WA_GREEN} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.brand}>PESCATORI DI UOMINI</Text>
-            <Text style={styles.title}>Scrivici su WhatsApp</Text>
-            <Text style={styles.subtitle}>Gettiamo le reti insieme — siamo a un messaggio di distanza</Text>
+            <Text style={styles.brand} numberOfLines={1}>PESCATORI DI UOMINI</Text>
+            <Text style={styles.title} numberOfLines={2}>Scrivici su WhatsApp</Text>
+            <Text style={styles.subtitle} numberOfLines={3}>Gettiamo le reti insieme — siamo a un messaggio di distanza</Text>
           </View>
         </View>
 
         {/* Feature cards (glassmorphism) */}
-        <View style={styles.features}>
+        <View style={[styles.features, narrow && styles.featuresCol]}>
           {FEATURES.map((f) => (
-            <BlurView key={f.label} intensity={Platform.OS === "android" ? 30 : 22} tint="light" style={styles.featureCard}>
-              <View style={styles.featureInner}>
+            <BlurView key={f.label} intensity={Platform.OS === "android" ? 30 : 22} tint="light" style={[styles.featureCard, narrow && styles.featureCardRow]}>
+              <View style={[styles.featureInner, narrow && styles.featureInnerRow]}>
                 <View style={styles.featureIcon}>
                   <MaterialCommunityIcons name={f.icon} size={20} color={WA_GREEN} />
                 </View>
-                <Text style={styles.featureLabel}>{f.label}</Text>
+                <Text style={[styles.featureLabel, narrow && styles.featureLabelRow]} numberOfLines={2}>{f.label}</Text>
               </View>
             </BlurView>
           ))}
@@ -140,6 +142,12 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     elevation: 8,
   },
+  wrapNarrow: { marginHorizontal: 0, marginTop: 0 },
+  panelNarrow: { padding: spacing.md },
+  featuresCol: { flexDirection: "column", gap: spacing.sm },
+  featureCardRow: { flex: 0, width: "100%" },
+  featureInnerRow: { flexDirection: "row", justifyContent: "flex-start", alignItems: "center", paddingHorizontal: spacing.md, gap: spacing.md },
+  featureLabelRow: { textAlign: "left", flex: 1 },
   panel: {
     padding: spacing.xl,
     borderRadius: radius.lg,

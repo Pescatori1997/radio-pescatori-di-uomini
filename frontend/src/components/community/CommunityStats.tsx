@@ -43,6 +43,8 @@ export default function CommunityStats() {
   const router = useRouter();
   const { user } = useAuth();
   const [stats, setStats] = useState<{ members: number; active_today: number; new_this_week: number } | null>(null);
+  const [w, setW] = useState(0);
+  const narrow = w > 0 && w < 240;
 
   useEffect(() => {
     api.communityStats().then(setStats).catch(() => {});
@@ -51,21 +53,21 @@ export default function CommunityStats() {
   if (!stats || stats.members <= 0) return null;
 
   return (
-    <Animated.View entering={FadeIn.duration(400)} style={styles.wrap}>
+    <Animated.View entering={FadeIn.duration(400)} onLayout={(e) => setW(e.nativeEvent.layout.width)} style={[styles.wrap, narrow && styles.wrapNarrow]}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Una comunità che cresce insieme</Text>
+        <Text style={styles.title} numberOfLines={2}>Una comunità che cresce insieme</Text>
         <Ionicons name="heart" size={16} color={colors.error} />
       </View>
       <View style={styles.row}>
         <View style={styles.stat}>
-          <AnimatedCounter value={stats.members} style={styles.big} />
+          <AnimatedCounter value={stats.members} style={[styles.big, narrow && styles.bigNarrow]} />
           <Text style={styles.label}>membri</Text>
         </View>
         <View style={styles.divider} />
         <View style={styles.stat}>
           <View style={styles.activeRow}>
             <View style={styles.pulseDot} />
-            <AnimatedCounter value={stats.active_today} style={styles.big} />
+            <AnimatedCounter value={stats.active_today} style={[styles.big, narrow && styles.bigNarrow]} />
           </View>
           <Text style={styles.label}>attivi oggi</Text>
         </View>
@@ -89,12 +91,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.brandTertiary, borderRadius: radius.lg,
     padding: spacing.lg, borderWidth: 1, borderColor: "rgba(14,165,233,0.25)",
   },
+  wrapNarrow: { marginHorizontal: 0, marginTop: 0, padding: spacing.md },
   headerRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: spacing.md },
   title: { color: colors.onBrandTertiary, fontSize: 14, fontWeight: "800" },
   row: { flexDirection: "row", alignItems: "center" },
   stat: { flex: 1, alignItems: "center" },
   divider: { width: 1, height: 40, backgroundColor: "rgba(2,132,199,0.2)" },
   big: { color: colors.navy, fontSize: 28, fontWeight: "800", letterSpacing: 0.3 },
+  bigNarrow: { fontSize: 22 },
   label: { color: colors.onSurfaceTertiary, fontSize: 12, fontWeight: "600", marginTop: 2 },
   activeRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   pulseDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.success },
