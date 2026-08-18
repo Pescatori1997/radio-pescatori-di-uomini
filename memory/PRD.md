@@ -553,3 +553,12 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - **Copertina puntate auto**: `_autosave_recordings` ora salva `image` (per YouTube = https://img.youtube.com/vi/{id}/hqdefault.jpg, altrimenti hero del programma) + `media_kind`. EpisodeIn e `_normalize_program` estesi con `image`/`media_kind`. La pagina programma mostra la miniatura 84x48 con overlay play su ogni puntata.
 - **Player interno**: la pagina programma (`programma/[slug].tsx`) apre le puntate in un player IN-APP (modal overlay 16:9 con `MeditationPlayer` — embed YouTube/Vimeo/FB via iframe/WebView, file diretti via video/audio) invece di `Linking.openURL` esterno. `episodeToMedia()` mappa audio_url→media (GridFS media_id o video_url+provider). Chiusura con X.
 - Verificato: autosave salva thumbnail YouTube+media_kind (backend); pagina programma mostra miniatura puntata; tap "AVVIA ULTIMA PUNTATA" apre il player in-app (iframe youtube/embed, tasto chiudi). Idempotenza autosave confermata.
+
+## Diretta video registrato = comportamento "vera diretta" (2026-06/08)
+- Richiesta: il video registrato in onda deve partire DA SOLO (autoplay), essere sincronizzato all'orario (chi entra dopo lo trova già avanti) e NON permettere all'utente di stoppare/riavviare/scorrere.
+- Fix in `diretta.tsx`:
+  - **Autoplay affidabile**: listener `statusChange` → quando lo status è `readyToPlay`, si effettua seek all'offset e `player.play()` (prima usava setTimeout 350ms che partiva prima che il media fosse pronto).
+  - **Sincronizzazione + loop**: per i registrati `player.loop=true` e seek a `offset_seconds`; se la registrazione è più corta dello slot (offset ≥ durata) si usa `offset % durata` così resta sempre allineata. Re-sync ogni 15s se drift > 6s. Per lo stream live vero (is_live) nessun seek (parte al live edge).
+  - **Niente controlli utente**: `nativeControls={false}` (via un contenitore con `StyleSheet.absoluteFill`); overlay minimale solo con Muto e Schermo intero. Nessun play/pausa/scrub.
+  - **Fallback sicuro**: se l'autoplay è bloccato (es. web/mobile-web) compare "Tocca per avviare la diretta" al centro; su iOS/Android nativo l'autoplay con audio funziona quindi il pulsante non appare.
+- Verificato su web: controlli nativi assenti, loop=true, overlay muto/fullscreen presenti, fallback tap-to-play mostrato quando in pausa. Nota: l'autoplay-con-audio è una restrizione solo web; sul build nativo parte da solo.

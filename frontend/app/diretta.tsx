@@ -16,22 +16,45 @@ export default function Diretta() {
   const [data, setData] = useState<any>(null);
   const [loaded, setLoaded] = useState(false);
   const [embedUrl, setEmbedUrl] = useState<string | null>(null);
+  const [muted, setMuted] = useState(false);
+  const [playing, setPlaying] = useState(false);
   const lastUrl = useRef<string>("");
+  const targetSeek = useRef<number | null>(null);
+  const videoRef = useRef<any>(null);
 
   const player = useVideoPlayer(null, (p) => { p.loop = false; p.staysActiveInBackground = true; });
+
+  // When the media is ready, jump to the synchronized position and start playing
+  // automatically (broadcast behaves like a real live: no manual play needed).
+  useEffect(() => {
+    const sub = player.addListener("statusChange", (payload: any) => {
+      if (payload?.status !== "readyToPlay") return;
+      try {
+        if (targetSeek.current != null) {
+          const dur = player.duration || 0;
+          let s = targetSeek.current;
+          if (dur > 0 && s >= dur) s = s % dur;   // recording shorter than slot → loop-sync
+          player.currentTime = Math.max(0, s);
+        }
+        player.play();
+      } catch {}
+    });
+    const sub2 = player.addListener("playingChange", (p: any) => setPlaying(!!p?.isPlaying));
+    return () => { try { sub.remove(); } catch {} try { sub2.remove(); } catch {} };
+  }, [player]);
 
   const applyLive = useCallback((d: any) => {
     setData(d);
     setLoaded(true);
     const onAir = d?.on_air && d?.media?.url;
     const filler = d?.filler || {};
-    let rawUrl = "", isLive = false, loop = false, seek: number | null = null;
+    let rawUrl = "", seek: number | null = null, shouldLoop = false;
     if (onAir) {
       rawUrl = d.media.url;
-      isLive = !!d.media.is_live;
-      seek = isLive ? null : Math.max(0, Number(d?.offset_seconds || 0));
+      if (d.media.is_live) { seek = null; shouldLoop = false; }        // real live stream → play at live edge
+      else { seek = Math.max(0, Number(d?.offset_seconds || 0)); shouldLoop = true; }  // recorded → time-synced + loop
     } else if (filler.url && (filler.kind === "video" || filler.kind === "audio")) {
-      rawUrl = filler.url; loop = true; seek = 0;
+      rawUrl = filler.url; seek = 0; shouldLoop = true;
     }
     // Embeddable provider (YouTube/Vimeo/Facebook/...) → iframe/WebView, NOT expo-video.
     const provider = detectProvider(rawUrl);
@@ -48,15 +71,18 @@ export default function Diretta() {
       if (url) {
         if (url !== lastUrl.current) {
           lastUrl.current = url;
-          player.loop = loop;
-          player.replace({ uri: url });
-          if (seek != null) setTimeout(() => { try { player.currentTime = seek as number; player.play(); } catch {} }, 350);
-          else setTimeout(() => { try { player.play(); } catch {} }, 350);
-        } else if (seek != null && Math.abs((player.currentTime || 0) - seek) > 6) {
-          player.currentTime = seek;
-          player.play();
+          player.loop = shouldLoop;
+          targetSeek.current = seek;
+          player.replace({ uri: url });   // statusChange listener seeks + plays when ready
         } else {
-          player.play();
+          // Same media, re-sync drift (keeps latecomers aligned with the live position).
+          if (seek != null) {
+            const dur = player.duration || 0;
+            let s = seek;
+            if (dur > 0 && s >= dur) s = s % dur;
+            if (Math.abs((player.currentTime || 0) - s) > 6) { try { player.currentTime = s; } catch {} }
+          }
+          try { player.play(); } catch {}
         }
       } else {
         lastUrl.current = "";
@@ -68,6 +94,8 @@ export default function Diretta() {
   const fetchLive = useCallback(() => {
     api.liveNow().then(applyLive).catch(() => setLoaded(true));
   }, [applyLive]);
+
+  useEffect(() => { try { player.muted = muted; } catch {} }, [muted, player]);
 
   useFocusEffect(
     useCallback(() => {
@@ -129,7 +157,23 @@ export default function Diretta() {
           {embedUrl ? (
             <View style={styles.video}><EmbedFrame url={embedUrl} testID="diretta-embed" /></View>
           ) : isVideo ? (
-            <VideoView player={player} style={styles.video} contentFit="contain" nativeControls allowsFullscreen />
+            <View style={styles.video}>
+              <VideoView ref={videoRef} player={player} style={StyleSheet.absoluteFill} contentFit="contain" nativeControls={false} allowsFullscreen />
+              <View style={styles.vidOverlay} pointerEvents="box-none">
+                <Pressable testID="diretta-mute" style={styles.vidBtn} onPress={() => setMuted((m) => !m)} hitSlop={8}>
+                  <Ionicons name={muted ? "volume-mute" : "volume-high"} size={20} color="#fff" />
+                </Pressable>
+                <Pressable testID="diretta-fs" style={styles.vidBtn} onPress={() => { try { videoRef.current?.enterFullscreen(); } catch {} }} hitSlop={8}>
+                  <Ionicons name="expand" size={20} color="#fff" />
+                </Pressable>
+              </View>
+              {!playing ? (
+                <Pressable testID="diretta-tap-play" style={styles.tapPlay} onPress={() => { setMuted(false); try { player.play(); } catch {} }}>
+                  <View style={styles.tapPlayBtn}><Ionicons name="play" size={34} color="#fff" /></View>
+                  <Text style={styles.tapPlayText}>Tocca per avviare la diretta</Text>
+                </Pressable>
+              ) : null}
+            </View>
           ) : (
             <View style={styles.audioStage}>
               {prog?.hero_image ? (
@@ -152,7 +196,14 @@ export default function Diretta() {
           {embedUrl ? (
             <View style={styles.video}><EmbedFrame url={embedUrl} testID="diretta-filler-embed" /></View>
           ) : filler.kind === "video" ? (
-            <VideoView player={player} style={styles.video} contentFit="contain" nativeControls />
+            <View style={styles.video}>
+              <VideoView ref={videoRef} player={player} style={StyleSheet.absoluteFill} contentFit="contain" nativeControls={false} />
+              <View style={styles.vidOverlay} pointerEvents="box-none">
+                <Pressable style={styles.vidBtn} onPress={() => setMuted((m) => !m)} hitSlop={8}>
+                  <Ionicons name={muted ? "volume-mute" : "volume-high"} size={20} color="#fff" />
+                </Pressable>
+              </View>
+            </View>
           ) : (
             <View style={styles.audioStage}>
               <View style={[styles.audioArt, styles.audioArtEmpty]}><Ionicons name="radio" size={64} color={colors.brandSecondary} /></View>
@@ -200,6 +251,11 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl, gap: spacing.md },
   stage: { flex: 1 },
   video: { width: "100%", aspectRatio: 16 / 9, backgroundColor: "#000", marginTop: spacing.md },
+  vidOverlay: { position: "absolute", top: 8, right: 8, flexDirection: "row", gap: 8 },
+  vidBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center" },
+  tapPlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", gap: 10 },
+  tapPlayBtn: { width: 72, height: 72, borderRadius: 36, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" },
+  tapPlayText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   audioStage: { alignItems: "center", justifyContent: "center", paddingVertical: 40, gap: spacing.lg },
   audioArt: { width: 220, height: 220, borderRadius: 24, backgroundColor: colors.navySoft },
   audioArtEmpty: { alignItems: "center", justifyContent: "center" },
