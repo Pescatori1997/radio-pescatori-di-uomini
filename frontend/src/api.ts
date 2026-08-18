@@ -267,6 +267,10 @@ export const api = {
   favorites: () => request("/me/favorites", {}, true),
   favoriteIds: () => request("/me/favorite-ids", {}, true),
   toggleFavorite: (id: string) => request(`/me/favorites/${id}`, { method: "POST" }, true),
+  // generic favorites for meditazioni + CMS content
+  contentFavIds: () => request("/me/content-fav-ids", {}, true),
+  toggleContentFav: (type: string, id: string) => request(`/me/content-fav/${type}/${encodeURIComponent(id)}`, { method: "POST" }, true),
+  myLibrary: () => request("/me/library", {}, true),
   history: () => request("/me/history", {}, true),
   addHistory: (id: string) => request(`/me/history/${id}`, { method: "POST" }, true),
   // admin

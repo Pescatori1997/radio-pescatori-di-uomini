@@ -5,9 +5,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/src/context/AuthContext";
-import { usePlayer } from "@/src/context/PlayerContext";
 import { useSettings } from "@/src/context/SettingsContext";
-import { api, audioSrc } from "@/src/api";
+import { useLabel } from "@/src/utils/labels";
+import { api } from "@/src/api";
 import { SupporterMedal, SupporterTag } from "@/src/components/SupporterBadge";
 import { colors, spacing, radius } from "@/src/theme";
 
@@ -15,15 +15,13 @@ export default function Profilo() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, logout, refreshUser } = useAuth();
-  const { playTrack } = usePlayer();
   const { sectionVisible } = useSettings();
-  const [favs, setFavs] = useState<any[]>([]);
+  const t = useLabel();
   const [isAdmin, setIsAdmin] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       if (user) {
-        api.favorites().then(setFavs).catch(() => {});
         api.adminMe().then(() => setIsAdmin(true)).catch(() => setIsAdmin(false));
         // Authoritative supporter refresh: sync the subscription from Stripe
         // (server-side) then refresh the user so the badge reflects the real
@@ -37,24 +35,21 @@ export default function Profilo() {
 
   const menu = [
     ...(isAdmin ? [{ icon: "shield-checkmark-outline", label: "Pannello Amministratore", route: "/admin" }] : []),
-    { icon: "boat-outline", label: "Il nostro Team", route: "/equipaggio", section: "team" },
-    ...(user ? [{ icon: "ribbon-outline", label: "Traguardi del Cammino", route: "/traguardi", section: "traguardi" }] : []),
-    { icon: "library-outline", label: "Biblioteca", route: "/biblioteca", section: "bibbia" },
-    { icon: "heart-outline", label: "Richieste di Preghiera", route: "/prayer", section: "prayer" },
-    { icon: "bag-handle-outline", label: "Merchandising", route: "/merch", section: "merch" },
-    { icon: "information-circle-outline", label: "Chi Siamo", route: "/about", section: "about" },
-    { icon: "gift-outline", label: "Sostieni il progetto", route: "/donate", section: "donate" },
+    { icon: "boat-outline", label: t("menu_team"), route: "/equipaggio", section: "team" },
+    ...(user ? [{ icon: "ribbon-outline", label: t("menu_traguardi"), route: "/traguardi", section: "traguardi" }] : []),
+    { icon: "library-outline", label: t("menu_biblioteca"), route: "/biblioteca", section: "bibbia" },
+    { icon: "heart-outline", label: t("menu_prayer"), route: "/prayer", section: "prayer" },
+    { icon: "bag-handle-outline", label: t("menu_merch"), route: "/merch", section: "merch" },
+    { icon: "information-circle-outline", label: t("menu_about"), route: "/about", section: "about" },
+    { icon: "gift-outline", label: t("menu_donate"), route: "/donate", section: "donate" },
     ...(user ? [{ icon: "receipt-outline", label: "Le mie offerte", route: "/donations-history" }] : []),
     ...(user ? [{ icon: "person-circle-outline", label: "Il mio account", route: "/account" }] : []),
     ...(user ? [{ icon: "notifications-outline", label: "Notifiche", route: "/notifications-settings" }] : []),
-    { icon: "mail-outline", label: "Contatti", route: "/contact", section: "contact" },
+    { icon: "mail-outline", label: t("menu_contact"), route: "/contact", section: "contact" },
     { icon: "alert-circle-outline", label: "Segnala un problema", route: "/report" },
     { icon: "shield-checkmark-outline", label: "Privacy Policy", route: "/privacy" },
     { icon: "settings-outline", label: "Impostazioni", route: "/settings" },
   ].filter((m: any) => !m.section || sectionVisible(m.section));
-
-  const play = (p: any) =>
-    playTrack({ id: p.id, title: p.title, artist: p.author, artwork: p.artwork, url: audioSrc(p.audio_url), isLive: false });
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.surface }} contentContainerStyle={{ paddingTop: insets.top + spacing.lg, paddingBottom: 180 }} showsVerticalScrollIndicator={false}>
@@ -97,17 +92,12 @@ export default function Profilo() {
         </Pressable>
       )}
 
-      {user && favs.length > 0 && (
-        <Section title="Podcast preferiti">
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hRow}>
-            {favs.map((p) => (
-              <Pressable key={p.id} style={styles.miniCard} onPress={() => play(p)}>
-                <Image source={{ uri: p.artwork }} style={styles.miniArt} contentFit="cover" />
-                <Text numberOfLines={2} style={styles.miniTitle}>{p.title}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        </Section>
+      {user && (
+        <Pressable testID="go-library" style={styles.libraryCta} onPress={() => router.push("/biblioteca" as any)}>
+          <Ionicons name="heart" size={18} color={colors.brandPrimary} />
+          <Text style={styles.libraryCtaText}>I tuoi preferiti sono nella Biblioteca</Text>
+          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+        </Pressable>
       )}
 
       <View style={styles.menu}>
@@ -124,16 +114,9 @@ export default function Profilo() {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <View style={{ marginTop: spacing.xl }}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {children}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
+  libraryCta: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginHorizontal: spacing.lg, marginTop: spacing.xl, backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.lg, borderWidth: 1, borderColor: colors.border },
+  libraryCtaText: { flex: 1, fontSize: 14, fontWeight: "700", color: colors.onSurface },
   h1: { fontSize: 30, fontWeight: "800", color: colors.onSurface, paddingHorizontal: spacing.lg },
   userCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginHorizontal: spacing.lg, marginTop: spacing.lg, backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.lg },
   avatar: { width: 56, height: 56, borderRadius: 28 },

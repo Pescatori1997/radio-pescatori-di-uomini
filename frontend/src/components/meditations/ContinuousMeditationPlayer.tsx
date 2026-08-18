@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { api, mediaUrl } from "@/src/api";
 import { useAuth } from "@/src/context/AuthContext";
+import { useContentFav } from "@/src/hooks/useContentFav";
 import MeditationPlayer from "@/src/components/MeditationPlayer";
 import MeditationCommentsPanel from "@/src/components/meditations/MeditationCommentsPanel";
 import MeditationInfoSheet from "@/src/components/meditations/MeditationInfoSheet";
@@ -51,6 +52,7 @@ export default function ContinuousMeditationPlayer({
   // layout width to the visible column so the video fits correctly.
   const W = Platform.OS === "web" ? Math.min(width, MAX_CONTENT_WIDTH) : width;
   const { user } = useAuth();
+  const medFav = useContentFav("meditazioni");
 
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -215,6 +217,9 @@ export default function ContinuousMeditationPlayer({
         {!commentsOpen && (
           <View style={[styles.rail, { bottom: bottomSpace }]}>
             <RailBtn testID={`med-like-${m.id}`} icon={st.liked ? "heart" : "heart-outline"} activeColor={colors.error} active={st.liked} label={`${st.likes_count || 0}`} onPress={() => toggleLike(m)} />
+            {user && (
+              <RailBtn testID={`med-save-${m.id}`} icon={medFav.isFav(m.id) ? "bookmark" : "bookmark-outline"} activeColor={colors.brandSecondary} active={medFav.isFav(m.id)} label="Salva" onPress={() => medFav.toggle(m.id)} />
+            )}
             <RailBtn testID={`med-comments-${m.id}`} icon="chatbubble-outline" label={`${st.comments_count || 0}`} onPress={() => openComments(m.id)} />
             <RailBtn testID={`med-share-${m.id}`} icon="paper-plane-outline" label="Invia" onPress={() => share(m)} />
           </View>

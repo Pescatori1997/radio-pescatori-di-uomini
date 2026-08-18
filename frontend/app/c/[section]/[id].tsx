@@ -10,6 +10,7 @@ import MeditationPlayer from "@/src/components/MeditationPlayer";
 import PressableScale from "@/src/components/PressableScale";
 import { PROVIDER_LABEL } from "@/src/utils/embeds";
 import { sectionLabel } from "@/src/utils/sections";
+import { useContentFav } from "@/src/hooks/useContentFav";
 import { colors, spacing, radius } from "@/src/theme";
 
 function fmtDate(iso?: string) {
@@ -23,6 +24,7 @@ export default function ContentDetail() {
   const { width } = useWindowDimensions();
   const { section, id } = useLocalSearchParams<{ section: string; id: string }>();
   const label = sectionLabel(section);
+  const { isFav, toggle, isLogged } = useContentFav(section!);
   const [m, setM] = useState<any>(null);
   const [siblings, setSiblings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,7 +71,14 @@ export default function ContentDetail() {
       <View style={[styles.topBar, { paddingTop: insets.top + spacing.sm }]}>
         <Pressable testID="cd-back" onPress={() => goBackOrHome()} hitSlop={12}><Ionicons name="arrow-back" size={24} color={colors.onSurface} /></Pressable>
         <Text style={styles.topTitle} numberOfLines={1}>{label}</Text>
-        <Pressable testID="cd-share" onPress={share} hitSlop={12}><Ionicons name="share-social" size={22} color={colors.onSurface} /></Pressable>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+          {isLogged && (
+            <Pressable testID="cd-fav" onPress={() => id && toggle(id)} hitSlop={12}>
+              <Ionicons name={id && isFav(id) ? "heart" : "heart-outline"} size={23} color={id && isFav(id) ? colors.brandPrimary : colors.onSurface} />
+            </Pressable>
+          )}
+          <Pressable testID="cd-share" onPress={share} hitSlop={12}><Ionicons name="share-social" size={22} color={colors.onSurface} /></Pressable>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 40 }} showsVerticalScrollIndicator={false}>

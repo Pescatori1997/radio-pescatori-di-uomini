@@ -955,6 +955,86 @@ async def toggle_favorite_program(prog_id: str, authorization: Optional[str] = H
     return {"favorited": True}
 
 
+# ---------------- Generic favorites for content types (meditazioni + CMS) ----------------
+CONTENT_FAV_TYPES = {"meditazioni", "studi-biblici", "predicazioni", "video"}
+
+
+@api_router.get("/me/content-fav-ids")
+async def content_fav_ids(authorization: Optional[str] = Header(None)):
+    """Map of favorited ids per content type, e.g. {"meditazioni": ["m1"], "video": [...]}"""
+    user = await get_current_user(authorization)
+    docs = await db.user_favorites.find({"user_id": user["user_id"]}, {"_id": 0, "item_type": 1, "item_id": 1}).to_list(2000)
+    out: Dict[str, list] = {}
+    for d in docs:
+        out.setdefault(d["item_type"], []).append(d["item_id"])
+    return out
+
+
+@api_router.post("/me/content-fav/{item_type}/{item_id}")
+async def toggle_content_fav(item_type: str, item_id: str, authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    if item_type not in CONTENT_FAV_TYPES:
+        raise HTTPException(status_code=400, detail="Tipo di contenuto non valido")
+    existing = await db.user_favorites.find_one({"user_id": user["user_id"], "item_type": item_type, "item_id": item_id})
+    if existing:
+        await db.user_favorites.delete_one({"_id": existing["_id"]})
+        return {"favorited": False}
+    await db.user_favorites.insert_one({"user_id": user["user_id"], "item_type": item_type, "item_id": item_id, "created_at": now_utc()})
+    return {"favorited": True}
+
+
+@api_router.get("/me/library")
+async def my_library(authorization: Optional[str] = Header(None)):
+    """All of the user's favorites resolved into lightweight cards, grouped by
+    category, for the "I tuoi preferiti" block in the Biblioteca."""
+    user = await get_current_user(authorization)
+    uid = user["user_id"]
+    groups: list = []
+
+    # Podcast (legacy collection)
+    pf = await db.favorites.find({"user_id": uid}, {"_id": 0, "podcast_id": 1}).to_list(500)
+    pids = [f["podcast_id"] for f in pf]
+    if pids:
+        docs = imageopt.lighten_list("podcasts", await db.podcasts.find({"id": {"$in": pids}}, {"_id": 0}).to_list(500))
+        items = [{"id": d["id"], "title": d.get("title"), "subtitle": d.get("author") or "",
+                  "image": d.get("artwork"), "type": "podcast", "route": f"/podcast/{d['id']}"} for d in docs]
+        if items:
+            groups.append({"key": "podcast", "label": "Podcast", "items": items})
+
+    # Meditazioni + CMS content types (generic collection)
+    for t in ["meditazioni", "studi-biblici", "predicazioni", "video"]:
+        cf = await db.user_favorites.find({"user_id": uid, "item_type": t}, {"_id": 0, "item_id": 1}).to_list(500)
+        ids = [f["item_id"] for f in cf]
+        if not ids:
+            continue
+        if t == "meditazioni":
+            docs = imageopt.lighten_list("meditations", [_decorate_meditation(d) for d in await db.meditations.find({"id": {"$in": ids}}, {"_id": 0}).to_list(500)])
+            items = [{"id": d["id"], "title": d.get("title"), "subtitle": d.get("category") or "",
+                      "image": d.get("thumbnail"), "type": t, "route": "/meditazioni"} for d in docs]
+            label = "Meditazioni"
+        else:
+            docs = imageopt.lighten_list("contents", [_decorate_meditation(d) for d in await db.contents.find({"id": {"$in": ids}}, {"_id": 0}).to_list(500)])
+            items = [{"id": d["id"], "title": d.get("title"), "subtitle": d.get("subtitle") or "",
+                      "image": d.get("thumbnail"), "type": t, "route": f"/c/{t}"} for d in docs]
+            label = CONTENT_SECTIONS.get(t, t)
+        if items:
+            groups.append({"key": t, "label": label, "items": items})
+
+    # Programmi (legacy collection)
+    gf = await db.program_favorites.find({"user_id": uid}, {"_id": 0, "program_id": 1}).to_list(500)
+    gids = [f["program_id"] for f in gf]
+    if gids:
+        pdocs = await db.programs.find({"id": {"$in": gids}}, {"_id": 0}).to_list(500)
+        progs = [imageopt.lighten("programs", _normalize_program(d)) for d in pdocs]
+        items = [{"id": p["id"], "title": p.get("title"), "subtitle": p.get("host") or "",
+                  "image": p.get("hero_image") or (p.get("images") or [None])[0], "type": "programma",
+                  "route": f"/programma/{p.get('slug') or p['id']}"} for p in progs]
+        if items:
+            groups.append({"key": "programma", "label": "Programmi", "items": items})
+
+    return {"groups": groups}
+
+
 @api_router.post("/me/history/{podcast_id}")
 async def add_history(podcast_id: str, authorization: Optional[str] = Header(None)):
     user = await get_current_user(authorization)
@@ -2562,6 +2642,8 @@ class GeneralSettings(BaseModel):
     nav_config: Optional[Dict[str, Any]] = None
     # Editable hint shown on the front of the flippable "Versetto del Giorno" Home card.
     verse_flip_hint: Optional[str] = None
+    # Admin-editable display names for app sections (menu voci, Biblioteca, titoli).
+    section_labels: Optional[Dict[str, str]] = None
 
 
 # Canonical toggleable sections. Everything defaults ON except Merchandising,

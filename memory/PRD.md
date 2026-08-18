@@ -504,3 +504,9 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Flip via reanimated rotateY + crossfade opacity + backfaceVisibility; pointerEvents per faccia.
 - Testo invito ("gira la scheda") modificabile dal pannello Admin -> Versetto del Giorno (campo `verse_flip_hint` in settings; default "Tocca la scheda per girarla"). Applicato live.
 - File: `src/components/VerseOfDayCard.tsx`, `app/admin/verses/index.tsx`, backend `GeneralSettings.verse_flip_hint`.
+
+## Preferiti nella Biblioteca + Rinomina sezioni (giugno 2026)
+- Preferiti generici: nuova collezione `user_favorites` per meditazioni e CMS (studi-biblici/predicazioni/video). Endpoint: GET `/me/content-fav-ids`, POST `/me/content-fav/{type}/{id}`, GET `/me/library` (raggruppa podcast+meditazioni+CMS+programmi in card). Podcast/programmi restano nelle loro collezioni legacy (union in /me/library).
+- Cuore/salva aggiunto: dettaglio CMS `c/[section]/[id]` (heart in topbar) e reels Meditazioni (RailBtn bookmark "Salva"). Hook `src/hooks/useContentFav.ts` + `api.contentFavIds/toggleContentFav/myLibrary`.
+- Biblioteca: blocco "I tuoi preferiti" raggruppato per categoria in cima; Profilo: rimossa sezione "Podcast preferiti", aggiunto CTA verso Biblioteca.
+- Rinomina sezioni: settings.section_labels (Dict) + helper `src/utils/labels.ts` (useLabel/LABEL_CATALOG) applicato a Profilo menu e Biblioteca. Nuova schermata admin `app/admin/section-names.tsx` ("Nomi delle sezioni"). Applicato live.
