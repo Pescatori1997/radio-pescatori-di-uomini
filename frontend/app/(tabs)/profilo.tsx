@@ -92,14 +92,6 @@ export default function Profilo() {
         </Pressable>
       )}
 
-      {user && (
-        <Pressable testID="go-library" style={styles.libraryCta} onPress={() => router.push("/biblioteca" as any)}>
-          <Ionicons name="heart" size={18} color={colors.brandPrimary} />
-          <Text style={styles.libraryCtaText}>I tuoi preferiti sono nella Biblioteca</Text>
-          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-        </Pressable>
-      )}
-
       <View style={styles.menu}>
         {menu.map((m) => (
           <Pressable key={m.label} testID={`menu-${m.route}`} style={styles.menuRow} onPress={() => router.push(m.route as any)}>

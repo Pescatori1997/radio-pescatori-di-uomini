@@ -41,6 +41,26 @@ export default function Biblioteca() {
     }, [user?.user_id]) // eslint-disable-line react-hooks/exhaustive-deps
   );
 
+  const renderFavCard = (g: any, it: any) => (
+    <Pressable key={`${g.key}-${it.id}`} testID={`fav-${g.key}-${it.id}`} style={styles.favCard} onPress={() => router.push(it.route as any)}>
+      <View>
+        {it.image ? (
+          <Image source={{ uri: it.image }} style={styles.favArt} contentFit="cover" />
+        ) : (
+          <View style={[styles.favArt, styles.favArtEmpty]}><Ionicons name="musical-notes" size={22} color={colors.muted} /></View>
+        )}
+        <Pressable testID={`fav-remove-${g.key}-${it.id}`} style={styles.favRemove} hitSlop={8} onPress={() => removeFav(g.key, it.id)}>
+          <Ionicons name="heart" size={16} color={colors.white} />
+        </Pressable>
+      </View>
+      <Text numberOfLines={2} style={styles.favCardTitle}>{it.title}</Text>
+      {!!it.subtitle && <Text numberOfLines={1} style={styles.favCardSub}>{it.subtitle}</Text>}
+    </Pressable>
+  );
+
+  const catKeys = LIBRARY_CATEGORIES.map((c) => c.key);
+  const extraGroups = groups.filter((g) => !catKeys.includes(g.key)); // e.g. programmi
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
       <View style={[styles.topBar, { paddingTop: insets.top + spacing.sm }]}>
@@ -50,54 +70,52 @@ export default function Biblioteca() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 180 }} showsVerticalScrollIndicator={false}>
-        {/* I tuoi preferiti */}
-        {user && groups.length > 0 && (
-          <View style={styles.favWrap}>
-            <View style={styles.favHead}>
-              <Ionicons name="heart" size={18} color={colors.brandPrimary} />
-              <Text style={styles.favTitle}>{t("favorites_title")}</Text>
-            </View>
-            {groups.map((g) => (
-              <View key={g.key} style={{ marginTop: spacing.md }}>
-                <Text style={styles.favGroupTitle}>{t(`cat_${g.key}`, g.label)}</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.favRow}>
-                  {g.items.map((it: any) => (
-                    <Pressable key={`${g.key}-${it.id}`} testID={`fav-${g.key}-${it.id}`} style={styles.favCard} onPress={() => router.push(it.route as any)}>
-                      <View>
-                        {it.image ? (
-                          <Image source={{ uri: it.image }} style={styles.favArt} contentFit="cover" />
-                        ) : (
-                          <View style={[styles.favArt, styles.favArtEmpty]}><Ionicons name="musical-notes" size={22} color={colors.muted} /></View>
-                        )}
-                        <Pressable testID={`fav-remove-${g.key}-${it.id}`} style={styles.favRemove} hitSlop={8} onPress={() => removeFav(g.key, it.id)}>
-                          <Ionicons name="heart" size={16} color={colors.white} />
-                        </Pressable>
-                      </View>
-                      <Text numberOfLines={2} style={styles.favCardTitle}>{it.title}</Text>
-                      {!!it.subtitle && <Text numberOfLines={1} style={styles.favCardSub}>{it.subtitle}</Text>}
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              </View>
-            ))}
-          </View>
-        )}
-
         <Text style={styles.h1}>{t("library_title")}</Text>
         <Text style={styles.sub}>Podcast, meditazioni, studi biblici, predicazioni e video per nutrire la tua fede.</Text>
 
         <View style={{ marginTop: spacing.xl, gap: spacing.md }}>
-          {LIBRARY_CATEGORIES.map((c, i) => (
-            <Animated.View key={c.key} entering={FadeInDown.delay(Math.min(i * 60, 300))}>
-              <PressableScale testID={`lib-cat-${c.key}`} style={styles.card} onPress={() => router.push(c.route as any)}>
-                <View style={styles.iconWrap}><MaterialCommunityIcons name={c.icon as any} size={26} color={colors.white} /></View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardTitle}>{t(`cat_${c.key}`, c.label)}</Text>
-                  <Text style={styles.cardDesc}>{c.description}</Text>
+          {LIBRARY_CATEGORIES.map((c, i) => {
+            const g = groups.find((x) => x.key === c.key);
+            const favItems = (user && g?.items) || [];
+            return (
+              <Animated.View key={c.key} entering={FadeInDown.delay(Math.min(i * 60, 300))}>
+                <PressableScale testID={`lib-cat-${c.key}`} style={styles.card} onPress={() => router.push(c.route as any)}>
+                  <View style={styles.iconWrap}><MaterialCommunityIcons name={c.icon as any} size={26} color={colors.white} /></View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.cardTitle}>{t(`cat_${c.key}`, c.label)}</Text>
+                    <Text style={styles.cardDesc}>{c.description}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+                </PressableScale>
+                {favItems.length > 0 && (
+                  <View style={styles.favSection}>
+                    <View style={styles.favSectionHead}>
+                      <Ionicons name="heart" size={13} color={colors.brandPrimary} />
+                      <Text style={styles.favSectionLabel}>I tuoi preferiti</Text>
+                    </View>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.favRow}>
+                      {favItems.map((it: any) => renderFavCard(g, it))}
+                    </ScrollView>
+                  </View>
+                )}
+              </Animated.View>
+            );
+          })}
+
+          {/* Preferiti che non appartengono a una cartella della Biblioteca (es. Programmi) */}
+          {extraGroups.map((g) => (
+            <View key={g.key} style={styles.extraGroup}>
+              <Text style={styles.cardTitle}>{t(`cat_${g.key}`, g.label)}</Text>
+              <View style={styles.favSection}>
+                <View style={styles.favSectionHead}>
+                  <Ionicons name="heart" size={13} color={colors.brandPrimary} />
+                  <Text style={styles.favSectionLabel}>I tuoi preferiti</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color={colors.muted} />
-              </PressableScale>
-            </Animated.View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.favRow}>
+                  {g.items.map((it: any) => renderFavCard(g, it))}
+                </ScrollView>
+              </View>
+            </View>
           ))}
         </View>
       </ScrollView>
@@ -118,6 +136,10 @@ const styles = StyleSheet.create({
   favHead: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   favTitle: { fontSize: 20, fontWeight: "800", color: colors.onSurface },
   favGroupTitle: { fontSize: 15, fontWeight: "800", color: colors.onSurfaceSecondary, marginBottom: spacing.sm },
+  favSection: { marginTop: spacing.md, marginLeft: spacing.xs },
+  favSectionHead: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: spacing.sm },
+  favSectionLabel: { fontSize: 12.5, fontWeight: "800", color: colors.brandPrimary, letterSpacing: 0.3 },
+  extraGroup: { marginTop: spacing.sm },
   favRow: { gap: spacing.md, paddingRight: spacing.lg },
   favCard: { width: 120 },
   favArt: { width: 120, height: 120, borderRadius: radius.md, backgroundColor: colors.surfaceTertiary },
