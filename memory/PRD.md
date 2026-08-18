@@ -569,3 +569,8 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Admin `home-layout.tsx`: interruttore "Mobile / Desktop" (testID hl-device-mobile/desktop); due array di config indipendenti (itemsMobile/itemsDesktop), caricati da home_layout e home_layout_desktop (desktop fa fallback su mobile se assente). Pulsante "Copia impostazioni da Mobile" (solo tab Desktop). Salva entrambi in un'unica PUT /admin/settings.
 - Home `(tabs)/index.tsx`: `useWindowDimensions()` → `isDesktop = width >= 768`; usa `home_layout_desktop` su schermi larghi (fallback a `home_layout`), altrimenti `home_layout`. Comportamento retrocompatibile: finché l'admin non configura il desktop, usa la config mobile.
 - Verificato: toggle + copia + salva funzionano; persistenza indipendente confermata (mobile meteo=normal, desktop meteo=large); artefatto di test poi rimosso (home_layout_desktop unset).
+
+## Fix widget Meteo in cella stretta ("Metà" su mobile) (2026-06/08)
+- Problema: con Meteo a larghezza "Metà" su telefono, la card (layout orizzontale fisso: icona 56 + contenuto + chip ora) si schiacciava e "27°C"/"Min/Max" andavano a capo lettera per lettera.
+- Fix in `WeatherWidget.tsx`: misura la larghezza via `onLayout`; se < 240px passa a un layout COMPATTO verticale (icona centrata, città, temperatura, descrizione, min/max, ora) con `numberOfLines={1}` + `adjustsFontSizeToFit` sulla temperatura per non andare mai a capo. Layout orizzontale invariato quando c'è spazio (full width / desktop).
+- Verificato: a 151px la card compatta è pulita (34°C su una riga, Min 22° · Max 34°, ora). Retrocompatibile.

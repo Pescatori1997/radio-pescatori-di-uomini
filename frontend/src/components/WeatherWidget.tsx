@@ -16,6 +16,8 @@ export default function WeatherWidget() {
   const { status, weather, city, offline, lastUpdated, requestLocation, selectCity } = useWeather();
   const [pickCity, setPickCity] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [w, setW] = useState(0);
+  const compact = w > 0 && w < 240;   // narrow cell (e.g. "Metà" width on a phone)
 
   const askLocation = async () => { setBusy(true); try { await requestLocation(); } finally { setBusy(false); } };
 
@@ -61,25 +63,39 @@ export default function WeatherWidget() {
 
   return (
     <>
-      <Animated.View entering={FadeIn.duration(400)}>
-        <PressableScale testID="weather-widget" style={styles.card} onPress={() => router.push("/weather")}>
-          <View style={styles.leftIcon}>
-            <WeatherAnimation category={cat} size={56} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <View style={styles.cityRow}>
-              <Ionicons name="location-sharp" size={13} color={colors.onSurfaceTertiary} />
+      <Animated.View entering={FadeIn.duration(400)} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
+        {compact ? (
+          <PressableScale testID="weather-widget" style={[styles.card, styles.cardCompact]} onPress={() => router.push("/weather")}>
+            <WeatherAnimation category={cat} size={48} />
+            <View style={styles.cityRowCompact}>
+              <Ionicons name="location-sharp" size={12} color={colors.onSurfaceTertiary} />
               <Text style={styles.city} numberOfLines={1}>{cityName}</Text>
             </View>
-            <Text style={styles.temp}>{weather.temp}°C</Text>
+            <Text style={styles.temp} numberOfLines={1} adjustsFontSizeToFit>{weather.temp}°C</Text>
             <Text style={styles.desc} numberOfLines={1}>{vis.label}</Text>
-            <Text style={styles.minmax}>Min {weather.min}° • Max {weather.max}°</Text>
-          </View>
-          <View style={styles.right}>
-            <View style={styles.timeChip}><Ionicons name="time-outline" size={13} color={colors.onSurfaceTertiary} /><Text style={styles.time}>{time}</Text></View>
-            <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-          </View>
-        </PressableScale>
+            <Text style={styles.minmax} numberOfLines={1}>Min {weather.min}° · Max {weather.max}°</Text>
+            <View style={styles.timeChip}><Ionicons name="time-outline" size={12} color={colors.onSurfaceTertiary} /><Text style={styles.time}>{time}</Text></View>
+          </PressableScale>
+        ) : (
+          <PressableScale testID="weather-widget" style={styles.card} onPress={() => router.push("/weather")}>
+            <View style={styles.leftIcon}>
+              <WeatherAnimation category={cat} size={56} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={styles.cityRow}>
+                <Ionicons name="location-sharp" size={13} color={colors.onSurfaceTertiary} />
+                <Text style={styles.city} numberOfLines={1}>{cityName}</Text>
+              </View>
+              <Text style={styles.temp} numberOfLines={1} adjustsFontSizeToFit>{weather.temp}°C</Text>
+              <Text style={styles.desc} numberOfLines={1}>{vis.label}</Text>
+              <Text style={styles.minmax} numberOfLines={1}>Min {weather.min}° • Max {weather.max}°</Text>
+            </View>
+            <View style={styles.right}>
+              <View style={styles.timeChip}><Ionicons name="time-outline" size={13} color={colors.onSurfaceTertiary} /><Text style={styles.time}>{time}</Text></View>
+              <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+            </View>
+          </PressableScale>
+        )}
         {offline && lastUpdated && (
           <Text style={styles.offline}>Ultimo aggiornamento alle {new Date(lastUpdated).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}</Text>
         )}
@@ -91,6 +107,8 @@ export default function WeatherWidget() {
 
 const styles = StyleSheet.create({
   card: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.lg, borderWidth: 1, borderColor: colors.border },
+  cardCompact: { flexDirection: "column", alignItems: "center", gap: 2, paddingVertical: spacing.md },
+  cityRowCompact: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 4, maxWidth: "100%" },
   centerRow: { justifyContent: "center", gap: spacing.sm },
   dim: { color: colors.onSurfaceSecondary, fontSize: 14 },
   leftIcon: { width: 56, alignItems: "center", justifyContent: "center" },
