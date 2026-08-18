@@ -1799,6 +1799,24 @@ async def me_achievements(authorization: Optional[str] = Header(None)):
     settings = await db.walk_board.find_one({"id": "default"}, {"_id": 0}) or DEFAULT_BOARD
     defs = await db.achievements.find({"active": True}, {"_id": 0}).sort([("order", 1), ("category", 1), ("threshold", 1)]).to_list(300)
     counts = await _user_metric_counts(uid)
+    # Persistent high-water marks: the displayed count for a metric must NEVER
+    # regress, even if the user later un-highlights verses / removes items.
+    peak_docs = await db.user_metric_peaks.find({"user_id": uid}, {"_id": 0, "metric": 1, "peak": 1}).to_list(200)
+    peaks = {d["metric"]: int(d.get("peak") or 0) for d in peak_docs}
+    for metric, live in list(counts.items()):
+        if metric == "manual":
+            continue
+        pk = peaks.get(metric, 0)
+        if int(live) > pk:
+            await db.user_metric_peaks.update_one(
+                {"user_id": uid, "metric": metric},
+                {"$set": {"peak": int(live)}}, upsert=True)
+            pk = int(live)
+        counts[metric] = pk
+    # Include peaks for metrics that dropped out of the live result entirely.
+    for metric, pk in peaks.items():
+        if metric != "manual":
+            counts[metric] = max(int(counts.get(metric, 0)), pk)
     manual = {r["achievement_id"]: r for r in await db.user_achievements.find({"user_id": uid}, {"_id": 0}).to_list(500)}
     out = []
     newly_earned = []
