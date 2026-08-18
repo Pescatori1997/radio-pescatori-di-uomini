@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, RefreshControl } from "react-native";
+import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, RefreshControl, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -33,6 +33,8 @@ const STUDIO = require("@/assets/images/studio.png");
 export default function Home() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768;
   const { playLive, playTrack, track, isPlaying, liveInfo } = usePlayer();
   const { sectionVisible, settings } = useSettings();
   const t = useLabel();
@@ -189,7 +191,11 @@ export default function Home() {
   };
 
   // Build the ordered, visibility-filtered layout, pairing consecutive halves.
-  const layout = mergeHomeLayout(settings?.home_layout).filter((s) => sectionVisible(s.key));
+  // Desktop (wide) and mobile use independent configurations set from the Admin.
+  const rawLayout = isDesktop
+    ? (settings?.home_layout_desktop ?? settings?.home_layout)
+    : settings?.home_layout;
+  const layout = mergeHomeLayout(rawLayout).filter((s) => sectionVisible(s.key));
   const rows: HomeSectionCfg[][] = [];
   let buf: HomeSectionCfg[] = [];
   const flush = () => { if (buf.length) { rows.push(buf); buf = []; } };

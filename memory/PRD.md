@@ -562,3 +562,10 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
   - **Niente controlli utente**: `nativeControls={false}` (via un contenitore con `StyleSheet.absoluteFill`); overlay minimale solo con Muto e Schermo intero. Nessun play/pausa/scrub.
   - **Fallback sicuro**: se l'autoplay è bloccato (es. web/mobile-web) compare "Tocca per avviare la diretta" al centro; su iOS/Android nativo l'autoplay con audio funziona quindi il pulsante non appare.
 - Verificato su web: controlli nativi assenti, loop=true, overlay muto/fullscreen presenti, fallback tap-to-play mostrato quando in pausa. Nota: l'autoplay-con-audio è una restrizione solo web; sul build nativo parte da solo.
+
+## Layout Home separato Mobile / Desktop (2026-06/08)
+- Richiesta: le dimensioni/larghezze delle sezioni Home impostate dall'admin vanno bene su desktop ma si rovinano su mobile (schermo stretto). Soluzione: impostazioni indipendenti per Mobile e Desktop.
+- Backend: `GeneralSettings.home_layout_desktop` (List[Dict]); servito da GET /settings insieme a `home_layout`.
+- Admin `home-layout.tsx`: interruttore "Mobile / Desktop" (testID hl-device-mobile/desktop); due array di config indipendenti (itemsMobile/itemsDesktop), caricati da home_layout e home_layout_desktop (desktop fa fallback su mobile se assente). Pulsante "Copia impostazioni da Mobile" (solo tab Desktop). Salva entrambi in un'unica PUT /admin/settings.
+- Home `(tabs)/index.tsx`: `useWindowDimensions()` → `isDesktop = width >= 768`; usa `home_layout_desktop` su schermi larghi (fallback a `home_layout`), altrimenti `home_layout`. Comportamento retrocompatibile: finché l'admin non configura il desktop, usa la config mobile.
+- Verificato: toggle + copia + salva funzionano; persistenza indipendente confermata (mobile meteo=normal, desktop meteo=large); artefatto di test poi rimosso (home_layout_desktop unset).

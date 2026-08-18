@@ -2871,6 +2871,7 @@ class GeneralSettings(BaseModel):
     section_visibility: Optional[Dict[str, bool]] = None
     # Home layout personalization: ordered list of { key, width, size }.
     home_layout: Optional[List[Dict[str, Any]]] = None
+    home_layout_desktop: Optional[List[Dict[str, Any]]] = None
     donate_config: Optional[Dict[str, Any]] = None
     # Per-item bottom-navigation customization (labels, colors, custom icons & animations).
     nav_config: Optional[Dict[str, Any]] = None
