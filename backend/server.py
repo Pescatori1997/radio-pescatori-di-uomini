@@ -149,6 +149,9 @@ def _normalize_program(d: dict) -> dict:
         "social": d.get("social") or {},
         "contact_url": d.get("contact_url") or "",
         "episodes": episodes,
+        # Scheduled broadcast media (video/audio that auto-plays during the slot)
+        "broadcast_media_url": d.get("broadcast_media_url") or "",
+        "broadcast_media_kind": d.get("broadcast_media_kind") or "",
     }
 
 
@@ -209,6 +212,53 @@ def _next_program(programs: list, now=None):
         "weekdays": best["weekdays"], "images": best.get("images") or [],
         "starts_at": best_dt.isoformat() if best_dt else "",
     }
+
+
+@api_router.get("/live/now")
+async def live_now():
+    """What is scheduled ON AIR right now, for the synchronized broadcast.
+    Returns the on-air program's media plus the current playback offset (so all
+    clients seek to the same position, like live TV/radio)."""
+    now = datetime.now(_ROME_TZ)
+    docs = await db.programs.find({}, {"_id": 0}).to_list(500)
+    progs = [imageopt.lighten("programs", _normalize_program(d)) for d in docs]
+    on_air = next((p for p in progs if _is_on_air(p, now) and p.get("broadcast_media_url")), None)
+    if not on_air:
+        on_air = next((p for p in progs if _is_on_air(p, now)), None)
+
+    result = {"server_time": now.isoformat(), "on_air": False, "program": None,
+              "media": None, "offset_seconds": 0, "duration_seconds": 0, "ends_in_seconds": 0,
+              "next": _next_program(progs, now)}
+    if not on_air:
+        return result
+
+    start, end = on_air.get("start_time") or "00:00", on_air.get("end_time") or "00:00"
+    try:
+        sh, sm = int(start[:2]), int(start[3:5])
+        eh, em = int(end[:2]), int(end[3:5])
+    except Exception:
+        sh = sm = eh = em = 0
+    start_dt = now.replace(hour=sh, minute=sm, second=0, microsecond=0)
+    end_dt = now.replace(hour=eh, minute=em, second=0, microsecond=0)
+    if end_dt <= start_dt:  # slot crosses midnight
+        if now < start_dt:
+            start_dt -= timedelta(days=1)
+        else:
+            end_dt += timedelta(days=1)
+    offset = max(0, int((now - start_dt).total_seconds()))
+    duration = max(0, int((end_dt - start_dt).total_seconds()))
+    ends_in = max(0, int((end_dt - now).total_seconds()))
+    media = None
+    if on_air.get("broadcast_media_url"):
+        media = {"url": on_air["broadcast_media_url"], "kind": on_air.get("broadcast_media_kind") or "audio"}
+    result.update({
+        "on_air": True,
+        "program": {"id": on_air["id"], "title": on_air["title"], "host": on_air.get("host") or "",
+                    "hero_image": on_air.get("hero_image") or "", "slug": on_air.get("slug"),
+                    "start_time": start, "end_time": end},
+        "media": media, "offset_seconds": offset, "duration_seconds": duration, "ends_in_seconds": ends_in,
+    })
+    return result
 
 
 def new_id(prefix="id"):
@@ -2522,6 +2572,8 @@ class ProgramIn(BaseModel):
     social: Optional[dict] = None
     contact_url: Optional[str] = ""
     episodes: Optional[List[EpisodeIn]] = None
+    broadcast_media_url: Optional[str] = ""
+    broadcast_media_kind: Optional[str] = ""
 
 
 class ProgramEdit(BaseModel):
@@ -2544,6 +2596,8 @@ class ProgramEdit(BaseModel):
     social: Optional[dict] = None
     contact_url: Optional[str] = None
     episodes: Optional[List[EpisodeIn]] = None
+    broadcast_media_url: Optional[str] = None
+    broadcast_media_kind: Optional[str] = None
 
 
 @api_router.get("/admin/programs")

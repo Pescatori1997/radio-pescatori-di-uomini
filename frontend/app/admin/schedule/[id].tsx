@@ -7,6 +7,7 @@ import { api } from "@/src/api";
 import { ADMIN } from "@/src/components/AdminShell";
 import PressableScale from "@/src/components/PressableScale";
 import { AInput, AImagePicker, ASwitch } from "@/src/components/adminForm";
+import MediaUpload from "@/src/components/MediaUpload";
 import { colors, spacing, radius } from "@/src/theme";
 
 const DAYS = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"];
@@ -29,6 +30,7 @@ export default function ProgramEditor() {
     description: "", long_description: "", hero_image: "", contact_url: "",
     social: { facebook: "", instagram: "", youtube: "", website: "" },
     episodes: [], color: "", active: true, type: "recorded",
+    broadcast: { media_id: null, video_url: "" }, broadcast_kind: "video",
   });
   const [loading, setLoading] = useState(!isNew);
   const [busy, setBusy] = useState(false);
@@ -49,6 +51,8 @@ export default function ProgramEditor() {
           episodes: p.episodes || [],
           color: p.color || "", active: p.active !== false,
           type: p.type && p.type !== "regular" ? p.type : "recorded",
+          broadcast: { media_id: null, video_url: p.broadcast_media_url || "" },
+          broadcast_kind: p.broadcast_media_kind || "video",
         });
       }).catch(() => {}).finally(() => setLoading(false));
     }
@@ -71,6 +75,7 @@ export default function ProgramEditor() {
     const presenters = f.presenters.filter((p: any) => p.name?.trim() || p.image);
     const images = presenters.map((p: any) => p.image).filter(Boolean);
     const episodes = (f.episodes || []).filter((e: any) => e.title?.trim()).map((e: any) => ({ ...e, duration_min: Number(e.duration_min) || 0 }));
+    const bmUrl = f.broadcast?.media_id ? `/api/media/${f.broadcast.media_id}` : (f.broadcast?.video_url || "").trim();
     const payload = {
       title: f.title, subtitle: f.subtitle, category: f.category,
       start_time: f.start_time, end_time: f.end_time,
@@ -78,6 +83,7 @@ export default function ProgramEditor() {
       description: f.description, long_description: f.long_description,
       hero_image: f.hero_image, contact_url: f.contact_url, social: f.social, episodes,
       color: f.color, active: f.active, type: f.type || "recorded",
+      broadcast_media_url: bmUrl, broadcast_media_kind: bmUrl ? (f.broadcast_kind || "video") : "",
     };
     try {
       if (isNew) { await api.adminCreateProgram(payload); router.back(); }
@@ -132,6 +138,23 @@ export default function ProgramEditor() {
 
         <Text style={styles.label}>Pagina programma</Text>
         <AImagePicker testID="prog-hero" label="Immagine grande (hero della pagina)" value={f.hero_image} onChange={(v: string) => set("hero_image", v)} aspect={[3, 4]} />
+
+        <Text style={styles.label}>Diretta programmata (va in onda automaticamente)</Text>
+        <Text style={styles.hint}>Carica un video o un audio: verrà riprodotto in automatico durante l'orario di questo programma, sincronizzato per tutti (come una TV/radio). Lascia vuoto se non c'è nessuna diretta.</Text>
+        <View style={styles.kindRow}>
+          {(["video", "audio"] as const).map((k) => (
+            <Pressable key={k} testID={`bc-kind-${k}`} onPress={() => set("broadcast_kind", k)} style={[styles.kindChip, f.broadcast_kind === k && styles.kindChipActive]}>
+              <Ionicons name={k === "video" ? "videocam" : "musical-notes"} size={16} color={f.broadcast_kind === k ? colors.white : ADMIN.muted} />
+              <Text style={[styles.kindChipText, f.broadcast_kind === k && { color: colors.white }]}>{k === "video" ? "Video" : "Audio"}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <MediaUpload
+          value={f.broadcast}
+          onChange={(v: any) => set("broadcast", v)}
+          accept={f.broadcast_kind === "audio" ? ["audio/*"] : ["video/*"]}
+        />
+
         <AInput testID="prog-long" label="Descrizione completa (tab Informazioni)" value={f.long_description} onChangeText={(v: string) => set("long_description", v)} multiline />
         <AInput testID="prog-contact" label="Contatto (email o link)" value={f.contact_url} onChangeText={(v: string) => set("contact_url", v)} placeholder="email@... oppure https://..." />
         <AInput testID="prog-fb" label="Facebook" value={f.social?.facebook} onChangeText={(v: string) => setSocial("facebook", v)} placeholder="https://facebook.com/..." />
@@ -210,6 +233,11 @@ const styles = StyleSheet.create({
   headerTitle: { color: colors.white, fontSize: 18, fontWeight: "800" },
   timeRow: { flexDirection: "row", gap: spacing.md },
   label: { color: ADMIN.muted, fontSize: 13, fontWeight: "700", marginBottom: 6 },
+  hint: { color: ADMIN.muted, fontSize: 12, lineHeight: 17, marginBottom: 8 },
+  kindRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
+  kindChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: ADMIN.card, borderWidth: 1, borderColor: ADMIN.border },
+  kindChipActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
+  kindChipText: { color: ADMIN.muted, fontSize: 13, fontWeight: "700" },
   dayRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginBottom: spacing.md },
   dayChip: { paddingHorizontal: spacing.md, paddingVertical: 8, borderRadius: radius.pill, backgroundColor: ADMIN.card, borderWidth: 1, borderColor: ADMIN.border },
   dayChipActive: { backgroundColor: colors.white, borderColor: colors.white },

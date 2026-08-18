@@ -11,6 +11,13 @@ export const TOKEN_KEY = "pdu_session_token";
 export const mediaUrl = (id: string, download = false) =>
   `${BASE}/api/media/${id}${download ? "?download=1" : ""}`;
 
+/** Make a possibly-relative backend path absolute (needed on native). */
+export const absUrl = (u?: string): string => {
+  const s = (u || "").trim();
+  if (!s) return "";
+  return /^https?:\/\//i.test(s) ? s : `${BASE}${s}`;
+};
+
 /**
  * Returns a playable audio URL. On web, expo-audio cannot load cross-origin
  * audio without CORS headers, so external files are routed through our
@@ -271,6 +278,7 @@ export const api = {
   contentFavIds: () => request("/me/content-fav-ids", {}, true),
   toggleContentFav: (type: string, id: string) => request(`/me/content-fav/${type}/${encodeURIComponent(id)}`, { method: "POST" }, true),
   myLibrary: () => request("/me/library", {}, true),
+  liveNow: () => request("/live/now"),
   // Biblioteca folders (admin-managed) + per-content assignment
   libraryFolders: () => request("/library-folders"),
   adminLibraryFolders: () => request("/admin/library-folders", {}, true),

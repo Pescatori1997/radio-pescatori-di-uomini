@@ -70,7 +70,7 @@ export default function Home() {
     ? ((onAir.images?.length ? onAir.images : (onAir.presenters || []).map((p: any) => p.image)).filter(Boolean))
     : [];
 
-  const onListen = () => { playLive(); router.push("/player"); };
+  const onListen = () => { router.push("/diretta"); };
 
   // ---- Section renderers (order/width/size come from the admin layout) ----
   const sectionNode = (key: string): React.ReactNode => {

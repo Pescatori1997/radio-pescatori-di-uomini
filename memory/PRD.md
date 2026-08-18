@@ -517,3 +517,9 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Admin: `app/admin/library-folders.tsx` (crea/rinomina/elimina/riordina/icona), `app/admin/content-folders.tsx` (assegna ogni contenuto a una cartella con chip).
 - Frontend: `app/biblioteca.tsx` (lista cartelle solo-preferiti), `app/biblioteca/folder/[id].tsx` (dettaglio con rimozione).
 - Nomi sezioni anche in HOME: aggiunte chiavi home_* in labels.ts, wired in index.tsx + BibleCard/ReadingPlansCard/BachecaCard.
+
+## Diretta sincronizzata dal Palinsesto (rimpiazza AzuraCast lato utente) (giugno 2026)
+- Ogni programma del Palinsesto puo avere un media di diretta: `broadcast_media_url` (+ `broadcast_media_kind` video/audio). Impostato nell editor admin (`app/admin/schedule/[id].tsx`) con toggle Video/Audio + MediaUpload (chunked). Salvato come URL RELATIVO `/api/media/{id}` (o link esterno) -> env-safe.
+- Backend `GET /live/now`: trova il programma ON AIR ora (usa `_is_on_air`), calcola offset_seconds (now-start) per la sincronizzazione tipo TV/radio, duration, ends_in, e `next`. Modelli ProgramIn/ProgramEdit + `_normalize_program` estesi.
+- Frontend `app/diretta.tsx`: player unico `expo-video` (video o audio) che fa seek all offset e riproduce; poll ogni 15s con correzione drift (>6s). Fuori orario mostra "Nessuna diretta in corso" + prossimo programma. Home CTA "In diretta" ora apre `/diretta` (non piu AzuraCast).
+- NOTA: audio background/schermo bloccato e video richiedono BUILD NATIVA (non Expo Go).
