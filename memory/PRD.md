@@ -498,3 +498,9 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Home ora usa il faro (MaterialCommunityIcons lighthouse) come icona di default.
 - Fallback: file animato/icona corrotti -> icona statica; asset mancante -> icona vettoriale predefinita.
 - File: `app/admin/nav-icons.tsx`, `src/components/navConfig.tsx`, `src/components/AppBottomBar.tsx`, `src/components/nav/NavAnim.{web,native}.tsx`. Lib aggiunte: lottie-react-native (native), lottie-react (web).
+
+## Versetto del Giorno — Scheda girevole (flip card) Home (giugno 2026)
+- `VerseOfDayCard` ora e' una scheda girevole. FRONTE: logo + "Radio Pescatori di Uomini", "VERSETTO DEL GIORNO", versetto + riferimento, sfondo marino (onde/raggi/bolle), icona Condividi in alto a dx, footer con invito a girare. RETRO (tap): "MEDITAZIONE DEL GIORNO" (da `verseMeditation`), player audio "Ascolta la meditazione" (`verseMeditationAudioUrl`) e pulsante "Leggi il contesto"; footer "Tocca per tornare al versetto".
+- Flip via reanimated rotateY + crossfade opacity + backfaceVisibility; pointerEvents per faccia.
+- Testo invito ("gira la scheda") modificabile dal pannello Admin -> Versetto del Giorno (campo `verse_flip_hint` in settings; default "Tocca la scheda per girarla"). Applicato live.
+- File: `src/components/VerseOfDayCard.tsx`, `app/admin/verses/index.tsx`, backend `GeneralSettings.verse_flip_hint`.

@@ -17,12 +17,22 @@ export default function AdminVersesList() {
   const [notif, setNotif] = useState<any>(null);
   const [notifBusy, setNotifBusy] = useState(false);
   const [notifMsg, setNotifMsg] = useState("");
+  const [flipHint, setFlipHint] = useState("");
+  const [flipBusy, setFlipBusy] = useState(false);
+  const [flipMsg, setFlipMsg] = useState("");
 
   const load = useCallback(() => {
     api.adminVerses(search || undefined).then(setItems).catch(() => {}).finally(() => { setLoading(false); setRefreshing(false); });
     api.adminVerseNotif().then(setNotif).catch(() => {});
+    api.adminSettings().then((s: any) => setFlipHint(s.verse_flip_hint || "")).catch(() => {});
   }, [search]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const saveFlipHint = async () => {
+    setFlipBusy(true); setFlipMsg("");
+    try { await api.adminUpdateSettings({ verse_flip_hint: flipHint }); setFlipMsg("Testo salvato ✓ (attivo subito nell'app)"); }
+    catch (e: any) { setFlipMsg(e.message || "Errore"); } finally { setFlipBusy(false); }
+  };
 
   const setN = (k: string, v: any) => setNotif((p: any) => ({ ...p, [k]: v }));
   const saveNotif = async () => {
@@ -96,6 +106,22 @@ export default function AdminVersesList() {
           )}
 
           <Text style={styles.hint}>I versetti ruotano automaticamente, uno al giorno (fuso orario Italia). Nessuna ripetizione finché non sono stati mostrati tutti.</Text>
+
+          {/* Testo invito a girare la scheda (Home) */}
+          <View style={styles.notifCard}>
+            <View style={styles.notifHead}>
+              <Ionicons name="sync-outline" size={18} color={colors.brandSecondary} />
+              <Text style={styles.notifTitle}>Scheda Home · testo "gira la scheda"</Text>
+            </View>
+            <Text style={styles.notifHint}>Testo mostrato in basso sulla scheda del Versetto nella Home, che invita a toccarla per girarla e vedere la meditazione. Lascia vuoto per usare il testo predefinito.</Text>
+            <AInput testID="flip-hint" label="Testo invito" value={flipHint} onChangeText={setFlipHint} placeholder="Tocca la scheda per girarla" />
+            {flipMsg ? <Text style={styles.notifResult}>{flipMsg}</Text> : null}
+            <View style={styles.notifBtns}>
+              <PressableScale testID="flip-hint-save" style={[styles.notifBtn, { backgroundColor: colors.brandPrimary }, flipBusy && { opacity: 0.6 }]} onPress={saveFlipHint} disabled={flipBusy}>
+                <Ionicons name="save-outline" size={16} color={colors.white} /><Text style={styles.notifBtnText}>Salva</Text>
+              </PressableScale>
+            </View>
+          </View>
 
           {items.length === 0 ? <Text style={styles.empty}>Nessun versetto. Tocca + per aggiungerne uno.</Text> : items.map((v) => (
             <PressableScale key={v.id} testID={`verse-row-${v.id}`} style={[styles.row, v.active === false && { opacity: 0.5 }]} onPress={() => router.push(`/admin/verses/${v.id}`)}>

@@ -2560,6 +2560,8 @@ class GeneralSettings(BaseModel):
     donate_config: Optional[Dict[str, Any]] = None
     # Per-item bottom-navigation customization (labels, colors, custom icons & animations).
     nav_config: Optional[Dict[str, Any]] = None
+    # Editable hint shown on the front of the flippable "Versetto del Giorno" Home card.
+    verse_flip_hint: Optional[str] = None
 
 
 # Canonical toggleable sections. Everything defaults ON except Merchandising,
