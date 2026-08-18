@@ -5445,6 +5445,56 @@ async def _verse_notif_scheduler():
         await asyncio.sleep(300)
 
 
+LIVE_NOTIF_MINUTES = 10  # notify this many minutes before a scheduled live starts
+
+
+async def _send_live_prenotifications():
+    """Notify users shortly before a Palinsesto program with broadcast media
+    goes on air. Reuses the same push system as the daily verse. Idempotent:
+    once per program per Rome day."""
+    now = datetime.now(_ROME_TZ)
+    today = VERSE_NOTIF_DAYS[now.weekday()]
+    docs = await db.programs.find({}, {"_id": 0}).to_list(500)
+    for d in docs:
+        p = _normalize_program(d)
+        if not p.get("broadcast_media_url") or p.get("active") is False:
+            continue
+        active_today = (today in (p.get("weekdays") or [])) or (d.get("date") == now.date().isoformat())
+        if not active_today:
+            continue
+        start = p.get("start_time") or ""
+        try:
+            sh, sm = int(start[:2]), int(start[3:5])
+        except Exception:
+            continue
+        start_dt = now.replace(hour=sh, minute=sm, second=0, microsecond=0)
+        delta = (start_dt - now).total_seconds()
+        if 0 <= delta <= LIVE_NOTIF_MINUTES * 60:
+            key = f"{p['id']}:{now.date().isoformat()}"
+            if await db.live_notif_sent.find_one({"key": key}):
+                continue
+            await db.live_notif_sent.insert_one({"key": key, "at": now_utc()})
+            mins = max(1, round(delta / 60))
+            await notify_category(
+                "diretta",
+                f"🔴 Sta per iniziare: {p['title']}",
+                f"La diretta inizia tra circa {mins} min. Non perdertela!",
+                action_url="/diretta",
+            )
+
+
+async def _live_notif_scheduler():
+    """Background loop: checks upcoming live programs every minute."""
+    await asyncio.sleep(30)
+    while True:
+        try:
+            await _send_live_prenotifications()
+        except Exception as e:
+            logger.warning("live notif scheduler error: %s", e)
+        await asyncio.sleep(60)
+
+
+
 # ---------------- Bible reader (Riveduta 1927, self-hosted) ----------------
 DEFAULT_BIBLE = "riveduta_1927"
 
@@ -6939,6 +6989,7 @@ async def startup():
 
     # Start the daily verse-notification scheduler (fires once per Rome day).
     asyncio.create_task(_verse_notif_scheduler())
+    asyncio.create_task(_live_notif_scheduler())
     # Import the Bible text (Riveduta 1927) once, if not present.
     try:
         from bible_seed import seed_bible

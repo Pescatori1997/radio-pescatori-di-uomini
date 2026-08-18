@@ -523,3 +523,8 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Backend `GET /live/now`: trova il programma ON AIR ora (usa `_is_on_air`), calcola offset_seconds (now-start) per la sincronizzazione tipo TV/radio, duration, ends_in, e `next`. Modelli ProgramIn/ProgramEdit + `_normalize_program` estesi.
 - Frontend `app/diretta.tsx`: player unico `expo-video` (video o audio) che fa seek all offset e riproduce; poll ogni 15s con correzione drift (>6s). Fuori orario mostra "Nessuna diretta in corso" + prossimo programma. Home CTA "In diretta" ora apre `/diretta` (non piu AzuraCast).
 - NOTA: audio background/schermo bloccato e video richiedono BUILD NATIVA (non Expo Go).
+
+## Diretta: countdown + notifica pre-inizio (giugno 2026)
+- Countdown nella schermata `app/diretta.tsx`: fuori orario mostra "La diretta inizia tra HH:MM:SS" + nome/orario prossimo programma (usa next.starts_at da /live/now, tick 1s).
+- Notifica pre-diretta: scheduler backend `_live_notif_scheduler` (ogni 60s) invia via `notify_category("diretta", ...)` (STESSO sistema push del versetto del giorno) ~10 min prima (LIVE_NOTIF_MINUTES) di ogni programma con broadcast_media_url. Idempotente per programma/giorno (`live_notif_sent`). Funziona solo su build nativa.
+- PENDING (richiesta utente): diretta in TEMPO REALE (RTMP/HLS) selezionabile dal pannello insieme alle registrate -> integrazione separata, serve scegliere provider streaming.

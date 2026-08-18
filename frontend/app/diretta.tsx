@@ -58,6 +58,22 @@ export default function Diretta() {
   const prog = data?.program;
   const nextP = data?.next;
 
+  // Live-ticking countdown to the next scheduled program (off-air only).
+  const [nowMs, setNowMs] = useState(Date.now());
+  useEffect(() => {
+    if (onAir || !nextP?.starts_at) return;
+    const iv = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(iv);
+  }, [onAir, nextP?.starts_at]);
+  const countdown = (() => {
+    if (onAir || !nextP?.starts_at) return null;
+    const remain = Math.max(0, Math.floor((new Date(nextP.starts_at).getTime() - nowMs) / 1000));
+    const hh = String(Math.floor(remain / 3600)).padStart(2, "0");
+    const mm = String(Math.floor((remain % 3600) / 60)).padStart(2, "0");
+    const ss = String(remain % 60).padStart(2, "0");
+    return `${hh}:${mm}:${ss}`;
+  })();
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.topBar}>
@@ -94,6 +110,12 @@ export default function Diretta() {
           <Text style={styles.offTitle}>Nessuna diretta in corso</Text>
           {onAir && prog ? (
             <Text style={styles.offSub}>{prog.title} è in onda ma non ha un contenuto da riprodurre.</Text>
+          ) : nextP && countdown ? (
+            <View style={styles.cdWrap}>
+              <Text style={styles.cdLabel}>La diretta inizia tra</Text>
+              <Text style={styles.cdTime}>{countdown}</Text>
+              <Text style={styles.cdProg} numberOfLines={2}>{nextP.title}{nextP.start_time ? ` · ${nextP.start_time}` : ""}</Text>
+            </View>
           ) : nextP ? (
             <Text style={styles.offSub}>Prossimo programma: <Text style={{ color: colors.white, fontWeight: "800" }}>{nextP.title}</Text>{nextP.start_time ? ` alle ${nextP.start_time}` : ""}</Text>
           ) : (
@@ -129,6 +151,10 @@ const styles = StyleSheet.create({
   offIcon: { width: 100, height: 100, borderRadius: 50, backgroundColor: colors.navySoft, alignItems: "center", justifyContent: "center" },
   offTitle: { color: colors.white, fontSize: 20, fontWeight: "800", marginTop: spacing.sm },
   offSub: { color: "#94A3B8", fontSize: 15, textAlign: "center", lineHeight: 22, paddingHorizontal: spacing.lg },
+  cdWrap: { alignItems: "center", gap: 6, marginTop: spacing.sm },
+  cdLabel: { color: "#94A3B8", fontSize: 14, fontWeight: "600" },
+  cdTime: { color: colors.brandSecondary, fontSize: 42, fontWeight: "900", letterSpacing: 2, fontVariant: ["tabular-nums"] },
+  cdProg: { color: colors.white, fontSize: 15, fontWeight: "800", textAlign: "center", paddingHorizontal: spacing.lg },
   schedBtn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.brandPrimary, paddingVertical: spacing.md, paddingHorizontal: spacing.xl, borderRadius: 999, marginTop: spacing.md },
   schedBtnText: { color: colors.white, fontSize: 15, fontWeight: "800" },
 });
