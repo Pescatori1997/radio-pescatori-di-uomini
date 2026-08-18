@@ -46,6 +46,8 @@ const NAV = [
   { key: "home_layout", label: "Layout Home", icon: "view-dashboard", route: "/admin/home-layout", perm: null },
   { key: "nav_icons", label: "Personalizzazione Navigazione", icon: "gesture-tap-button", route: "/admin/nav-icons", perm: null },
   { key: "section_names", label: "Nomi delle sezioni", icon: "rename-box", route: "/admin/section-names", perm: null },
+  { key: "library_folders", label: "Cartelle Biblioteca", icon: "folder-multiple", route: "/admin/library-folders", perm: null },
+  { key: "content_folders", label: "Assegna contenuti", icon: "folder-move", route: "/admin/content-folders", perm: null },
 ];
 
 const ADMIN = {

@@ -271,6 +271,14 @@ export const api = {
   contentFavIds: () => request("/me/content-fav-ids", {}, true),
   toggleContentFav: (type: string, id: string) => request(`/me/content-fav/${type}/${encodeURIComponent(id)}`, { method: "POST" }, true),
   myLibrary: () => request("/me/library", {}, true),
+  // Biblioteca folders (admin-managed) + per-content assignment
+  libraryFolders: () => request("/library-folders"),
+  adminLibraryFolders: () => request("/admin/library-folders", {}, true),
+  adminCreateFolder: (b: any) => request("/admin/library-folders", { method: "POST", body: JSON.stringify(b) }, true),
+  adminUpdateFolder: (id: string, b: any) => request(`/admin/library-folders/${id}`, { method: "PUT", body: JSON.stringify(b) }, true),
+  adminDeleteFolder: (id: string) => request(`/admin/library-folders/${id}`, { method: "DELETE" }, true),
+  adminContentCatalog: () => request("/admin/content-catalog", {}, true),
+  adminSetContentFolder: (b: any) => request("/admin/content-folder", { method: "POST", body: JSON.stringify(b) }, true),
   history: () => request("/me/history", {}, true),
   addHistory: (id: string) => request(`/me/history/${id}`, { method: "POST" }, true),
   // admin

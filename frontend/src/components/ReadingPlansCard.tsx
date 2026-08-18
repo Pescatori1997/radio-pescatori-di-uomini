@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { api } from "@/src/api";
 import PressableScale from "@/src/components/PressableScale";
+import { useLabel } from "@/src/utils/labels";
 import { colors, spacing, radius } from "@/src/theme";
 
 /**
@@ -15,6 +16,7 @@ import { colors, spacing, radius } from "@/src/theme";
  */
 export default function ReadingPlansCard({ inGrid = false }: { inGrid?: boolean }) {
   const router = useRouter();
+  const t = useLabel();
   const [plans, setPlans] = useState<any[]>([]);
 
   useEffect(() => {
@@ -36,7 +38,7 @@ export default function ReadingPlansCard({ inGrid = false }: { inGrid?: boolean 
           <View style={styles.info}>
             <View style={styles.kickerRow}>
               <Ionicons name="ribbon" size={14} color={colors.brandSecondary} />
-              <Text style={styles.kicker}>PIANI DI LETTURA</Text>
+              <Text style={styles.kicker}>{t("home_piani").toUpperCase()}</Text>
             </View>
             <Text style={styles.title} numberOfLines={2}>
               {plans.length ? "Percorsi guidati nella Parola" : "Inizia un percorso nella Parola"}

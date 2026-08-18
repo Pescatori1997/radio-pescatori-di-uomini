@@ -6,6 +6,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "@/src/context/AuthContext";
 import { api } from "@/src/api";
 import PressableScale from "@/src/components/PressableScale";
+import { useLabel } from "@/src/utils/labels";
 import { colors, spacing, radius } from "@/src/theme";
 
 /**
@@ -15,6 +16,7 @@ import { colors, spacing, radius } from "@/src/theme";
  */
 export default function BachecaCard({ inGrid = false }: { inGrid?: boolean }) {
   const router = useRouter();
+  const t = useLabel();
   const { user } = useAuth();
   const [earned, setEarned] = useState<number | null>(null);
   const [total, setTotal] = useState<number | null>(null);
@@ -40,7 +42,7 @@ export default function BachecaCard({ inGrid = false }: { inGrid?: boolean }) {
         <View style={styles.info}>
           <View style={styles.kickerRow}>
             <Ionicons name="footsteps" size={13} color="#E0B23C" />
-            <Text style={styles.kicker}>TRAGUARDI DEL CAMMINO</Text>
+            <Text style={styles.kicker}>{t("home_traguardi").toUpperCase()}</Text>
           </View>
           <Text style={styles.title} numberOfLines={1}>La tua Bacheca del Cammino</Text>
           <Text style={styles.sub} numberOfLines={1}>

@@ -983,56 +983,7 @@ async def toggle_content_fav(item_type: str, item_id: str, authorization: Option
     return {"favorited": True}
 
 
-@api_router.get("/me/library")
-async def my_library(authorization: Optional[str] = Header(None)):
-    """All of the user's favorites resolved into lightweight cards, grouped by
-    category, for the "I tuoi preferiti" block in the Biblioteca."""
-    user = await get_current_user(authorization)
-    uid = user["user_id"]
-    groups: list = []
 
-    # Podcast (legacy collection)
-    pf = await db.favorites.find({"user_id": uid}, {"_id": 0, "podcast_id": 1}).to_list(500)
-    pids = [f["podcast_id"] for f in pf]
-    if pids:
-        docs = imageopt.lighten_list("podcasts", await db.podcasts.find({"id": {"$in": pids}}, {"_id": 0}).to_list(500))
-        items = [{"id": d["id"], "title": d.get("title"), "subtitle": d.get("author") or "",
-                  "image": d.get("artwork"), "type": "podcast", "route": f"/podcast/{d['id']}"} for d in docs]
-        if items:
-            groups.append({"key": "podcast", "label": "Podcast", "items": items})
-
-    # Meditazioni + CMS content types (generic collection)
-    for t in ["meditazioni", "studi-biblici", "predicazioni", "video"]:
-        cf = await db.user_favorites.find({"user_id": uid, "item_type": t}, {"_id": 0, "item_id": 1}).to_list(500)
-        ids = [f["item_id"] for f in cf]
-        if not ids:
-            continue
-        if t == "meditazioni":
-            docs = imageopt.lighten_list("meditations", [_decorate_meditation(d) for d in await db.meditations.find({"id": {"$in": ids}}, {"_id": 0}).to_list(500)])
-            items = [{"id": d["id"], "title": d.get("title"), "subtitle": d.get("category") or "",
-                      "image": d.get("thumbnail"), "type": t, "route": "/meditazioni"} for d in docs]
-            label = "Meditazioni"
-        else:
-            docs = imageopt.lighten_list("contents", [_decorate_meditation(d) for d in await db.contents.find({"id": {"$in": ids}}, {"_id": 0}).to_list(500)])
-            items = [{"id": d["id"], "title": d.get("title"), "subtitle": d.get("subtitle") or "",
-                      "image": d.get("thumbnail"), "type": t, "route": f"/c/{t}"} for d in docs]
-            label = CONTENT_SECTIONS.get(t, t)
-        if items:
-            groups.append({"key": t, "label": label, "items": items})
-
-    # Programmi (legacy collection)
-    gf = await db.program_favorites.find({"user_id": uid}, {"_id": 0, "program_id": 1}).to_list(500)
-    gids = [f["program_id"] for f in gf]
-    if gids:
-        pdocs = await db.programs.find({"id": {"$in": gids}}, {"_id": 0}).to_list(500)
-        progs = [imageopt.lighten("programs", _normalize_program(d)) for d in pdocs]
-        items = [{"id": p["id"], "title": p.get("title"), "subtitle": p.get("host") or "",
-                  "image": p.get("hero_image") or (p.get("images") or [None])[0], "type": "programma",
-                  "route": f"/programma/{p.get('slug') or p['id']}"} for p in progs]
-        if items:
-            groups.append({"key": "programma", "label": "Programmi", "items": items})
-
-    return {"groups": groups}
 
 
 @api_router.post("/me/history/{podcast_id}")
@@ -1243,6 +1194,190 @@ async def require_uploader(authorization: Optional[str] = Header(None)):
     if user.get("role") == ROLE_COLLAB and (user.get("permissions") or []):
         return user
     raise HTTPException(status_code=403, detail="Non hai i permessi per caricare file")
+
+DEFAULT_LIBRARY_FOLDERS = [
+    {"name": "Podcast", "icon": "microphone", "default_types": ["podcast"]},
+    {"name": "Meditazioni", "icon": "book-open-variant", "default_types": ["meditazioni"]},
+    {"name": "Studi Biblici", "icon": "book-open-page-variant", "default_types": ["studi-biblici"]},
+    {"name": "Predicazioni", "icon": "bullhorn", "default_types": ["predicazioni"]},
+    {"name": "Video", "icon": "play-circle", "default_types": ["video"]},
+    {"name": "Programmi", "icon": "radio", "default_types": ["programma"]},
+]
+
+
+async def _seed_default_folders():
+    if await db.library_folders.count_documents({}) == 0:
+        for i, f in enumerate(DEFAULT_LIBRARY_FOLDERS):
+            await db.library_folders.insert_one({
+                "id": str(uuid.uuid4()), "name": f["name"], "icon": f["icon"],
+                "default_types": f["default_types"], "order": i, "active": True,
+            })
+
+
+async def _folders_list():
+    await _seed_default_folders()
+    return await db.library_folders.find({"active": {"$ne": False}}, {"_id": 0}).sort("order", 1).to_list(200)
+
+
+class FolderIn(BaseModel):
+    name: Optional[str] = None
+    icon: Optional[str] = None
+    order: Optional[int] = None
+    default_types: Optional[list] = None
+    active: Optional[bool] = None
+
+
+class FolderCreateIn(BaseModel):
+    name: str
+    icon: Optional[str] = "folder"
+    order: Optional[int] = None
+    default_types: Optional[list] = None
+    active: Optional[bool] = None
+
+
+class ContentFolderIn(BaseModel):
+    item_type: str
+    item_id: str
+    folder_id: Optional[str] = None  # null => remove assignment
+
+
+@api_router.get("/library-folders")
+async def library_folders_public():
+    folders = await _folders_list()
+    return [{"id": f["id"], "name": f["name"], "icon": f.get("icon") or "folder", "order": f.get("order", 0)} for f in folders]
+
+
+@api_router.get("/admin/library-folders")
+async def admin_library_folders(admin=Depends(require_admin)):
+    return await _folders_list()
+
+
+@api_router.post("/admin/library-folders")
+async def admin_create_folder(body: FolderCreateIn, admin=Depends(require_admin)):
+    mx = await db.library_folders.find({}, {"order": 1}).sort("order", -1).limit(1).to_list(1)
+    order = body.order if body.order is not None else ((mx[0].get("order", 0) + 1) if mx else 0)
+    doc = {"id": str(uuid.uuid4()), "name": body.name, "icon": body.icon or "folder",
+           "default_types": body.default_types or [], "order": order, "active": True}
+    await db.library_folders.insert_one(doc)
+    return {k: v for k, v in doc.items() if k != "_id"}
+
+
+@api_router.put("/admin/library-folders/{fid}")
+async def admin_update_folder(fid: str, body: FolderIn, admin=Depends(require_admin)):
+    updates = {k: v for k, v in body.model_dump(exclude_unset=True).items()}
+    if updates:
+        await db.library_folders.update_one({"id": fid}, {"$set": updates})
+    return {"ok": True}
+
+
+@api_router.delete("/admin/library-folders/{fid}")
+async def admin_delete_folder(fid: str, admin=Depends(require_admin)):
+    await db.library_folders.delete_one({"id": fid})
+    await db.content_folders.delete_many({"folder_id": fid})
+    return {"ok": True}
+
+
+async def _resolve_content_cards(item_type: str, ids: list):
+    """Return display cards for a list of ids of a given favoritable type."""
+    if not ids:
+        return []
+    if item_type == "podcast":
+        docs = imageopt.lighten_list("podcasts", await db.podcasts.find({"id": {"$in": ids}}, {"_id": 0}).to_list(500))
+        return [{"id": d["id"], "title": d.get("title"), "subtitle": d.get("author") or "", "image": d.get("artwork"), "type": "podcast", "route": f"/podcast/{d['id']}"} for d in docs]
+    if item_type == "meditazioni":
+        docs = imageopt.lighten_list("meditations", [_decorate_meditation(d) for d in await db.meditations.find({"id": {"$in": ids}}, {"_id": 0}).to_list(500)])
+        return [{"id": d["id"], "title": d.get("title"), "subtitle": d.get("category") or "", "image": d.get("thumbnail"), "type": "meditazioni", "route": "/meditazioni"} for d in docs]
+    if item_type == "programma":
+        pdocs = await db.programs.find({"id": {"$in": ids}}, {"_id": 0}).to_list(500)
+        progs = [imageopt.lighten("programs", _normalize_program(d)) for d in pdocs]
+        return [{"id": p["id"], "title": p.get("title"), "subtitle": p.get("host") or "", "image": p.get("hero_image") or (p.get("images") or [None])[0], "type": "programma", "route": f"/programma/{p.get('slug') or p['id']}"} for p in progs]
+    # CMS content types
+    docs = imageopt.lighten_list("contents", [_decorate_meditation(d) for d in await db.contents.find({"id": {"$in": ids}}, {"_id": 0}).to_list(500)])
+    return [{"id": d["id"], "title": d.get("title"), "subtitle": d.get("subtitle") or "", "image": d.get("thumbnail"), "type": item_type, "route": f"/c/{item_type}/{d['id']}"} for d in docs]
+
+
+@api_router.get("/admin/content-catalog")
+async def admin_content_catalog(admin=Depends(require_admin)):
+    """All favoritable content with its current folder assignment, for the
+    admin 'assegna alle cartelle' screen."""
+    await _seed_default_folders()
+    assign = {(a["item_type"], a["item_id"]): a["folder_id"] for a in await db.content_folders.find({}, {"_id": 0}).to_list(5000)}
+    out = {}
+    sources = [
+        ("podcast", db.podcasts), ("meditazioni", db.meditations),
+        ("studi-biblici", None), ("predicazioni", None), ("video", None),
+        ("programma", db.programs),
+    ]
+    for t, coll in sources:
+        if t in ("studi-biblici", "predicazioni", "video"):
+            docs = await db.contents.find({"section": t}, {"_id": 0, "id": 1, "title": 1}).to_list(1000)
+        else:
+            docs = await coll.find({}, {"_id": 0, "id": 1, "title": 1}).to_list(1000)
+        out[t] = [{"id": d["id"], "title": d.get("title") or "(senza titolo)", "folder_id": assign.get((t, d["id"]))} for d in docs]
+    return out
+
+
+@api_router.post("/admin/content-folder")
+async def admin_set_content_folder(body: ContentFolderIn, admin=Depends(require_admin)):
+    if body.folder_id:
+        await db.content_folders.update_one(
+            {"item_type": body.item_type, "item_id": body.item_id},
+            {"$set": {"folder_id": body.folder_id}}, upsert=True)
+    else:
+        await db.content_folders.delete_one({"item_type": body.item_type, "item_id": body.item_id})
+    return {"ok": True}
+
+
+@api_router.get("/me/library")
+async def my_library(authorization: Optional[str] = Header(None)):
+    """The user's favorites organized into the admin-defined Biblioteca folders.
+    Each favorite lands in its assigned folder, or in the folder whose
+    default_types matches its content type."""
+    user = await get_current_user(authorization)
+    uid = user["user_id"]
+    folders = await _folders_list()
+
+    # Map each content type to a default folder id.
+    default_for_type = {}
+    for f in folders:
+        for tp in (f.get("default_types") or []):
+            default_for_type.setdefault(tp, f["id"])
+
+    # Explicit per-item assignments.
+    assign = {(a["item_type"], a["item_id"]): a["folder_id"] for a in await db.content_folders.find({}, {"_id": 0}).to_list(5000)}
+
+    # Gather the user's favorites per type.
+    fav_by_type: dict = {}
+    pf = await db.favorites.find({"user_id": uid}, {"_id": 0, "podcast_id": 1}).to_list(500)
+    if pf:
+        fav_by_type["podcast"] = [x["podcast_id"] for x in pf]
+    for t in ["meditazioni", "studi-biblici", "predicazioni", "video"]:
+        cf = await db.user_favorites.find({"user_id": uid, "item_type": t}, {"_id": 0, "item_id": 1}).to_list(500)
+        if cf:
+            fav_by_type[t] = [x["item_id"] for x in cf]
+    gf = await db.program_favorites.find({"user_id": uid}, {"_id": 0, "program_id": 1}).to_list(500)
+    if gf:
+        fav_by_type["programma"] = [x["program_id"] for x in gf]
+
+    # Resolve cards and bucket them by folder.
+    valid_folder_ids = {f["id"] for f in folders}
+    buckets: dict = {f["id"]: [] for f in folders}
+    for t, ids in fav_by_type.items():
+        cards = await _resolve_content_cards(t, ids)
+        for c in cards:
+            fid = assign.get((t, c["id"])) or default_for_type.get(t)
+            if fid not in valid_folder_ids:
+                fid = None
+            if fid:
+                buckets[fid].append(c)
+
+    groups = []
+    for f in folders:
+        items = buckets.get(f["id"], [])
+        if items:
+            groups.append({"key": f["id"], "folder_id": f["id"], "label": f["name"], "icon": f.get("icon") or "folder", "items": items})
+    return {"groups": groups}
+
 
 
 class ApplicationEdit(BaseModel):

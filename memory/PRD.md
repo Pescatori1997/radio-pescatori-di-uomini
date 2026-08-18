@@ -510,3 +510,10 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Cuore/salva aggiunto: dettaglio CMS `c/[section]/[id]` (heart in topbar) e reels Meditazioni (RailBtn bookmark "Salva"). Hook `src/hooks/useContentFav.ts` + `api.contentFavIds/toggleContentFav/myLibrary`.
 - Biblioteca: blocco "I tuoi preferiti" raggruppato per categoria in cima; Profilo: rimossa sezione "Podcast preferiti", aggiunto CTA verso Biblioteca.
 - Rinomina sezioni: settings.section_labels (Dict) + helper `src/utils/labels.ts` (useLabel/LABEL_CATALOG) applicato a Profilo menu e Biblioteca. Nuova schermata admin `app/admin/section-names.tsx` ("Nomi delle sezioni"). Applicato live.
+
+## Biblioteca a cartelle (solo preferiti) + assegnazione contenuti (giugno 2026)
+- La Biblioteca ora e' una libreria personale: mostra solo i PREFERITI dell utente raggruppati in CARTELLE gestite dall admin. Aprendo una cartella si vedono i preferiti dentro (rimovibili).
+- Backend: `library_folders` (CRUD admin, seed 6 default con default_types), `content_folders` (mappa item->cartella). Endpoint: GET /library-folders, GET/POST/PUT/DELETE /admin/library-folders, GET /admin/content-catalog, POST /admin/content-folder, GET /me/library (raggruppa per cartella: assegnazione esplicita o default per tipo). Fix: FolderIn (PUT parziale, tutti opzionali) vs FolderCreateIn (POST, name richiesto).
+- Admin: `app/admin/library-folders.tsx` (crea/rinomina/elimina/riordina/icona), `app/admin/content-folders.tsx` (assegna ogni contenuto a una cartella con chip).
+- Frontend: `app/biblioteca.tsx` (lista cartelle solo-preferiti), `app/biblioteca/folder/[id].tsx` (dettaglio con rimozione).
+- Nomi sezioni anche in HOME: aggiunte chiavi home_* in labels.ts, wired in index.tsx + BibleCard/ReadingPlansCard/BachecaCard.

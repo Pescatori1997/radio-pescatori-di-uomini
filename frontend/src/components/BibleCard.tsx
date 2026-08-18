@@ -15,6 +15,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { FishingNet, SeaWaves, SunriseGlow, Bubbles } from "@/src/components/marine";
 import PressableScale from "@/src/components/PressableScale";
+import { useLabel } from "@/src/utils/labels";
 import { colors, spacing, radius } from "@/src/theme";
 
 const LOGO = require("@/assets/images/logo.png");
@@ -26,6 +27,7 @@ const LOGO = require("@/assets/images/logo.png");
  */
 export default function BibleCard({ inGrid = false }: { inGrid?: boolean }) {
   const router = useRouter();
+  const t = useLabel();
   const [size, setSize] = useState({ w: 0, h: 0 });
 
   // Gentle glow shimmer on the card border.
@@ -68,7 +70,7 @@ export default function BibleCard({ inGrid = false }: { inGrid?: boolean }) {
               <Ionicons name="book" size={26} color={colors.navy} />
             </View>
             <View style={styles.headerText}>
-              <Text style={styles.title}>📚 Leggi la Bibbia</Text>
+              <Text style={styles.title}>📚 {t("home_bibbia")}</Text>
               <Text style={styles.subtitle}>La Parola di Dio, sempre con te.</Text>
             </View>
           </View>

@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 47 — Admin-managed Biblioteca folders + content assignment + user Biblioteca grouped by folder + Home section rename. Backend: 8/8 pytest passing (/app/backend/tests/test_library_folders.py → /app/test_reports/pytest/iteration_47_library_folders.xml) — public GET /api/library-folders returns seeded defaults sorted by order (Podcast/Meditazioni/Studi Biblici/Predicazioni/Video/Programmi), admin CRUD /api/admin/library-folders create/rename/reorder/delete works, GET /api/admin/content-catalog returns items per type with folder_id, POST /api/admin/content-folder assigns and toggles-off, GET /api/me/library groups favorites into the admin folders (default_types mapping for meditazioni→Meditazioni and explicit assignment reflects immediately). Frontend (mobile 390x844): (1) Admin '/admin/library-folders' — seeded folders render as cards, 'create-folder' with 'new-folder-name' creates a new folder (verified via API), 'folder-name-<id>' + 'save-folder-<id>' rename persists, 'delete-folder-<id>' triggers a confirm and deletes (via UI clicks; test used dialog=accept), and the reorder chevron-down inside the first folder card successfully bubbled up 5 PUTs that reassigned orders 0..N (Podcast moved to order 1, Meditazioni to 0). (2) Admin '/admin/content-folders' — all 6 type sections render with chip rows, tapping testID assign-<itemId>-<folderId> assigns and tapping again removes (both persist via API check). (3) User /biblioteca — after favoriting a meditation and a studi-biblici, only the two matching folders render (testID lib-folder-<folderId>); opening the Meditazioni folder shows folder-item-<med_id> with folder-remove-<id>, tapping remove unfavorites correctly (verified via /api/me/content-fav-ids). (4) Reassignment effect — assigning meditazioni to Studi Biblici folder puts the item into that folder group in /me/library. (5) Home section rename — setting section_labels.home_podcast → 'PodcastRenamedIter47' via PUT /api/admin/settings renders on Home instead of 'Ultimi Podcast'. (6) Regression — Home + bottom nav render, Biblioteca ↔ folder detail navigation stable, no red screen, only pre-existing RN-Web shadow*/textShadow* warnings (unrelated). BACKEND BUG FOUND AND FIXED: `FolderIn` Pydantic model in /app/backend/server.py had `name: str` as required, breaking partial-update PUTs used by the admin UI for reorder and icon change (frontend sends only {order} or {icon}). I split it into two models: FolderIn (all optional, used by PUT) and FolderCreateIn (name required, used by POST). Verified fix with curl (before: 422 'name required'; after: 200 ok) and via UI chevron reorder click.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_library_folders.py",
+    "/app/test_reports/pytest/iteration_47_library_folders.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:1222-1227 (FIXED by testing agent) — FolderIn had name:str required which made PUT /api/admin/library-folders/{fid} reject any body missing 'name' with 422. Frontend content-folders.tsx move()/setIcon() both send only {order:i} or {icon}, so reorder + icon-change had been SILENTLY FAILING via .catch(()=>{}) in the admin UI. Fix: split into FolderIn (all optional, PUT/partial) and FolderCreateIn (name required, POST). Verified reorder + icon PUTs now return 200 and persist. Please review the change; test regression is green.",
+    "server.py:1323-1371 (/me/library) — grouping logic is clean: buckets favorites by explicit assignment then falls back to default_types; skips empty groups; validates folder ids so stale assignments to deleted folders are safely dropped.",
+    "server.py:1291-1309 (/admin/content-catalog) — one round-trip per type (podcasts/meditations/programs/contents(section=…)); good.",
+    "biblioteca.tsx:56 — uses g.folder_id as key, so multiple future custom folders with the same name won't collide.",
+    "biblioteca/folder/[id].tsx:24-31 — removeFav dispatches by it.type (podcast/programma/other) — matches the three legacy stores; also nicely optimistically removes and reverts via load() on error.",
+    "library-folders.tsx move()/setIcon() — both use `.catch(()=>{})` swallowing all errors. Once the schema fix ships, consider surfacing errors to the admin (toast) instead of silently ignoring.",
+    "Minor (pre-existing, project-wide): RN-Web shadow*/textShadow*/pointerEvents deprecation warnings still present — not introduced by this feature."
+  ],
+  "updated_files": [
+    "/app/backend/server.py (FolderIn → optional fields; new FolderCreateIn for POST) — fixes silent-fail reorder & icon change in admin UI",
+    "/app/backend/tests/test_library_folders.py (new: 8 tests, all passing)"
+  ],
+  "success_rate": {
+    "backend": "100% (8/8 pytest passed after the FolderIn fix)",
+    "frontend": "100% (all 7 review scenarios verified: create/rename/reorder/delete folders, assign/unassign content, biblioteca grouped view, folder detail with remove, reassignment reflects, home section rename)"
+  },
+  "seed_data_creation": "Transient only — TEST_UI_Iter47 folder created and deleted; content-folder assignments made and reverted; favorites toggled on and off; section_labels {home_podcast:'PodcastRenamedIter47'} set and reset to {}. Default folders' order/icon were briefly touched and restored to the seeded defaults (Podcast=0/microphone, Meditazioni=1/book-open-variant, Studi Biblici=2/book-open-page-variant, Predicazioni=3/bullhorn, Video=4/play-circle, Programmi=5/radio). Live app is back to defaults.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Admin login: pescatoridiuomini@outlook.it / Admin1234!. Preview DB: 2 podcasts, 2 meditations (Echo=med_50209f73871c is first), 2 studi-biblici (cnt_seed1 first), 0 predicazioni, 0 video, 3 programmi. New Pydantic models in server.py: FolderIn (partial update, all fields optional) is used by PUT; FolderCreateIn (name required) is used by POST — keep both if extending. Delete confirmation on /admin/library-folders uses confirmAsync which on web triggers window.confirm; in Playwright bind `page.on('dialog', lambda d: d.accept())`.",
+  "rca_of_issue": "RCA (backend bug found & fixed): FolderIn was reused for both POST (create) and PUT (partial update) — but declared `name: str` as required. FastAPI/Pydantic returned 422 for any PUT missing 'name'. The admin UI move()/setIcon() calls send only {order} / {icon} and wrap the request in `.catch(()=>{})`, so failures were silently swallowed — reorder & icon-change appeared broken to the admin. Fix: split into two models — FolderIn (all optional, PUT) + FolderCreateIn (name required, POST). Verified via curl and UI: reorder chevron and icon chip now persist. Mitigation for future: don't reuse creation schemas for partial updates; either use `PartialFolderIn` or leverage `Field(...)` + `exclude_unset=True` with all-optional fields."
+}

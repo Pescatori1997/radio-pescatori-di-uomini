@@ -25,6 +25,7 @@ import { PulsingDot, SoundRings } from "@/src/components/LiveHeroFx";
 import PressableScale from "@/src/components/PressableScale";
 import Logo from "@/src/components/Logo";
 import { mergeHomeLayout, scaleFor, HomeSectionCfg } from "@/src/homeLayout";
+import { useLabel } from "@/src/utils/labels";
 import { colors, spacing, radius } from "@/src/theme";
 
 const STUDIO = require("@/assets/images/studio.png");
@@ -34,6 +35,7 @@ export default function Home() {
   const router = useRouter();
   const { playLive, playTrack, track, isPlaying, liveInfo } = usePlayer();
   const { sectionVisible, settings } = useSettings();
+  const t = useLabel();
   const [podcasts, setPodcasts] = useState<any[]>([]);
   const [programs, setPrograms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,7 +82,7 @@ export default function Home() {
       case "podcast":
         return (
           <>
-            <SectionHeader title="Ultimi Podcast" onPress={() => router.push("/podcast")} />
+            <SectionHeader title={t("home_podcast")} onPress={() => router.push("/podcast")} />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hRow}>
               {podcasts.slice(0, 6).map((p) => (
                 <PressableScale key={p.id} testID={`home-podcast-${p.id}`} style={styles.podCard}
@@ -98,7 +100,7 @@ export default function Home() {
       case "palinsesto":
         return (
           <>
-            <SectionHeader title="Palinsesto" onPress={() => router.push("/palinsesto")} />
+            <SectionHeader title={t("home_palinsesto")} onPress={() => router.push("/palinsesto")} />
             <View style={{ paddingHorizontal: spacing.lg }}>
               <PressableScale testID="home-onair" style={styles.onAirCard} onPress={() => router.push("/palinsesto")}>
                 {onAir ? (
