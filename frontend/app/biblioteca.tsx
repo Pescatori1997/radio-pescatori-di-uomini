@@ -19,6 +19,21 @@ export default function Biblioteca() {
   const { user } = useAuth();
   const [groups, setGroups] = useState<any[]>([]);
 
+  const removeFav = useCallback(async (typeKey: string, id: string) => {
+    // optimistic remove; empty groups disappear
+    setGroups((prev) => prev
+      .map((g) => (g.key === typeKey ? { ...g, items: g.items.filter((it: any) => it.id !== id) } : g))
+      .filter((g) => g.items.length > 0));
+    try {
+      if (typeKey === "podcast") await api.toggleFavorite(id);
+      else if (typeKey === "programma") await api.toggleFavoriteProgram(id);
+      else await api.toggleContentFav(typeKey, id);
+    } catch {
+      // reload authoritative state on failure
+      api.myLibrary().then((d: any) => setGroups(d?.groups || [])).catch(() => {});
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       if (user) api.myLibrary().then((d: any) => setGroups(d?.groups || [])).catch(() => setGroups([]));
@@ -48,11 +63,16 @@ export default function Biblioteca() {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.favRow}>
                   {g.items.map((it: any) => (
                     <Pressable key={`${g.key}-${it.id}`} testID={`fav-${g.key}-${it.id}`} style={styles.favCard} onPress={() => router.push(it.route as any)}>
-                      {it.image ? (
-                        <Image source={{ uri: it.image }} style={styles.favArt} contentFit="cover" />
-                      ) : (
-                        <View style={[styles.favArt, styles.favArtEmpty]}><Ionicons name="musical-notes" size={22} color={colors.muted} /></View>
-                      )}
+                      <View>
+                        {it.image ? (
+                          <Image source={{ uri: it.image }} style={styles.favArt} contentFit="cover" />
+                        ) : (
+                          <View style={[styles.favArt, styles.favArtEmpty]}><Ionicons name="musical-notes" size={22} color={colors.muted} /></View>
+                        )}
+                        <Pressable testID={`fav-remove-${g.key}-${it.id}`} style={styles.favRemove} hitSlop={8} onPress={() => removeFav(g.key, it.id)}>
+                          <Ionicons name="heart" size={16} color={colors.white} />
+                        </Pressable>
+                      </View>
                       <Text numberOfLines={2} style={styles.favCardTitle}>{it.title}</Text>
                       {!!it.subtitle && <Text numberOfLines={1} style={styles.favCardSub}>{it.subtitle}</Text>}
                     </Pressable>
@@ -102,6 +122,7 @@ const styles = StyleSheet.create({
   favCard: { width: 120 },
   favArt: { width: 120, height: 120, borderRadius: radius.md, backgroundColor: colors.surfaceTertiary },
   favArtEmpty: { alignItems: "center", justifyContent: "center" },
+  favRemove: { position: "absolute", top: 6, right: 6, width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(10,17,40,0.55)", alignItems: "center", justifyContent: "center" },
   favCardTitle: { fontSize: 13, fontWeight: "700", color: colors.onSurface, marginTop: spacing.sm },
   favCardSub: { fontSize: 12, color: colors.onSurfaceTertiary, marginTop: 1 },
 });
