@@ -30,7 +30,7 @@ export default function ProgramEditor() {
     description: "", long_description: "", hero_image: "", contact_url: "",
     social: { facebook: "", instagram: "", youtube: "", website: "" },
     episodes: [], color: "", active: true, type: "recorded",
-    broadcast: { media_id: null, video_url: "" }, broadcast_kind: "video",
+    broadcast: { media_id: null, video_url: "" }, broadcast_kind: "video", broadcast_is_live: false,
   });
   const [loading, setLoading] = useState(!isNew);
   const [busy, setBusy] = useState(false);
@@ -53,6 +53,7 @@ export default function ProgramEditor() {
           type: p.type && p.type !== "regular" ? p.type : "recorded",
           broadcast: { media_id: null, video_url: p.broadcast_media_url || "" },
           broadcast_kind: p.broadcast_media_kind || "video",
+          broadcast_is_live: !!p.broadcast_is_live,
         });
       }).catch(() => {}).finally(() => setLoading(false));
     }
@@ -84,6 +85,7 @@ export default function ProgramEditor() {
       hero_image: f.hero_image, contact_url: f.contact_url, social: f.social, episodes,
       color: f.color, active: f.active, type: f.type || "recorded",
       broadcast_media_url: bmUrl, broadcast_media_kind: bmUrl ? (f.broadcast_kind || "video") : "",
+      broadcast_is_live: !!f.broadcast_is_live,
     };
     try {
       if (isNew) { await api.adminCreateProgram(payload); router.back(); }
@@ -154,6 +156,10 @@ export default function ProgramEditor() {
           onChange={(v: any) => set("broadcast", v)}
           accept={f.broadcast_kind === "audio" ? ["audio/*"] : ["video/*"]}
         />
+        <ASwitch testID="bc-live" label="Diretta in tempo reale (live)" value={!!f.broadcast_is_live} onValueChange={(v: boolean) => set("broadcast_is_live", v)} />
+        {f.broadcast_is_live ? (
+          <Text style={styles.hint}>LIVE attivo: incolla nel campo qui sopra l'URL dello stream in diretta (HLS .m3u8) del tuo servizio (es. Mux, Cloudflare Stream, YouTube). Verrà trasmesso in tempo reale. Se disattivato, il file caricato va in onda sincronizzato all'orario (registrato).</Text>
+        ) : null}
 
         <AInput testID="prog-long" label="Descrizione completa (tab Informazioni)" value={f.long_description} onChangeText={(v: string) => set("long_description", v)} multiline />
         <AInput testID="prog-contact" label="Contatto (email o link)" value={f.contact_url} onChangeText={(v: string) => set("contact_url", v)} placeholder="email@... oppure https://..." />

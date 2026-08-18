@@ -152,6 +152,7 @@ def _normalize_program(d: dict) -> dict:
         # Scheduled broadcast media (video/audio that auto-plays during the slot)
         "broadcast_media_url": d.get("broadcast_media_url") or "",
         "broadcast_media_kind": d.get("broadcast_media_kind") or "",
+        "broadcast_is_live": bool(d.get("broadcast_is_live")),
     }
 
 
@@ -226,9 +227,29 @@ async def live_now():
     if not on_air:
         on_air = next((p for p in progs if _is_on_air(p, now)), None)
 
+    # Up-next: the next programs scheduled later today (with an on-air media or not).
+    today = VERSE_NOTIF_DAYS[now.weekday()]
+    up_next = []
+    for p in progs:
+        st = p.get("start_time") or ""
+        try:
+            h, m = int(st[:2]), int(st[3:5])
+        except Exception:
+            continue
+        active_today = (today in (p.get("weekdays") or [])) or (p.get("date") == now.date().isoformat())
+        sdt = now.replace(hour=h, minute=m, second=0, microsecond=0)
+        if active_today and sdt > now:
+            up_next.append({"id": p["id"], "title": p["title"], "start_time": st, "host": p.get("host") or "", "slug": p.get("slug")})
+    up_next.sort(key=lambda x: x["start_time"])
+    up_next = up_next[:6]
+
+    st_doc = await db.settings.find_one({"_id": "general"}) or {}
+    filler = {"kind": st_doc.get("live_filler_kind") or "", "url": st_doc.get("live_filler_url") or "",
+              "message": st_doc.get("live_filler_message") or ""}
+
     result = {"server_time": now.isoformat(), "on_air": False, "program": None,
               "media": None, "offset_seconds": 0, "duration_seconds": 0, "ends_in_seconds": 0,
-              "next": _next_program(progs, now)}
+              "next": _next_program(progs, now), "up_next": up_next, "filler": filler}
     if not on_air:
         return result
 
@@ -250,7 +271,7 @@ async def live_now():
     ends_in = max(0, int((end_dt - now).total_seconds()))
     media = None
     if on_air.get("broadcast_media_url"):
-        media = {"url": on_air["broadcast_media_url"], "kind": on_air.get("broadcast_media_kind") or "audio"}
+        media = {"url": on_air["broadcast_media_url"], "kind": on_air.get("broadcast_media_kind") or "audio", "is_live": bool(on_air.get("broadcast_is_live"))}
     result.update({
         "on_air": True,
         "program": {"id": on_air["id"], "title": on_air["title"], "host": on_air.get("host") or "",
@@ -2574,6 +2595,7 @@ class ProgramIn(BaseModel):
     episodes: Optional[List[EpisodeIn]] = None
     broadcast_media_url: Optional[str] = ""
     broadcast_media_kind: Optional[str] = ""
+    broadcast_is_live: Optional[bool] = False
 
 
 class ProgramEdit(BaseModel):
@@ -2598,6 +2620,7 @@ class ProgramEdit(BaseModel):
     episodes: Optional[List[EpisodeIn]] = None
     broadcast_media_url: Optional[str] = None
     broadcast_media_kind: Optional[str] = None
+    broadcast_is_live: Optional[bool] = None
 
 
 @api_router.get("/admin/programs")
@@ -2851,6 +2874,10 @@ class GeneralSettings(BaseModel):
     verse_flip_hint: Optional[str] = None
     # Admin-editable display names for app sections (menu voci, Biblioteca, titoli).
     section_labels: Optional[Dict[str, str]] = None
+    # Filler shown on the Diretta screen when nothing is scheduled.
+    live_filler_kind: Optional[str] = None  # "video" | "audio" | "message" | ""
+    live_filler_url: Optional[str] = None
+    live_filler_message: Optional[str] = None
 
 
 # Canonical toggleable sections. Everything defaults ON except Merchandising,

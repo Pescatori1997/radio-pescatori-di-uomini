@@ -528,3 +528,11 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Countdown nella schermata `app/diretta.tsx`: fuori orario mostra "La diretta inizia tra HH:MM:SS" + nome/orario prossimo programma (usa next.starts_at da /live/now, tick 1s).
 - Notifica pre-diretta: scheduler backend `_live_notif_scheduler` (ogni 60s) invia via `notify_category("diretta", ...)` (STESSO sistema push del versetto del giorno) ~10 min prima (LIVE_NOTIF_MINUTES) di ogni programma con broadcast_media_url. Idempotente per programma/giorno (`live_notif_sent`). Funziona solo su build nativa.
 - PENDING (richiesta utente): diretta in TEMPO REALE (RTMP/HLS) selezionabile dal pannello insieme alle registrate -> integrazione separata, serve scegliere provider streaming.
+
+## Diretta Fase 2 — Streaming live + A seguire + Riempitivo (2026-06/08)
+- COMPLETATO. Tre estensioni alla Diretta (retrocompatibili):
+  1. **Streaming live in tempo reale**: nell'editor programma (admin/schedule/[id]) switch "Diretta in tempo reale (live)" → si incolla l'URL dello stream HLS (.m3u8, es. Mux/Cloudflare Stream/YouTube). Se attivo, `/diretta` trasmette lo stream in tempo reale (no seek); se disattivo, il file caricato va in onda sincronizzato all'orario. Backend: `broadcast_media_url` + `broadcast_is_live` → esposti in `/live/now` come `media.{url,kind,is_live}`.
+  2. **A seguire (up_next)**: `/live/now` restituisce `up_next[]` (prossimi programmi di oggi, max 6); mostrato in `/diretta`.
+  3. **Riempitivo (filler)**: Admin > Palinsesto → card "Impostazioni Diretta · Riempitivo" (testID filler-toggle): tipo Nessuno/Video/Audio/Messaggio; per Video/Audio MediaUpload (file GridFS o URL), per Messaggio testo. Salvato in settings `general` (`live_filler_kind/url/message`) via PUT /admin/settings (exclude_unset, non azzera altre settings). `/live/now` → `filler{kind,url,message}`; `/diretta` off-air riproduce il filler media o mostra il messaggio, altrimenti countdown al prossimo programma.
+- File: `frontend/app/admin/schedule/index.tsx` (UI riempitivo completata), `frontend/app/diretta.tsx`, `backend/server.py` (/live/now ~218-282, GeneralSettings live_filler_*).
+- Test: backend 7/7 (iteration_48, tests/test_live_now_filler.py) + frontend E2E (admin salva riempitivo + persiste, /diretta riflette messaggio/countdown). Nessun bug.

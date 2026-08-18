@@ -20,18 +20,28 @@ export default function Diretta() {
   const applyLive = useCallback((d: any) => {
     setData(d);
     setLoaded(true);
-    const url = d?.on_air && d?.media?.url ? absUrl(d.media.url) : "";
-    const offset = Math.max(0, Number(d?.offset_seconds || 0));
+    const onAir = d?.on_air && d?.media?.url;
+    const filler = d?.filler || {};
+    let url = "", isLive = false, loop = false, seek: number | null = null;
+    if (onAir) {
+      url = absUrl(d.media.url);
+      isLive = !!d.media.is_live;
+      seek = isLive ? null : Math.max(0, Number(d?.offset_seconds || 0));
+    } else if (filler.url && (filler.kind === "video" || filler.kind === "audio")) {
+      url = absUrl(filler.url); loop = true; seek = 0;
+    }
     try {
       if (url) {
         if (url !== lastUrl.current) {
           lastUrl.current = url;
+          player.loop = loop;
           player.replace({ uri: url });
-          // seek + play shortly after the new source loads
-          setTimeout(() => { try { player.currentTime = offset; player.play(); } catch {} }, 350);
+          if (seek != null) setTimeout(() => { try { player.currentTime = seek as number; player.play(); } catch {} }, 350);
+          else setTimeout(() => { try { player.play(); } catch {} }, 350);
+        } else if (seek != null && Math.abs((player.currentTime || 0) - seek) > 6) {
+          player.currentTime = seek;
+          player.play();
         } else {
-          // same media: correct drift only if noticeable (keeps everyone in sync)
-          if (Math.abs((player.currentTime || 0) - offset) > 6) player.currentTime = offset;
           player.play();
         }
       } else {
@@ -73,6 +83,22 @@ export default function Diretta() {
     const ss = String(remain % 60).padStart(2, "0");
     return `${hh}:${mm}:${ss}`;
   })();
+  const upNext = data?.up_next || [];
+  const filler = data?.filler || {};
+  const fillerMedia = !onAir && filler?.url && (filler.kind === "video" || filler.kind === "audio");
+  const fillerMessage = !onAir && !fillerMedia && filler?.kind === "message" && !!filler?.message;
+
+  const UpNext = upNext.length > 0 ? (
+    <View style={styles.upNext}>
+      <Text style={styles.upNextTitle}>A seguire</Text>
+      {upNext.map((u: any) => (
+        <View key={u.id} style={styles.upRow}>
+          <Text style={styles.upTime}>{u.start_time}</Text>
+          <Text style={styles.upTitle} numberOfLines={1}>{u.title}{u.host ? ` · ${u.host}` : ""}</Text>
+        </View>
+      ))}
+    </View>
+  ) : null;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -101,14 +127,30 @@ export default function Diretta() {
           <View style={styles.info}>
             <Text style={styles.progTitle} numberOfLines={2}>{prog?.title}</Text>
             {!!prog?.host && <Text style={styles.progHost} numberOfLines={1}>con {prog.host}</Text>}
-            {!!(prog?.start_time && prog?.end_time) && <Text style={styles.progTime}>{prog.start_time} – {prog.end_time}</Text>}
+            {!!(prog?.start_time && prog?.end_time) && <Text style={styles.progTime}>{prog.start_time} – {prog.end_time}{data?.media?.is_live ? "  ·  LIVE" : ""}</Text>}
           </View>
+          {UpNext}
+        </View>
+      ) : fillerMedia ? (
+        <View style={styles.stage}>
+          {filler.kind === "video" ? (
+            <VideoView player={player} style={styles.video} contentFit="contain" nativeControls />
+          ) : (
+            <View style={styles.audioStage}>
+              <View style={[styles.audioArt, styles.audioArtEmpty]}><Ionicons name="radio" size={64} color={colors.brandSecondary} /></View>
+              <View style={styles.audioWave}><Ionicons name="musical-notes" size={20} color={colors.brandSecondary} /><Text style={styles.audioWaveText}>Programmazione</Text></View>
+            </View>
+          )}
+          <View style={styles.info}><Text style={styles.progTitle}>Programmazione</Text><Text style={styles.progHost}>Nessuna diretta in questo momento</Text></View>
+          {UpNext}
         </View>
       ) : (
         <View style={styles.center}>
           <View style={styles.offIcon}><Ionicons name="tv-outline" size={54} color={colors.muted} /></View>
           <Text style={styles.offTitle}>Nessuna diretta in corso</Text>
-          {onAir && prog ? (
+          {fillerMessage ? (
+            <Text style={styles.offSub}>{filler.message}</Text>
+          ) : onAir && prog ? (
             <Text style={styles.offSub}>{prog.title} è in onda ma non ha un contenuto da riprodurre.</Text>
           ) : nextP && countdown ? (
             <View style={styles.cdWrap}>
@@ -121,6 +163,7 @@ export default function Diretta() {
           ) : (
             <Text style={styles.offSub}>Torna più tardi per la prossima diretta.</Text>
           )}
+          {UpNext}
           <Pressable testID="diretta-palinsesto" style={styles.schedBtn} onPress={() => router.push("/palinsesto" as any)}>
             <Ionicons name="calendar-outline" size={16} color={colors.white} /><Text style={styles.schedBtnText}>Vedi il palinsesto</Text>
           </Pressable>
@@ -157,4 +200,9 @@ const styles = StyleSheet.create({
   cdProg: { color: colors.white, fontSize: 15, fontWeight: "800", textAlign: "center", paddingHorizontal: spacing.lg },
   schedBtn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.brandPrimary, paddingVertical: spacing.md, paddingHorizontal: spacing.xl, borderRadius: 999, marginTop: spacing.md },
   schedBtnText: { color: colors.white, fontSize: 15, fontWeight: "800" },
+  upNext: { paddingHorizontal: spacing.xl, marginTop: spacing.md, gap: 8, width: "100%" },
+  upNextTitle: { color: colors.brandSecondary, fontSize: 13, fontWeight: "900", letterSpacing: 1 },
+  upRow: { flexDirection: "row", gap: spacing.md, alignItems: "center" },
+  upTime: { color: colors.white, fontSize: 13, fontWeight: "800", width: 46 },
+  upTitle: { color: "#CBD5E1", fontSize: 13, flex: 1 },
 });

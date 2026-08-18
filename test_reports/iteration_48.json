@@ -1,0 +1,31 @@
+{
+  "summary": "Feature 'Diretta in tempo reale' (Riempitivo) validata end-to-end. Backend: 7/7 pytest passati in /app/backend/tests/test_live_now_filler.py (GET /api/live/now shape, PUT/GET /api/admin/settings persistence, exclude_unset non cancella altri campi, /api/live/now riflette il filler configurato per tipi message/video/none). Frontend: login admin UI OK, card 'Impostazioni Diretta · Riempitivo' presente in /admin/schedule con testID filler-toggle e chip filler-kind-{none,video,audio,message}. Selezionato 'Messaggio', compilato 'Torna più tardi UI test', click Salva mostra 'Impostazioni salvate ✓', persiste dopo reload, e la schermata /diretta in stato off-air mostra il testo del messaggio al posto del countdown. In stato off-air senza filler viene invece mostrato il countdown alla prossima diretta con il titolo del prossimo programma (Buongiorno con la Parola · 16:00). Sezione 'A seguire' non applicabile oggi (nessun programma successivo nel Martedì).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_live_now_filler.py",
+    "/app/test_reports/pytest/iteration_48_live_filler.xml"
+  ],
+  "action_items": [
+    "Aggiornare /app/memory/test_credentials.md: la password reale corrente dell'admin allowlist 'pescatoridiuomini@outlook.it' è 'Admin1234!' (non 'AdminTestPwd1!' come dichiarato nel prompt e nella nota di sessione). La review request usa credenziali errate; l'UI login con 'AdminTestPwd1!' restituisce 401 'Credenziali non valide'. Verificare con la sessione precedente (test iteration 44 ha reso persistente 'Admin1234!' dopo il flow password-reset)."
+  ],
+  "critical_code_review_comments": [
+    "server.py::PUT /api/admin/settings usa correttamente body.model_dump(exclude_unset=True) → i partial update non azzerano gli altri campi (verificato con test 'test_exclude_unset_does_not_wipe_other_fields').",
+    "live/now: la costruzione del dict 'filler' avviene sempre, anche in stato off-air; struttura {kind,url,message} sempre presente (200 OK garantito).",
+    "AInput (adminForm.tsx) applica testID direttamente sul TextInput → su web il nodo <textarea> ha data-testid=\"filler-message\" (buona pratica per test)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_live_now_filler.py (nuovo)"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% (login + filler save/reload/persistence + /diretta reflection)"},
+  "seed_data_creation": "Nessun seed permanente. I test settano temporaneamente live_filler_kind/message/url e ripristinano allo snapshot in teardown. UI test conclusa con cleanup che riporta il filler a kind='' vuoto.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Password admin corrente per UI login: 'Admin1234!' (non AdminTestPwd1!). ADMINTESTTOKEN123 funziona per test API ma NON passa il welcome gate del frontend (usare UI login). Il filler è persistito in db.settings _id='general' con chiavi live_filler_kind/url/message.",
+  "rca_of_issue": "N/A — nessun bug riscontrato. Unica discrepanza: le credenziali dichiarate nel prompt (AdminTestPwd1!) non corrispondono a quelle attualmente valide (Admin1234!). Testato con curl POST /api/auth/login: AdminTestPwd1! → 401; Admin1234! → token+role=administrator."
+}
