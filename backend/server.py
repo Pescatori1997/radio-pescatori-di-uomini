@@ -2878,6 +2878,11 @@ class GeneralSettings(BaseModel):
     live_filler_kind: Optional[str] = None  # "video" | "audio" | "message" | ""
     live_filler_url: Optional[str] = None
     live_filler_message: Optional[str] = None
+    # Pre-live push notification (admin managed).
+    live_notif_enabled: Optional[bool] = None   # default True
+    live_notif_minutes: Optional[int] = None     # minutes before start (default 10)
+    # Auto-save each broadcast as an episode ("puntata") of its program.
+    autosave_recordings: Optional[bool] = None   # default True
 
 
 # Canonical toggleable sections. Everything defaults ON except Merchandising,
@@ -5472,13 +5477,22 @@ async def _verse_notif_scheduler():
         await asyncio.sleep(300)
 
 
-LIVE_NOTIF_MINUTES = 10  # notify this many minutes before a scheduled live starts
+LIVE_NOTIF_MINUTES = 10  # default minutes before a scheduled live starts (admin can override)
 
 
 async def _send_live_prenotifications():
     """Notify users shortly before a Palinsesto program with broadcast media
     goes on air. Reuses the same push system as the daily verse. Idempotent:
-    once per program per Rome day."""
+    once per program per Rome day. Timing & on/off are admin-managed via
+    settings (live_notif_enabled / live_notif_minutes)."""
+    st = await db.settings.find_one({"_id": "general"}) or {}
+    if st.get("live_notif_enabled") is False:
+        return
+    try:
+        minutes = int(st.get("live_notif_minutes") or LIVE_NOTIF_MINUTES)
+    except Exception:
+        minutes = LIVE_NOTIF_MINUTES
+    minutes = max(1, min(minutes, 180))
     now = datetime.now(_ROME_TZ)
     today = VERSE_NOTIF_DAYS[now.weekday()]
     docs = await db.programs.find({}, {"_id": 0}).to_list(500)
@@ -5496,7 +5510,7 @@ async def _send_live_prenotifications():
             continue
         start_dt = now.replace(hour=sh, minute=sm, second=0, microsecond=0)
         delta = (start_dt - now).total_seconds()
-        if 0 <= delta <= LIVE_NOTIF_MINUTES * 60:
+        if 0 <= delta <= minutes * 60:
             key = f"{p['id']}:{now.date().isoformat()}"
             if await db.live_notif_sent.find_one({"key": key}):
                 continue
@@ -5510,14 +5524,73 @@ async def _send_live_prenotifications():
             )
 
 
+async def _autosave_recordings():
+    """When a scheduled broadcast finishes, automatically save it as an episode
+    ("puntata") of its own program so it appears under 'Le puntate'. For live
+    streams the same URL becomes the replay/VOD; for pre-recorded media the file
+    itself is archived. Idempotent: once per program per Rome day. Admin can
+    disable via autosave_recordings."""
+    st = await db.settings.find_one({"_id": "general"}) or {}
+    if st.get("autosave_recordings") is False:
+        return
+    now = datetime.now(_ROME_TZ)
+    today = VERSE_NOTIF_DAYS[now.weekday()]
+    today_iso = now.date().isoformat()
+    docs = await db.programs.find({}, {"_id": 0}).to_list(500)
+    for d in docs:
+        p = _normalize_program(d)
+        url = (p.get("broadcast_media_url") or "").strip()
+        if not url or p.get("active") is False:
+            continue
+        active_today = (today in (p.get("weekdays") or [])) or (d.get("date") == today_iso)
+        if not active_today:
+            continue
+        start, end = p.get("start_time") or "", p.get("end_time") or ""
+        try:
+            sh, sm = int(start[:2]), int(start[3:5])
+            eh, em = int(end[:2]), int(end[3:5])
+        except Exception:
+            continue
+        start_dt = now.replace(hour=sh, minute=sm, second=0, microsecond=0)
+        end_dt = now.replace(hour=eh, minute=em, second=0, microsecond=0)
+        if end_dt <= start_dt:  # crosses midnight → ends tomorrow
+            end_dt += timedelta(days=1)
+        # Only after the slot has ended (small guard so it triggers just once).
+        if now < end_dt:
+            continue
+        key = f"{p['id']}:{today_iso}"
+        if await db.live_recorded.find_one({"key": key}):
+            continue
+        # Skip if an episode with this URL & date already exists (manual add).
+        already = any((e.get("audio_url") == url and e.get("date") == today_iso) for e in (d.get("episodes") or []))
+        await db.live_recorded.insert_one({"key": key, "at": now_utc()})
+        if already:
+            continue
+        duration_min = max(0, round((end_dt - start_dt).total_seconds() / 60))
+        ep = {
+            "id": new_id("ep"),
+            "title": f"{p['title']} · {now.strftime('%d/%m/%Y')}",
+            "date": today_iso,
+            "duration_min": duration_min,
+            "description": "Registrazione della diretta",
+            "audio_url": url,
+        }
+        await db.programs.update_one({"id": p["id"]}, {"$push": {"episodes": ep}})
+        logger.info("autosaved recording episode for program %s", p["id"])
+
+
 async def _live_notif_scheduler():
-    """Background loop: checks upcoming live programs every minute."""
+    """Background loop: pre-live notifications + auto-save recordings, every minute."""
     await asyncio.sleep(30)
     while True:
         try:
             await _send_live_prenotifications()
         except Exception as e:
             logger.warning("live notif scheduler error: %s", e)
+        try:
+            await _autosave_recordings()
+        except Exception as e:
+            logger.warning("autosave recordings error: %s", e)
         await asyncio.sleep(60)
 
 

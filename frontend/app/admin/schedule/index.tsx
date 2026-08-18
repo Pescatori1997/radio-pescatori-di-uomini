@@ -5,7 +5,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { api } from "@/src/api";
 import AdminShell, { ADMIN } from "@/src/components/AdminShell";
 import PressableScale from "@/src/components/PressableScale";
-import { AInput } from "@/src/components/adminForm";
+import { AInput, ASwitch } from "@/src/components/adminForm";
 import MediaUpload from "@/src/components/MediaUpload";
 import { colors, spacing, radius } from "@/src/theme";
 
@@ -24,6 +24,9 @@ export default function AdminSchedule() {
   const [fillMessage, setFillMessage] = useState("");
   const [fillMsg, setFillMsg] = useState("");
   const [savingFill, setSavingFill] = useState(false);
+  const [notifEnabled, setNotifEnabled] = useState(true);
+  const [notifMinutes, setNotifMinutes] = useState("10");
+  const [autosave, setAutosave] = useState(true);
 
   const load = useCallback(() => {
     api.adminPrograms().then(setItems).catch(() => {}).finally(() => { setLoading(false); setRefreshing(false); });
@@ -33,6 +36,9 @@ export default function AdminSchedule() {
       setFillKind(s.live_filler_kind || "");
       setFillMedia(m ? { media_id: m[1], video_url: "" } : { media_id: null, video_url: url });
       setFillMessage(s.live_filler_message || "");
+      setNotifEnabled(s.live_notif_enabled !== false);
+      setNotifMinutes(String(s.live_notif_minutes || 10));
+      setAutosave(s.autosave_recordings !== false);
     }).catch(() => {});
   }, []);
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -40,12 +46,17 @@ export default function AdminSchedule() {
   const saveFiller = async () => {
     setFillMsg(""); setSavingFill(true);
     const url = fillMedia.media_id ? `/api/media/${fillMedia.media_id}` : (fillMedia.video_url || "").trim();
+    const mins = Math.max(1, Math.min(180, parseInt(notifMinutes, 10) || 10));
     try {
       await api.adminUpdateSettings({
         live_filler_kind: fillKind,
         live_filler_url: fillKind === "message" ? "" : url,
         live_filler_message: fillKind === "message" ? fillMessage : "",
+        live_notif_enabled: notifEnabled,
+        live_notif_minutes: mins,
+        autosave_recordings: autosave,
       });
+      setNotifMinutes(String(mins));
       setFillMsg("Impostazioni salvate ✓");
     } catch { setFillMsg("Errore nel salvataggio"); }
     finally { setSavingFill(false); }
@@ -90,6 +101,15 @@ export default function AdminSchedule() {
             {fillKind === "message" ? (
               <AInput testID="filler-message" label="Messaggio da mostrare" value={fillMessage} onChangeText={setFillMessage} placeholder="Es. Torna più tardi per la prossima diretta 🎙️" multiline />
             ) : null}
+
+            <View style={styles.fillerDivider} />
+            <ASwitch testID="notif-enabled" label="Avvisa i fedeli prima della diretta" value={notifEnabled} onValueChange={setNotifEnabled} />
+            {notifEnabled ? (
+              <AInput testID="notif-minutes" label="Minuti di anticipo dell'avviso" value={notifMinutes} onChangeText={(v: string) => setNotifMinutes(v.replace(/[^0-9]/g, ""))} keyboardType="number-pad" placeholder="10" />
+            ) : null}
+            <ASwitch testID="autosave-rec" label="Salva automaticamente le registrazioni" value={autosave} onValueChange={setAutosave} />
+            <Text style={styles.fillerHint}>Al termine di ogni diretta, la registrazione viene salvata come puntata del suo programma (visibile in “Le puntate”).</Text>
+
             <PressableScale testID="filler-save" style={styles.saveBtn} onPress={saveFiller}>
               {savingFill ? <ActivityIndicator color={colors.white} size="small" /> : (
                 <><Ionicons name="checkmark" size={18} color={colors.white} /><Text style={styles.saveBtnText}>Salva riempitivo</Text></>
@@ -140,6 +160,7 @@ const styles = StyleSheet.create({
   kindChipActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
   kindChipText: { color: ADMIN.muted, fontSize: 13, fontWeight: "700" },
   kindChipTextActive: { color: colors.white },
+  fillerDivider: { height: 1, backgroundColor: ADMIN.border, marginVertical: spacing.xs },
   saveBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.brandPrimary, paddingVertical: spacing.md, borderRadius: radius.md, marginTop: spacing.xs },
   saveBtnText: { color: colors.white, fontSize: 15, fontWeight: "800" },
   fillMsg: { color: colors.success, fontSize: 13, fontWeight: "700", textAlign: "center" },
