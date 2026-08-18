@@ -158,7 +158,7 @@ export default function ProgramEditor() {
         />
         <ASwitch testID="bc-live" label="Diretta in tempo reale (live)" value={!!f.broadcast_is_live} onValueChange={(v: boolean) => set("broadcast_is_live", v)} />
         {f.broadcast_is_live ? (
-          <Text style={styles.hint}>LIVE attivo: incolla nel campo qui sopra l'URL dello stream in diretta (HLS .m3u8) del tuo servizio (es. Mux, Cloudflare Stream, YouTube). Verrà trasmesso in tempo reale. Se disattivato, il file caricato va in onda sincronizzato all'orario (registrato).</Text>
+          <Text style={styles.hint}>LIVE attivo: incolla qui sopra il link della diretta. Funziona con YouTube, Facebook, Vimeo, Twitch (basta il link della pagina) oppure con un URL HLS (.m3u8) da servizi come Mux o Cloudflare Stream. Se disattivato, il file caricato va in onda sincronizzato all'orario (registrato).</Text>
         ) : null}
 
         <AInput testID="prog-long" label="Descrizione completa (tab Informazioni)" value={f.long_description} onChangeText={(v: string) => set("long_description", v)} multiline />

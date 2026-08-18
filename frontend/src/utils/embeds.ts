@@ -39,6 +39,19 @@ export function detectProvider(url: string): string | null {
   return null;
 }
 
+/**
+ * Build an embed URL for a LIVE stream with autoplay (muted, so browsers/mobile
+ * allow autostart; the viewer taps to unmute). Returns null if not embeddable.
+ */
+export function liveEmbedSrc(url: string, provider?: string | null): string | null {
+  const base = embedSrc(url, provider || detectProvider(url));
+  if (!base) return null;
+  const sep = base.includes("?") ? "&" : "?";
+  if (base.includes("youtube.com/embed")) return `${base}${sep}autoplay=1&mute=1`;
+  if (base.includes("player.vimeo.com")) return `${base}${sep}autoplay=1&muted=1`;
+  return base;
+}
+
 export const PROVIDER_LABEL: Record<string, string> = {
   youtube: "YouTube",
   vimeo: "Vimeo",

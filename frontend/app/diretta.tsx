@@ -6,6 +6,8 @@ import { useVideoPlayer, VideoView } from "expo-video";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, absUrl } from "@/src/api";
+import { detectProvider, liveEmbedSrc } from "@/src/utils/embeds";
+import EmbedFrame from "@/src/components/live/EmbedFrame";
 import { colors, spacing, radius } from "@/src/theme";
 
 export default function Diretta() {
@@ -13,6 +15,7 @@ export default function Diretta() {
   const router = useRouter();
   const [data, setData] = useState<any>(null);
   const [loaded, setLoaded] = useState(false);
+  const [embedUrl, setEmbedUrl] = useState<string | null>(null);
   const lastUrl = useRef<string>("");
 
   const player = useVideoPlayer(null, (p) => { p.loop = false; p.staysActiveInBackground = true; });
@@ -22,14 +25,25 @@ export default function Diretta() {
     setLoaded(true);
     const onAir = d?.on_air && d?.media?.url;
     const filler = d?.filler || {};
-    let url = "", isLive = false, loop = false, seek: number | null = null;
+    let rawUrl = "", isLive = false, loop = false, seek: number | null = null;
     if (onAir) {
-      url = absUrl(d.media.url);
+      rawUrl = d.media.url;
       isLive = !!d.media.is_live;
       seek = isLive ? null : Math.max(0, Number(d?.offset_seconds || 0));
     } else if (filler.url && (filler.kind === "video" || filler.kind === "audio")) {
-      url = absUrl(filler.url); loop = true; seek = 0;
+      rawUrl = filler.url; loop = true; seek = 0;
     }
+    // Embeddable provider (YouTube/Vimeo/Facebook/...) → iframe/WebView, NOT expo-video.
+    const provider = detectProvider(rawUrl);
+    const embed = provider ? liveEmbedSrc(rawUrl, provider) : null;
+    if (embed) {
+      setEmbedUrl(embed);
+      lastUrl.current = "";
+      try { player.pause(); } catch {}
+      return;
+    }
+    setEmbedUrl(null);
+    const url = rawUrl ? absUrl(rawUrl) : "";
     try {
       if (url) {
         if (url !== lastUrl.current) {
@@ -112,7 +126,9 @@ export default function Diretta() {
         <View style={styles.center}><ActivityIndicator color={colors.brandSecondary} size="large" /></View>
       ) : onAir && data?.media ? (
         <View style={styles.stage}>
-          {isVideo ? (
+          {embedUrl ? (
+            <View style={styles.video}><EmbedFrame url={embedUrl} testID="diretta-embed" /></View>
+          ) : isVideo ? (
             <VideoView player={player} style={styles.video} contentFit="contain" nativeControls allowsFullscreen />
           ) : (
             <View style={styles.audioStage}>
@@ -133,7 +149,9 @@ export default function Diretta() {
         </View>
       ) : fillerMedia ? (
         <View style={styles.stage}>
-          {filler.kind === "video" ? (
+          {embedUrl ? (
+            <View style={styles.video}><EmbedFrame url={embedUrl} testID="diretta-filler-embed" /></View>
+          ) : filler.kind === "video" ? (
             <VideoView player={player} style={styles.video} contentFit="contain" nativeControls />
           ) : (
             <View style={styles.audioStage}>
