@@ -123,6 +123,8 @@ def _normalize_program(d: dict) -> dict:
         "duration_min": e.get("duration_min") or e.get("duration") or 0,
         "description": e.get("description") or "",
         "audio_url": e.get("audio_url") or "",
+        "image": e.get("image") or "",
+        "media_kind": e.get("media_kind") or "",
     } for e in episodes if isinstance(e, dict)]
     episodes.sort(key=lambda e: e.get("date") or "", reverse=True)
     return {
@@ -2571,6 +2573,8 @@ class EpisodeIn(BaseModel):
     duration_min: Optional[int] = 0
     description: Optional[str] = ""
     audio_url: Optional[str] = ""
+    image: Optional[str] = ""
+    media_kind: Optional[str] = ""
 
 
 class ProgramIn(BaseModel):
@@ -2881,6 +2885,8 @@ class GeneralSettings(BaseModel):
     # Pre-live push notification (admin managed).
     live_notif_enabled: Optional[bool] = None   # default True
     live_notif_minutes: Optional[int] = None     # minutes before start (default 10)
+    live_notif_title: Optional[str] = None       # custom title, placeholders {titolo} {minuti}
+    live_notif_body: Optional[str] = None        # custom body, placeholders {titolo} {minuti}
     # Auto-save each broadcast as an episode ("puntata") of its program.
     autosave_recordings: Optional[bool] = None   # default True
 
@@ -5480,11 +5486,37 @@ async def _verse_notif_scheduler():
 LIVE_NOTIF_MINUTES = 10  # default minutes before a scheduled live starts (admin can override)
 
 
+def _yt_id(url: str):
+    """Extract a YouTube video id from common URL formats, else None."""
+    import re as _re
+    s = (url or "").strip()
+    if not s:
+        return None
+    if _re.fullmatch(r"[A-Za-z0-9_-]{11}", s):
+        return s
+    for pat in (r"youtu\.be/([A-Za-z0-9_-]{11})", r"[?&]v=([A-Za-z0-9_-]{11})",
+                r"/embed/([A-Za-z0-9_-]{11})", r"/live/([A-Za-z0-9_-]{11})", r"/shorts/([A-Za-z0-9_-]{11})"):
+        m = _re.search(pat, s)
+        if m:
+            return m.group(1)
+    return None
+
+
+def _recording_thumbnail(url: str, hero: str = "") -> str:
+    """Best-effort cover for an auto-saved recording: YouTube thumbnail when the
+    URL is a YouTube link, otherwise the program hero image."""
+    vid = _yt_id(url)
+    if vid:
+        return f"https://img.youtube.com/vi/{vid}/hqdefault.jpg"
+    return hero or ""
+
+
 async def _send_live_prenotifications():
     """Notify users shortly before a Palinsesto program with broadcast media
     goes on air. Reuses the same push system as the daily verse. Idempotent:
-    once per program per Rome day. Timing & on/off are admin-managed via
-    settings (live_notif_enabled / live_notif_minutes)."""
+    once per program per Rome day. Timing, on/off and message text are
+    admin-managed (live_notif_enabled / live_notif_minutes / live_notif_title /
+    live_notif_body). Placeholders {titolo} and {minuti} are substituted."""
     st = await db.settings.find_one({"_id": "general"}) or {}
     if st.get("live_notif_enabled") is False:
         return
@@ -5493,6 +5525,8 @@ async def _send_live_prenotifications():
     except Exception:
         minutes = LIVE_NOTIF_MINUTES
     minutes = max(1, min(minutes, 180))
+    tmpl_title = (st.get("live_notif_title") or "").strip()
+    tmpl_body = (st.get("live_notif_body") or "").strip()
     now = datetime.now(_ROME_TZ)
     today = VERSE_NOTIF_DAYS[now.weekday()]
     docs = await db.programs.find({}, {"_id": 0}).to_list(500)
@@ -5516,12 +5550,11 @@ async def _send_live_prenotifications():
                 continue
             await db.live_notif_sent.insert_one({"key": key, "at": now_utc()})
             mins = max(1, round(delta / 60))
-            await notify_category(
-                "diretta",
-                f"🔴 Sta per iniziare: {p['title']}",
-                f"La diretta inizia tra circa {mins} min. Non perdertela!",
-                action_url="/diretta",
-            )
+            def _fill(s: str) -> str:
+                return s.replace("{titolo}", p["title"]).replace("{minuti}", str(mins))
+            title = _fill(tmpl_title) if tmpl_title else f"🔴 Sta per iniziare: {p['title']}"
+            body = _fill(tmpl_body) if tmpl_body else f"La diretta inizia tra circa {mins} min. Non perdertela!"
+            await notify_category("diretta", title, body, action_url="/diretta")
 
 
 async def _autosave_recordings():
@@ -5574,6 +5607,8 @@ async def _autosave_recordings():
             "duration_min": duration_min,
             "description": "Registrazione della diretta",
             "audio_url": url,
+            "image": _recording_thumbnail(url, d.get("hero_image") or ""),
+            "media_kind": p.get("broadcast_media_kind") or "video",
         }
         await db.programs.update_one({"id": p["id"]}, {"$push": {"episodes": ep}})
         logger.info("autosaved recording episode for program %s", p["id"])

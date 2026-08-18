@@ -26,6 +26,8 @@ export default function AdminSchedule() {
   const [savingFill, setSavingFill] = useState(false);
   const [notifEnabled, setNotifEnabled] = useState(true);
   const [notifMinutes, setNotifMinutes] = useState("10");
+  const [notifTitle, setNotifTitle] = useState("");
+  const [notifBody, setNotifBody] = useState("");
   const [autosave, setAutosave] = useState(true);
 
   const load = useCallback(() => {
@@ -38,6 +40,8 @@ export default function AdminSchedule() {
       setFillMessage(s.live_filler_message || "");
       setNotifEnabled(s.live_notif_enabled !== false);
       setNotifMinutes(String(s.live_notif_minutes || 10));
+      setNotifTitle(s.live_notif_title || "");
+      setNotifBody(s.live_notif_body || "");
       setAutosave(s.autosave_recordings !== false);
     }).catch(() => {});
   }, []);
@@ -54,6 +58,8 @@ export default function AdminSchedule() {
         live_filler_message: fillKind === "message" ? fillMessage : "",
         live_notif_enabled: notifEnabled,
         live_notif_minutes: mins,
+        live_notif_title: notifTitle.trim(),
+        live_notif_body: notifBody.trim(),
         autosave_recordings: autosave,
       });
       setNotifMinutes(String(mins));
@@ -105,7 +111,12 @@ export default function AdminSchedule() {
             <View style={styles.fillerDivider} />
             <ASwitch testID="notif-enabled" label="Avvisa i fedeli prima della diretta" value={notifEnabled} onValueChange={setNotifEnabled} />
             {notifEnabled ? (
-              <AInput testID="notif-minutes" label="Minuti di anticipo dell'avviso" value={notifMinutes} onChangeText={(v: string) => setNotifMinutes(v.replace(/[^0-9]/g, ""))} keyboardType="number-pad" placeholder="10" />
+              <>
+                <AInput testID="notif-minutes" label="Minuti di anticipo dell'avviso" value={notifMinutes} onChangeText={(v: string) => setNotifMinutes(v.replace(/[^0-9]/g, ""))} keyboardType="number-pad" placeholder="10" />
+                <AInput testID="notif-title" label="Titolo dell'avviso (facoltativo)" value={notifTitle} onChangeText={setNotifTitle} placeholder="🔴 Sta per iniziare: {titolo}" />
+                <AInput testID="notif-body" label="Testo dell'avviso (facoltativo)" value={notifBody} onChangeText={setNotifBody} placeholder="La diretta inizia tra circa {minuti} min. Non perdertela!" multiline />
+                <Text style={styles.fillerHint}>Lascia vuoto per usare il testo automatico. Puoi usare {"{titolo}"} (nome del programma) e {"{minuti}"} (minuti mancanti).</Text>
+              </>
             ) : null}
             <ASwitch testID="autosave-rec" label="Salva automaticamente le registrazioni" value={autosave} onValueChange={setAutosave} />
             <Text style={styles.fillerHint}>Al termine di ogni diretta, la registrazione viene salvata come puntata del suo programma (visibile in “Le puntate”).</Text>

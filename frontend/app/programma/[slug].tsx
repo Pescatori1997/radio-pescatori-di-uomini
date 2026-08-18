@@ -5,7 +5,9 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { api, mediaUrl, audioSrc } from "@/src/api";
+import { api, mediaUrl, absUrl } from "@/src/api";
+import { detectProvider } from "@/src/utils/embeds";
+import MeditationPlayer from "@/src/components/MeditationPlayer";
 import { useAuth } from "@/src/context/AuthContext";
 import { colors, radius } from "@/src/theme";
 
@@ -26,6 +28,15 @@ function fmtDate(s: string): string {
   return d.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+/** Map a program episode to the media shape used by the unified in-app player. */
+function episodeToMedia(ep: any) {
+  const url = (ep?.audio_url || "").trim();
+  const m = url.match(/\/api\/media\/([^/?]+)/);
+  const thumbnail = imgUri(ep?.image) || undefined;
+  if (m) return { id: ep.id, title: ep.title, media_id: m[1], media_type: ep?.media_kind === "audio" ? "audio" : "video", thumbnail };
+  return { id: ep.id, title: ep.title, video_url: absUrl(url), provider: detectProvider(url), thumbnail };
+}
+
 export default function ProgramDetail() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const insets = useSafeAreaInsets();
@@ -36,6 +47,7 @@ export default function ProgramDetail() {
   const [tab, setTab] = useState<"episodes" | "info">("episodes");
   const [fav, setFav] = useState(false);
   const [crew, setCrew] = useState<any[]>([]);
+  const [playing, setPlaying] = useState<any>(null);
 
   useEffect(() => {
     api.crew().then((c: any[]) => setCrew(c || [])).catch(() => {});
@@ -64,7 +76,7 @@ export default function ProgramDetail() {
     if (c) Linking.openURL(c.includes("@") && !c.startsWith("mailto") ? `mailto:${c}` : c).catch(() => {});
     else router.push("/contact" as any);
   }, [p, router]);
-  const playEpisode = useCallback((ep: any) => { if (ep?.audio_url) Linking.openURL(audioSrc(ep.audio_url)).catch(() => {}); }, []);
+  const playEpisode = useCallback((ep: any) => { if (ep?.audio_url) setPlaying(ep); }, []);
 
   if (loading) return <View style={[styles.screen, styles.center]}><ActivityIndicator color={ACCENT} size="large" /></View>;
   if (!p) return (
@@ -185,8 +197,15 @@ export default function ProgramDetail() {
               <Text style={styles.infoMuted}>Ancora nessuna puntata pubblicata.</Text>
             ) : episodes.map((ep: any) => (
               <View key={ep.id || ep.title} style={styles.epRow}>
-                <Pressable onPress={() => playEpisode(ep)} hitSlop={8}>
-                  <Ionicons name="play-circle" size={34} color={ep.audio_url ? ACCENT : colors.muted} />
+                <Pressable onPress={() => playEpisode(ep)} hitSlop={8} style={styles.epThumbWrap}>
+                  {imgUri(ep.image) ? (
+                    <>
+                      <Image source={{ uri: imgUri(ep.image)! }} style={styles.epThumb} contentFit="cover" />
+                      <View style={styles.epThumbPlay}><Ionicons name="play" size={16} color="#fff" /></View>
+                    </>
+                  ) : (
+                    <Ionicons name="play-circle" size={34} color={ep.audio_url ? ACCENT : colors.muted} />
+                  )}
                 </Pressable>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.epTitle} numberOfLines={2}>{ep.title}</Text>
@@ -221,6 +240,21 @@ export default function ProgramDetail() {
           </View>
         )}
       </ScrollView>
+
+      {playing ? (
+        <View style={styles.playerOverlay}>
+          <Pressable style={styles.playerBackdrop} onPress={() => setPlaying(null)} />
+          <View style={[styles.playerSheet, { paddingTop: insets.top }]}>
+            <View style={styles.playerBar}>
+              <Text style={styles.playerTitle} numberOfLines={1}>{playing.title}</Text>
+              <Pressable testID="ep-player-close" onPress={() => setPlaying(null)} hitSlop={10}><Ionicons name="close" size={26} color="#fff" /></Pressable>
+            </View>
+            <View style={styles.playerBox}>
+              <MeditationPlayer m={episodeToMedia(playing)} />
+            </View>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -269,6 +303,9 @@ const styles = StyleSheet.create({
   tabText: { color: TEXT, fontSize: 14, fontWeight: "800" },
   tabTextActive: { color: "#fff" },
   epRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.border },
+  epThumbWrap: { width: 84, height: 48, borderRadius: 8, overflow: "hidden", alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceSecondary },
+  epThumb: { width: "100%", height: "100%" },
+  epThumbPlay: { position: "absolute", width: 30, height: 30, borderRadius: 15, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" },
   epTitle: { color: TEXT, fontSize: 15, fontWeight: "800" },
   epMeta: { color: colors.muted, fontSize: 12.5, marginTop: 3 },
   epDesc: { color: colors.muted, fontSize: 12.5, marginTop: 3 },
@@ -281,4 +318,10 @@ const styles = StyleSheet.create({
   socialRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   socialBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border },
   socialText: { color: TEXT, fontSize: 13, fontWeight: "700", textTransform: "capitalize" },
+  playerOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 },
+  playerBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.7)" },
+  playerSheet: { position: "absolute", top: 0, left: 0, right: 0, backgroundColor: colors.navy },
+  playerBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
+  playerTitle: { color: "#fff", fontSize: 15, fontWeight: "800", flex: 1 },
+  playerBox: { width: "100%", aspectRatio: 16 / 9, backgroundColor: "#000" },
 });
