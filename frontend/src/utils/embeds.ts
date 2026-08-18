@@ -40,15 +40,23 @@ export function detectProvider(url: string): string | null {
 }
 
 /**
- * Build an embed URL for a LIVE stream with autoplay (muted, so browsers/mobile
- * allow autostart; the viewer taps to unmute). Returns null if not embeddable.
+ * Build an embed URL for a LIVE/scheduled stream with autoplay (muted, so
+ * browsers/mobile allow autostart; the viewer taps to unmute). When
+ * `startSeconds` > 0 the video starts at that offset (time-synced replay).
+ * Returns null if not embeddable.
  */
-export function liveEmbedSrc(url: string, provider?: string | null): string | null {
+export function liveEmbedSrc(url: string, provider?: string | null, startSeconds = 0): string | null {
   const base = embedSrc(url, provider || detectProvider(url));
   if (!base) return null;
-  const sep = base.includes("?") ? "&" : "?";
-  if (base.includes("youtube.com/embed")) return `${base}${sep}autoplay=1&mute=1`;
-  if (base.includes("player.vimeo.com")) return `${base}${sep}autoplay=1&muted=1`;
+  const start = Math.max(0, Math.floor(startSeconds || 0));
+  if (base.includes("youtube.com/embed")) {
+    const sep = base.includes("?") ? "&" : "?";
+    return `${base}${sep}autoplay=1&mute=1${start > 0 ? `&start=${start}` : ""}`;
+  }
+  if (base.includes("player.vimeo.com")) {
+    const sep = base.includes("?") ? "&" : "?";
+    return `${base}${sep}autoplay=1&muted=1${start > 0 ? `#t=${start}s` : ""}`;
+  }
   return base;
 }
 

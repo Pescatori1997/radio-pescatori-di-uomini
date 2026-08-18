@@ -19,6 +19,7 @@ export default function Diretta() {
   const [muted, setMuted] = useState(false);
   const [playing, setPlaying] = useState(false);
   const lastUrl = useRef<string>("");
+  const lastEmbedBase = useRef<string>("");
   const targetSeek = useRef<number | null>(null);
   const videoRef = useRef<any>(null);
 
@@ -48,23 +49,31 @@ export default function Diretta() {
     setLoaded(true);
     const onAir = d?.on_air && d?.media?.url;
     const filler = d?.filler || {};
-    let rawUrl = "", seek: number | null = null, shouldLoop = false;
+    let rawUrl = "", seek: number | null = null, shouldLoop = false, embedStart = 0;
     if (onAir) {
       rawUrl = d.media.url;
+      const off = Math.max(0, Number(d?.offset_seconds || 0));
+      embedStart = off;
       if (d.media.is_live) { seek = null; shouldLoop = false; }        // real live stream → play at live edge
-      else { seek = Math.max(0, Number(d?.offset_seconds || 0)); shouldLoop = true; }  // recorded → time-synced + loop
+      else { seek = off; shouldLoop = true; }                          // recorded → time-synced + loop
     } else if (filler.url && (filler.kind === "video" || filler.kind === "audio")) {
-      rawUrl = filler.url; seek = 0; shouldLoop = true;
+      rawUrl = filler.url; seek = 0; shouldLoop = true; embedStart = 0;
     }
     // Embeddable provider (YouTube/Vimeo/Facebook/...) → iframe/WebView, NOT expo-video.
     const provider = detectProvider(rawUrl);
-    const embed = provider ? liveEmbedSrc(rawUrl, provider) : null;
-    if (embed) {
-      setEmbedUrl(embed);
+    if (provider) {
+      // Set the embed URL only when the source changes, so the iframe is NOT
+      // reloaded on every poll (which would restart the video). The start
+      // offset makes latecomers join at the synchronized position.
+      if (rawUrl !== lastEmbedBase.current) {
+        lastEmbedBase.current = rawUrl;
+        setEmbedUrl(liveEmbedSrc(rawUrl, provider, embedStart));
+      }
       lastUrl.current = "";
       try { player.pause(); } catch {}
       return;
     }
+    lastEmbedBase.current = "";
     setEmbedUrl(null);
     const url = rawUrl ? absUrl(rawUrl) : "";
     try {

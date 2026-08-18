@@ -582,3 +582,8 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - `(tabs)/index.tsx`: `sectionNode(key, half)` — in cella metà azzera i doppi margini di meteo (`wrapHalf`), palinsesto (paddingHorizontal 0) e prayer (`ctaHalf`), e aggiunge `numberOfLines` a titoli/sottotitoli (palinsesto vuoto, bacheca preghiere) + `minWidth:0` per evitare wrapping lettera-per-lettera.
 - Verse/Showcase/Collaborators/Bible/Piani/Traguardi già adattavano (misurano larghezza o scroll orizzontale o hanno variante inGrid).
 - Verificato a mano (mobile 390px) con 6 sezioni impostate a "Metà": WhatsApp impilato pulito, Community compatta, Meteo compatto, nessun overflow/testo spezzato. Layout utente ripristinato dopo il test.
+
+## Fix sync YouTube in Diretta (ripartiva da zero) (2026-06/08)
+- Problema: un video YouTube programmato ripartiva sempre da 0 per chi entrava dopo (l'embed iframe non riceveva l'offset).
+- Fix: `liveEmbedSrc(url, provider, startSeconds)` ora aggiunge `&start=<sec>` (YouTube) / `#t=<sec>s` (Vimeo). In `diretta.tsx` l'offset (`offset_seconds`) viene calcolato sempre per gli embed (a prescindere da is_live) e passato come start. L'embedUrl viene impostato SOLO quando cambia la sorgente (`lastEmbedBase` ref), così l'iframe non si ricarica ad ogni polling (15s) evitando il restart.
+- Verificato: iframe src = `youtube.com/embed/<id>?...&autoplay=1&mute=1&start=579`, invariato dopo 16s (nessun reload). Chi entra dopo parte dal punto sincronizzato.
