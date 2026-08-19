@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView, useWindowDimensions } from "react-native";
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, useWindowDimensions } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -59,6 +59,7 @@ export default function AdminShell({ title, activeKey, children }: { title: stri
   const [collapsed, setCollapsed] = useState(false);
   const [role, setRole] = useState<string | null>(null);
   const [perms, setPerms] = useState<string[]>([]);
+  const [ready, setReady] = useState(false);
   const [unread, setUnread] = useState(0);
   // Reactive breakpoint: the sidebar auto-switches between a fixed rail (wide
   // screens) and a slide-in drawer (narrow) as the window/resolution changes.
@@ -71,7 +72,8 @@ export default function AdminShell({ title, activeKey, children }: { title: stri
     let cancelled = false;
     api.adminMe()
       .then((r: any) => { if (!cancelled) { setRole(r.role); setPerms(r.permissions || []); } })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setReady(true); });
     const loadUnread = () => api.inboxUnread().then((r: any) => { if (!cancelled) setUnread(r.count || 0); }).catch(() => {});
     loadUnread();
     const iv = setInterval(loadUnread, 30000);
@@ -79,29 +81,26 @@ export default function AdminShell({ title, activeKey, children }: { title: stri
   }, []);
 
   const isCollab = role === "collaborator";
-  const navItems = useMemo(() => (
-    isCollab
-      ? NAV.filter((n) => {
-          if (!n.perm) return false;
-          if (n.perm === "agenda.view") return perms.some((p) => p.startsWith("agenda."));
-          return perms.includes(n.perm);
-        })
-      : NAV
-  ), [isCollab, perms]);
+  const hasPerm = (p?: string | null) => !!p && (p === "agenda.view" ? perms.some((x) => x.startsWith("agenda.")) : perms.includes(p));
+  const navItems = useMemo(() => {
+    if (!ready) return [];                       // avoid flashing the full menu before role is known
+    return isCollab ? NAV.filter((n) => hasPerm(n.perm)) : NAV;
+  }, [ready, isCollab, perms]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Is the current screen permitted for this user? (full admins & non-sidebar sub-screens allowed)
+  const current = NAV.find((n) => n.key === activeKey);
+  const allowedHere = role === "administrator" || !current || (isCollab && hasPerm(current.perm));
+  const showContent = ready && allowedHere;
 
   // Collaborators that land on an admin-only section get redirected to their first allowed one.
   useEffect(() => {
-    if (!isCollab) return;
-    const current = NAV.find((n) => n.key === activeKey);
+    if (!ready || !isCollab) return;
     if (!current) return; // screens not in the sidebar (inbox, detail views) are allowed
-    const allowed = current.perm
-      ? (current.perm === "agenda.view" ? perms.some((p) => p.startsWith("agenda.")) : perms.includes(current.perm))
-      : false;
-    if (!allowed && navItems.length > 0) {
+    if (!hasPerm(current.perm) && navItems.length > 0) {
       router.replace(navItems[0].route as any);
     }
     // `router` is stable in expo-router and intentionally excluded from deps.
-  }, [isCollab, activeKey, perms, navItems]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ready, isCollab, activeKey, perms, navItems]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const Sidebar = ({ onNav }: { onNav?: () => void }) => (
     <View style={[styles.sidebar, { paddingTop: wide ? insets.top + spacing.lg : spacing.lg }]}>
@@ -158,7 +157,11 @@ export default function AdminShell({ title, activeKey, children }: { title: stri
             )}
           </Pressable>
         </View>
-        <View style={{ flex: 1 }}>{children}</View>
+        <View style={{ flex: 1 }}>
+          {showContent ? children : (
+            <View style={styles.gate}><ActivityIndicator color={colors.brandSecondary} size="large" /></View>
+          )}
+        </View>
       </View>
 
       {!wide && open && (
@@ -177,6 +180,7 @@ export { ADMIN };
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: ADMIN.bg },
+  gate: { flex: 1, alignItems: "center", justifyContent: "center" },
   sidebar: { width: 260, backgroundColor: ADMIN.surface, paddingHorizontal: spacing.md, paddingBottom: spacing.lg, borderRightWidth: 1, borderRightColor: ADMIN.border, flex: 1 },
   brand: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: spacing.sm, marginBottom: spacing.xl },
   brandName: { color: colors.white, fontSize: 16, fontWeight: "800" },

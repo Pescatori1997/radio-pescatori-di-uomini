@@ -616,3 +616,8 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
   - users.tsx: lista permessi "Gestisci permessi" ora elenca TUTTE le sezioni (incluse avanzate Utenti/Impostazioni).
 - Verificato (token collaboratore reale): perms concessi (team→/admin/crew, content→/admin/contents, reports) = 200; non concessi (users, settings) = 403; admin pieno = accesso totale. Schermata Gestione Utenti carica senza crash.
 - NOTA sicurezza: concedere "Utenti" o "Impostazioni" a un collaboratore è potente (può gestire altri utenti/impostazioni). L'admin decide caso per caso, come richiesto.
+
+## Fix flash sezioni collaboratore (accesso momentaneo) (2026-06/08)
+- Problema: cambiando sezione, per qualche secondo un collaboratore vedeva TUTTE le voci del menu e il contenuto, prima che `adminMe()` risolvesse (role/perms non ancora noti → mostrava NAV completa).
+- Fix in `AdminShell.tsx`: stato `ready` (settato in `.finally` di adminMe). Finché `!ready`: `navItems=[]` (nessun menu) e `showContent=false` (spinner). Nuovo gate `showContent = ready && allowedHere` dove `allowedHere = admin || sotto-schermata non-in-NAV || (collaboratore con permesso)`; il contenuto reale (`children`) è renderizzato solo se permesso, altrimenti spinner + redirect alla prima sezione consentita. Redirect effect ora attende `ready`.
+- Verificato: admin vede tutto senza blocchi; niente più flash del menu completo. (Backend già protegge i dati con 403.)
