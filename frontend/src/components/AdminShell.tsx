@@ -12,14 +12,14 @@ import { colors, spacing, radius } from "@/src/theme";
 // Generic CMS sections (managed by the universal engine). Adding a section in
 // src/utils/sections.ts automatically adds it here — no panel restructuring needed.
 const CMS_NAV = CMS_SECTIONS.map((s) => ({
-  key: s.key, label: s.label, icon: s.icon, route: `/admin/content/${s.key}`, perm: null,
+  key: s.key, label: s.label, icon: s.icon, route: `/admin/content/${s.key}`, perm: "content",
 }));
 
 const NAV = [
-  { key: "dash", label: "Dashboard", icon: "view-dashboard", route: "/admin", perm: null },
-  { key: "stats", label: "Statistiche", icon: "chart-line", route: "/admin/statistiche", perm: null },
+  { key: "dash", label: "Dashboard", icon: "view-dashboard", route: "/admin", perm: "dashboard" },
+  { key: "stats", label: "Statistiche", icon: "chart-line", route: "/admin/statistiche", perm: "stats" },
   { key: "agenda", label: "Agenda", icon: "calendar-check", route: "/admin/agenda", perm: "agenda.view" },
-  { key: "team", label: "Team", icon: "anchor", route: "/admin/team", perm: null },
+  { key: "team", label: "Team", icon: "anchor", route: "/admin/team", perm: "team" },
   { key: "podcast", label: "Podcast", icon: "microphone", route: "/admin/podcasts", perm: "podcasts" },
   { key: "meditations", label: "Meditazioni", icon: "book-open-variant", route: "/admin/meditations", perm: "meditations" },
   ...CMS_NAV,
@@ -32,19 +32,19 @@ const NAV = [
   { key: "schedule", label: "Palinsesto", icon: "calendar-month", route: "/admin/schedule", perm: "schedule" },
   { key: "prayer", label: "Richieste di Preghiera", icon: "hands-pray", route: "/admin/prayers", perm: "prayers" },
   { key: "messages", label: "Messaggi & Testimonianze", icon: "message-text", route: "/admin/messages", perm: "messages" },
-  { key: "donations", label: "Donazioni", icon: "gift", route: "/admin/donations", perm: null },
-  { key: "donate_config", label: "Sostieni il Progetto", icon: "hand-heart", route: "/admin/donate-config", perm: null },
+  { key: "donations", label: "Donazioni", icon: "gift", route: "/admin/donations", perm: "donations" },
+  { key: "donate_config", label: "Sostieni il Progetto", icon: "hand-heart", route: "/admin/donate-config", perm: "donate_config" },
   { key: "finance", label: "Trasparenza Economica", icon: "chart-box", route: "/admin/finance", perm: "finance" },
-  { key: "notifications", label: "Notifiche", icon: "bell-ring", route: "/admin/notifications", perm: null },
-  { key: "reports", label: "Segnalazioni", icon: "message-alert", route: "/admin/reports", perm: null },
-  { key: "users", label: "Utenti", icon: "account-group", route: "/admin/users", perm: null },
-  { key: "activity", label: "Registro Attività", icon: "history", route: "/admin/activity", perm: null },
-  { key: "settings", label: "Impostazioni", icon: "cog", route: "/admin/settings", perm: null },
-  { key: "home_layout", label: "Layout Home", icon: "view-dashboard", route: "/admin/home-layout", perm: null },
-  { key: "nav_icons", label: "Personalizzazione Navigazione", icon: "gesture-tap-button", route: "/admin/nav-icons", perm: null },
-  { key: "section_names", label: "Nomi delle sezioni", icon: "rename-box", route: "/admin/section-names", perm: null },
-  { key: "library_folders", label: "Cartelle Biblioteca", icon: "folder-multiple", route: "/admin/library-folders", perm: null },
-  { key: "content_folders", label: "Assegna contenuti", icon: "folder-move", route: "/admin/content-folders", perm: null },
+  { key: "notifications", label: "Notifiche", icon: "bell-ring", route: "/admin/notifications", perm: "notifications" },
+  { key: "reports", label: "Segnalazioni", icon: "message-alert", route: "/admin/reports", perm: "reports" },
+  { key: "users", label: "Utenti", icon: "account-group", route: "/admin/users", perm: "users" },
+  { key: "activity", label: "Registro Attività", icon: "history", route: "/admin/activity", perm: "activity" },
+  { key: "settings", label: "Impostazioni", icon: "cog", route: "/admin/settings", perm: "settings" },
+  { key: "home_layout", label: "Layout Home", icon: "view-dashboard", route: "/admin/home-layout", perm: "home_layout" },
+  { key: "nav_icons", label: "Personalizzazione Navigazione", icon: "gesture-tap-button", route: "/admin/nav-icons", perm: "nav_icons" },
+  { key: "section_names", label: "Nomi delle sezioni", icon: "rename-box", route: "/admin/section-names", perm: "section_names" },
+  { key: "library_folders", label: "Cartelle Biblioteca", icon: "folder-multiple", route: "/admin/library-folders", perm: "library_folders" },
+  { key: "content_folders", label: "Assegna contenuti", icon: "folder-move", route: "/admin/content-folders", perm: "content_folders" },
 ];
 
 const ADMIN = {

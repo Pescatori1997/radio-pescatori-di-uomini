@@ -606,3 +606,13 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 
 ## Team/Equipaggio: sezioni vuote nascoste nella bio (2026-06/08)
 - `equipaggio/[id].tsx`: le sezioni ora si mostrano solo se compilate (trim-safe): Biografia (`m.bio`), Ministero (`m.ministry` — prima era sempre visibile), Testimonianza (`m.testimony`), Versetto+riferimento (`m.verse`/`m.verse_ref`), e la frase "mission" nell'header (poster e non). Verificato con membro di prova a campi vuoti: appare solo Biografia, niente Ministero/Testimonianza né virgolette vuote.
+
+## RBAC completo: TUTTE le sezioni admin delegabili ai collaboratori (2026-06/08)
+- Problema: "Team" (e altre) non si sbloccavano: nella NAV avevano `perm: null` → nascoste ai collaboratori anche se il permesso era concesso. Inoltre molte sezioni usavano `require_admin` (solo admin pieno).
+- Fix completo:
+  - AdminShell NAV: OGNI voce ora ha un `perm` (dashboard, stats, team, content [CMS], donations, donate_config, notifications, reports, users, activity, settings, home_layout, nav_icons, section_names, library_folders, content_folders, ...). Le CMS dinamiche usano perm `content`.
+  - Backend: nuovo helper `require_any_perm([...])`. Convertiti tutti i 34 endpoint `require_admin` → `require_perm("<key>")` (o `require_any_perm` per /admin/settings condiviso da Impostazioni/Layout Home/Navigazione/Nomi sezioni/Sostieni, e /admin/stats per stats+dashboard). Gli admin pieni bypassano sempre (require_perm consente role=administrator).
+  - `PERM_SECTIONS` esteso con: content, dashboard, stats, users, activity, settings, home_layout, nav_icons, section_names, donations, donate_config, notifications, reports, library_folders, content_folders. `ASSIGNABLE_PERMS = PERM_SECTIONS + AGENDA_PERMS` → /admin/me li restituisce all'admin.
+  - users.tsx: lista permessi "Gestisci permessi" ora elenca TUTTE le sezioni (incluse avanzate Utenti/Impostazioni).
+- Verificato (token collaboratore reale): perms concessi (team→/admin/crew, content→/admin/contents, reports) = 200; non concessi (users, settings) = 403; admin pieno = accesso totale. Schermata Gestione Utenti carica senza crash.
+- NOTA sicurezza: concedere "Utenti" o "Impostazioni" a un collaboratore è potente (può gestire altri utenti/impostazioni). L'admin decide caso per caso, come richiesto.

@@ -1085,7 +1085,7 @@ async def get_history(authorization: Optional[str] = Header(None)):
 ADMIN_EMAILS = [e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()]
 ROLE_ADMIN, ROLE_COLLAB, ROLE_LISTENER = "administrator", "collaborator", "listener"
 # Sections that can be delegated to a collaborator (each maps to an existing admin area).
-PERM_SECTIONS = ["podcasts", "meditations", "news", "showcase", "merch", "schedule", "prayers", "messages", "team", "radio", "verses", "plans", "achievements", "finance", "agenda"]
+PERM_SECTIONS = ["podcasts", "meditations", "news", "showcase", "merch", "schedule", "prayers", "messages", "team", "radio", "verses", "plans", "achievements", "finance", "agenda", "content", "dashboard", "stats", "users", "activity", "settings", "home_layout", "nav_icons", "section_names", "donations", "donate_config", "notifications", "reports", "library_folders", "content_folders"]
 
 # Granular Agenda permissions (configurable per collaborator by the Super Admin).
 AGENDA_PERMS = [
@@ -1258,6 +1258,22 @@ def require_perm(section: str):
     return dep
 
 
+def require_any_perm(sections: List[str]):
+    """Allow full admins, or collaborators holding ANY of the given permissions.
+    Used for endpoints shared by multiple admin screens (e.g. /admin/settings is
+    used by Impostazioni, Layout Home, Navigazione, Nomi sezioni, Sostieni)."""
+    async def dep(authorization: Optional[str] = Header(None)):
+        user = await get_current_user(authorization)
+        email = (user.get("email") or "").lower()
+        if user.get("role") == ROLE_ADMIN or email in ADMIN_EMAILS:
+            return user
+        perms = user.get("permissions") or []
+        if user.get("role") == ROLE_COLLAB and any(s in perms for s in sections):
+            return user
+        raise HTTPException(status_code=403, detail="Non hai i permessi per questa sezione")
+    return dep
+
+
 async def require_uploader(authorization: Optional[str] = Header(None)):
     """Generic media upload access: admins, or any collaborator that manages at
     least one section. The section endpoints (podcasts/meditations/...) still
@@ -1323,12 +1339,12 @@ async def library_folders_public():
 
 
 @api_router.get("/admin/library-folders")
-async def admin_library_folders(admin=Depends(require_admin)):
+async def admin_library_folders(admin=Depends(require_perm("library_folders"))):
     return await _folders_list()
 
 
 @api_router.post("/admin/library-folders")
-async def admin_create_folder(body: FolderCreateIn, admin=Depends(require_admin)):
+async def admin_create_folder(body: FolderCreateIn, admin=Depends(require_perm("library_folders"))):
     mx = await db.library_folders.find({}, {"order": 1}).sort("order", -1).limit(1).to_list(1)
     order = body.order if body.order is not None else ((mx[0].get("order", 0) + 1) if mx else 0)
     doc = {"id": str(uuid.uuid4()), "name": body.name, "icon": body.icon or "folder",
@@ -1338,7 +1354,7 @@ async def admin_create_folder(body: FolderCreateIn, admin=Depends(require_admin)
 
 
 @api_router.put("/admin/library-folders/{fid}")
-async def admin_update_folder(fid: str, body: FolderIn, admin=Depends(require_admin)):
+async def admin_update_folder(fid: str, body: FolderIn, admin=Depends(require_perm("library_folders"))):
     updates = {k: v for k, v in body.model_dump(exclude_unset=True).items()}
     if updates:
         await db.library_folders.update_one({"id": fid}, {"$set": updates})
@@ -1346,7 +1362,7 @@ async def admin_update_folder(fid: str, body: FolderIn, admin=Depends(require_ad
 
 
 @api_router.delete("/admin/library-folders/{fid}")
-async def admin_delete_folder(fid: str, admin=Depends(require_admin)):
+async def admin_delete_folder(fid: str, admin=Depends(require_perm("library_folders"))):
     await db.library_folders.delete_one({"id": fid})
     await db.content_folders.delete_many({"folder_id": fid})
     return {"ok": True}
@@ -1372,7 +1388,7 @@ async def _resolve_content_cards(item_type: str, ids: list):
 
 
 @api_router.get("/admin/content-catalog")
-async def admin_content_catalog(admin=Depends(require_admin)):
+async def admin_content_catalog(admin=Depends(require_perm("content_folders"))):
     """All favoritable content with its current folder assignment, for the
     admin 'assegna alle cartelle' screen."""
     await _seed_default_folders()
@@ -1393,7 +1409,7 @@ async def admin_content_catalog(admin=Depends(require_admin)):
 
 
 @api_router.post("/admin/content-folder")
-async def admin_set_content_folder(body: ContentFolderIn, admin=Depends(require_admin)):
+async def admin_set_content_folder(body: ContentFolderIn, admin=Depends(require_perm("content_folders"))):
     if body.folder_id:
         await db.content_folders.update_one(
             {"item_type": body.item_type, "item_id": body.item_id},
@@ -1531,7 +1547,7 @@ async def admin_me(authorization: Optional[str] = Header(None)):
 
 
 @api_router.get("/admin/stats")
-async def admin_stats(admin=Depends(require_admin)):
+async def admin_stats(admin=Depends(require_any_perm(["stats","dashboard"]))):
     return {
         "pending_applications": await db.crew_applications.count_documents({"status": "pending"}),
         "approved_members": await db.crew.count_documents({"published": True}),
@@ -2355,7 +2371,7 @@ async def admin_delete_message(mid: str, admin=Depends(require_perm("messages"))
 @api_router.get("/admin/users")
 async def admin_users(search: Optional[str] = None, role: Optional[str] = None,
                       status: Optional[str] = None, sort: Optional[str] = "recent",
-                      admin=Depends(require_admin)):
+                      admin=Depends(require_perm("users"))):
     query = {}
     if search:
         query["$or"] = [{"name": {"$regex": re.escape(search), "$options": "i"}}, {"email": {"$regex": re.escape(search), "$options": "i"}}]
@@ -2386,7 +2402,7 @@ class UserRoleIn(BaseModel):
 
 
 @api_router.put("/admin/users/{uid}/role")
-async def admin_set_user_role(uid: str, body: UserRoleIn, admin=Depends(require_admin)):
+async def admin_set_user_role(uid: str, body: UserRoleIn, admin=Depends(require_perm("users"))):
     u = await db.users.find_one({"user_id": uid})
     if not u:
         raise HTTPException(status_code=404, detail="Utente non trovato")
@@ -2412,7 +2428,7 @@ class UserStatusIn(BaseModel):
 
 
 @api_router.put("/admin/users/{uid}/status")
-async def admin_set_user_status(uid: str, body: UserStatusIn, admin=Depends(require_admin)):
+async def admin_set_user_status(uid: str, body: UserStatusIn, admin=Depends(require_perm("users"))):
     u = await db.users.find_one({"user_id": uid})
     if not u:
         raise HTTPException(status_code=404, detail="Utente non trovato")
@@ -2429,7 +2445,7 @@ async def admin_set_user_status(uid: str, body: UserStatusIn, admin=Depends(requ
 
 
 @api_router.delete("/admin/users/{uid}")
-async def admin_delete_user(uid: str, admin=Depends(require_admin)):
+async def admin_delete_user(uid: str, admin=Depends(require_perm("users"))):
     u = await db.users.find_one({"user_id": uid})
     if not u:
         raise HTTPException(status_code=404, detail="Utente non trovato")
@@ -2449,7 +2465,7 @@ class InvitationIn(BaseModel):
 
 
 @api_router.get("/admin/invitations")
-async def admin_invitations(admin=Depends(require_admin)):
+async def admin_invitations(admin=Depends(require_perm("users"))):
     docs = await db.invitations.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
     for d in docs:
         d["accept_url"] = f"{APP_BASE_URL}/invite?token={d['token']}" if APP_BASE_URL else f"/invite?token={d['token']}"
@@ -2457,7 +2473,7 @@ async def admin_invitations(admin=Depends(require_admin)):
 
 
 @api_router.post("/admin/invitations", status_code=201)
-async def admin_create_invitation(body: InvitationIn, admin=Depends(require_admin)):
+async def admin_create_invitation(body: InvitationIn, admin=Depends(require_perm("users"))):
     email_l = body.email.lower()
     existing_user = await db.users.find_one({"email": email_l})
     if existing_user:
@@ -2502,7 +2518,7 @@ async def admin_create_invitation(body: InvitationIn, admin=Depends(require_admi
 
 
 @api_router.delete("/admin/invitations/{inv_id}")
-async def admin_delete_invitation(inv_id: str, admin=Depends(require_admin)):
+async def admin_delete_invitation(inv_id: str, admin=Depends(require_perm("users"))):
     await db.invitations.delete_one({"id": inv_id})
     return {"ok": True}
 
@@ -2557,7 +2573,7 @@ async def accept_invitation(token: str, body: AcceptInvitationIn):
 
 # ---------------- Admin: Activity log ----------------
 @api_router.get("/admin/activity")
-async def admin_activity(limit: int = 100, admin=Depends(require_admin)):
+async def admin_activity(limit: int = 100, admin=Depends(require_perm("activity"))):
     docs = await db.activity_log.find({}, {"_id": 0}).sort("created_at", -1).to_list(min(max(limit, 1), 500))
     return docs
 
@@ -2931,14 +2947,14 @@ ABOUT_DEFAULTS = {
 
 
 @api_router.get("/admin/settings")
-async def admin_get_settings(admin=Depends(require_admin)):
+async def admin_get_settings(admin=Depends(require_any_perm(["settings","home_layout","nav_icons","section_names","donate_config"]))):
     doc = await db.settings.find_one({"_id": "general"}) or {}
     doc.pop("_id", None)
     return _with_section_defaults(doc)
 
 
 @api_router.put("/admin/settings")
-async def admin_update_settings(body: GeneralSettings, admin=Depends(require_admin)):
+async def admin_update_settings(body: GeneralSettings, admin=Depends(require_any_perm(["settings","home_layout","nav_icons","section_names","donate_config"]))):
     updates = body.model_dump(exclude_unset=True)
     if updates:
         await db.settings.update_one({"_id": "general"}, {"$set": updates}, upsert=True)
@@ -3784,7 +3800,7 @@ async def my_donations(authorization: Optional[str] = Header(None)):
 
 
 @api_router.get("/admin/donations")
-async def admin_donations(admin=Depends(require_admin)):
+async def admin_donations(admin=Depends(require_perm("donations"))):
     docs = await db.donation_transactions.find(
         {"payment_status": "paid"}, {"_id": 0}
     ).sort("created_at", -1).to_list(500)
@@ -3792,7 +3808,7 @@ async def admin_donations(admin=Depends(require_admin)):
 
 
 @api_router.get("/admin/donations/stats")
-async def admin_donation_stats(admin=Depends(require_admin)):
+async def admin_donation_stats(admin=Depends(require_perm("donations"))):
     paid = await db.donation_transactions.find({"payment_status": "paid"}, {"_id": 0}).to_list(5000)
     total = round(sum(d.get("amount", 0) for d in paid), 2)
     count = len(paid)
@@ -4030,7 +4046,7 @@ async def webpush_unsubscribe(body: WebPushSubscribeBody):
 
 
 @api_router.get("/admin/webpush/stats")
-async def webpush_stats(admin=Depends(require_admin)):
+async def webpush_stats(admin=Depends(require_perm("notifications"))):
     """Diagnostics: how many web-push devices are registered (total / logged-in / guest)."""
     total = await db.web_push_subs.count_documents({})
     anon = await db.web_push_subs.count_documents({"user_id": None})
@@ -4224,7 +4240,7 @@ class AdminNotifyIn(BaseModel):
 
 
 @api_router.post("/admin/notifications/send")
-async def admin_send_notification(body: AdminNotifyIn, admin=Depends(require_admin)):
+async def admin_send_notification(body: AdminNotifyIn, admin=Depends(require_perm("notifications"))):
     if body.category not in NOTIF_CATEGORIES:
         raise HTTPException(status_code=400, detail="Categoria non valida")
     if not body.title.strip() or not body.message.strip():
@@ -4236,7 +4252,7 @@ async def admin_send_notification(body: AdminNotifyIn, admin=Depends(require_adm
 
 
 @api_router.get("/admin/notifications")
-async def admin_notifications_log(admin=Depends(require_admin)):
+async def admin_notifications_log(admin=Depends(require_perm("notifications"))):
     docs = await db.notifications_log.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
     # Mongo returns naive UTC datetimes; emit them with an explicit UTC offset so
     # the client converts to the device's local timezone (Europe/Rome) correctly.
@@ -4248,7 +4264,7 @@ async def admin_notifications_log(admin=Depends(require_admin)):
 
 
 @api_router.get("/admin/notifications/audience")
-async def admin_notification_audience(admin=Depends(require_admin)):
+async def admin_notification_audience(admin=Depends(require_perm("notifications"))):
     """Recipient count per category for the admin preview."""
     out = {}
     for c in NOTIF_CATEGORIES:
@@ -4946,7 +4962,7 @@ async def get_content(cid: str):
 
 @api_router.get("/admin/contents")
 async def admin_contents(section: str, status: Optional[str] = None, search: Optional[str] = None,
-                         admin=Depends(require_admin)):
+                         admin=Depends(require_perm("content"))):
     _check_section(section)
     query: dict = {"section": section}
     if status:
@@ -4961,7 +4977,7 @@ async def admin_contents(section: str, status: Optional[str] = None, search: Opt
 
 
 @api_router.get("/admin/contents/item/{cid}")
-async def admin_get_content(cid: str, admin=Depends(require_admin)):
+async def admin_get_content(cid: str, admin=Depends(require_perm("content"))):
     doc = await db.contents.find_one({"id": cid}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Contenuto non trovato")
@@ -4969,7 +4985,7 @@ async def admin_get_content(cid: str, admin=Depends(require_admin)):
 
 
 @api_router.post("/admin/contents", status_code=201)
-async def admin_create_content(body: ContentIn, admin=Depends(require_admin)):
+async def admin_create_content(body: ContentIn, admin=Depends(require_perm("content"))):
     _check_section(body.section)
     doc = body.model_dump()
     doc["id"] = new_id("cnt")
@@ -4987,7 +5003,7 @@ async def admin_create_content(body: ContentIn, admin=Depends(require_admin)):
 
 
 @api_router.patch("/admin/contents/{cid}")
-async def admin_edit_content(cid: str, body: ContentEdit, admin=Depends(require_admin)):
+async def admin_edit_content(cid: str, body: ContentEdit, admin=Depends(require_perm("content"))):
     prev = await db.contents.find_one({"id": cid})
     if not prev:
         raise HTTPException(status_code=404, detail="Contenuto non trovato")
@@ -5000,7 +5016,7 @@ async def admin_edit_content(cid: str, body: ContentEdit, admin=Depends(require_
 
 
 @api_router.post("/admin/contents/{cid}/duplicate", status_code=201)
-async def admin_duplicate_content(cid: str, admin=Depends(require_admin)):
+async def admin_duplicate_content(cid: str, admin=Depends(require_perm("content"))):
     doc = await db.contents.find_one({"id": cid}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Contenuto non trovato")
@@ -5015,7 +5031,7 @@ async def admin_duplicate_content(cid: str, admin=Depends(require_admin)):
 
 
 @api_router.delete("/admin/contents/{cid}")
-async def admin_delete_content(cid: str, admin=Depends(require_admin)):
+async def admin_delete_content(cid: str, admin=Depends(require_perm("content"))):
     doc = await db.contents.find_one({"id": cid}, {"media_id": 1})
     if doc:
         # Only delete the GridFS file if no other content references it (duplicates share it).
@@ -5079,7 +5095,7 @@ async def create_report(body: ReportIn, authorization: Optional[str] = Header(No
 @api_router.get("/admin/reports")
 async def admin_reports(status: Optional[str] = None, category: Optional[str] = None,
                         search: Optional[str] = None, sort: Optional[str] = "desc",
-                        admin=Depends(require_admin)):
+                        admin=Depends(require_perm("reports"))):
     query: dict = {}
     if status and status in REPORT_STATUSES:
         query["status"] = status
@@ -5099,12 +5115,12 @@ async def admin_reports(status: Optional[str] = None, category: Optional[str] = 
 
 
 @api_router.get("/admin/reports/unread-count")
-async def admin_reports_unread(admin=Depends(require_admin)):
+async def admin_reports_unread(admin=Depends(require_perm("reports"))):
     return {"count": await db.reports.count_documents({"read": {"$ne": True}})}
 
 
 @api_router.get("/admin/reports/{rid}")
-async def admin_get_report(rid: str, admin=Depends(require_admin)):
+async def admin_get_report(rid: str, admin=Depends(require_perm("reports"))):
     doc = await db.reports.find_one({"id": rid}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Segnalazione non trovata")
@@ -5116,7 +5132,7 @@ async def admin_get_report(rid: str, admin=Depends(require_admin)):
 
 
 @api_router.patch("/admin/reports/{rid}")
-async def admin_update_report(rid: str, body: ReportStatusIn, admin=Depends(require_admin)):
+async def admin_update_report(rid: str, body: ReportStatusIn, admin=Depends(require_perm("reports"))):
     if body.status not in REPORT_STATUSES:
         raise HTTPException(status_code=400, detail="Stato non valido")
     res = await db.reports.update_one({"id": rid}, {"$set": {"status": body.status, "read": True, "updated_at": now_utc()}})
@@ -5127,7 +5143,7 @@ async def admin_update_report(rid: str, body: ReportStatusIn, admin=Depends(requ
 
 
 @api_router.delete("/admin/reports/{rid}")
-async def admin_delete_report(rid: str, admin=Depends(require_admin)):
+async def admin_delete_report(rid: str, admin=Depends(require_perm("reports"))):
     await db.reports.delete_one({"id": rid})
     return {"ok": True}
 
