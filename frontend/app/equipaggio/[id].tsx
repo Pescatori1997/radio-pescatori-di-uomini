@@ -53,7 +53,7 @@ export default function CrewProfile() {
                   <Text style={styles.roleTagText}>{m.role}</Text>
                 </View>
                 <Text style={styles.name}>{m.name}</Text>
-                <Text style={styles.mission}>{`"${m.mission}"`}</Text>
+                {!!(m.mission && m.mission.trim()) && <Text style={styles.mission}>{`"${m.mission}"`}</Text>}
               </View>
             </>
           )}
@@ -69,20 +69,22 @@ export default function CrewProfile() {
               <Text style={styles.roleTagText}>{m.role}</Text>
             </View>
             <Text style={styles.posterName}>{m.name}</Text>
-            <Text style={styles.posterMission}>{`"${m.mission}"`}</Text>
+            {!!(m.mission && m.mission.trim()) && <Text style={styles.posterMission}>{`"${m.mission}"`}</Text>}
           </View>
         )}
 
         <View style={styles.content}>
-          {!m.poster && (
+          {!m.poster && !!(m.bio && m.bio.trim()) && (
             <Section icon="account-heart" title="Biografia" delay={60}>
               <Text style={styles.body}>{m.bio}</Text>
             </Section>
           )}
 
-          <Section icon="hand-heart" title="Ministero" delay={120}>
-            <Text style={styles.body}>{m.ministry}</Text>
-          </Section>
+          {!!(m.ministry && m.ministry.trim()) && (
+            <Section icon="hand-heart" title="Ministero" delay={120}>
+              <Text style={styles.body}>{m.ministry}</Text>
+            </Section>
+          )}
 
           {m.programs?.length > 0 && (
             <Section icon="radio" title="Programmi condotti" delay={180}>
@@ -94,15 +96,15 @@ export default function CrewProfile() {
             </Section>
           )}
 
-          {m.verse && !m.poster && (
+          {!!(m.verse && m.verse.trim()) && !m.poster && (
             <Animated.View entering={FadeInDown.duration(400).delay(240)} style={styles.verseCard}>
               <MaterialCommunityIcons name="format-quote-open" size={28} color={colors.brandPrimary} />
               <Text style={styles.verseText}>{m.verse}</Text>
-              <Text style={styles.verseRef}>{m.verse_ref}</Text>
+              {!!(m.verse_ref && m.verse_ref.trim()) && <Text style={styles.verseRef}>{m.verse_ref}</Text>}
             </Animated.View>
           )}
 
-          {m.testimony && (
+          {!!(m.testimony && m.testimony.trim()) && (
             <Section icon="star-four-points" title="Testimonianza" delay={300}>
               <Text style={styles.body}>{m.testimony}</Text>
             </Section>

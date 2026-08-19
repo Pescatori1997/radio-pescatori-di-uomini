@@ -603,3 +603,6 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 
 ## Timoteo: rimossi i bottoni rapidi (2026-06/08)
 - Su richiesta utente rimossa la riga di scorciatoie (QUICK: Trova un versetto, Cerca un podcast, Ascolta la radio, ecc.) da `Timoteo.tsx`. Ora l'assistente mostra solo il messaggio di benvenuto + la casella di input (chat normale). Rimossi costante QUICK, variabile showSuggestions e blocco di rendering. Verificato: nessun chip, input presente.
+
+## Team/Equipaggio: sezioni vuote nascoste nella bio (2026-06/08)
+- `equipaggio/[id].tsx`: le sezioni ora si mostrano solo se compilate (trim-safe): Biografia (`m.bio`), Ministero (`m.ministry` — prima era sempre visibile), Testimonianza (`m.testimony`), Versetto+riferimento (`m.verse`/`m.verse_ref`), e la frase "mission" nell'header (poster e non). Verificato con membro di prova a campi vuoti: appare solo Biografia, niente Ministero/Testimonianza né virgolette vuote.
