@@ -50,18 +50,6 @@ const SCREEN_PATHS: Record<string, string> = {
   contact: "/contact",
 };
 
-const QUICK: { icon: string; label: string; prompt: string }[] = [
-  { icon: "📖", label: "Trova un versetto", prompt: "Trova un versetto" },
-  { icon: "🎙️", label: "Cerca un podcast", prompt: "Cerca un podcast" },
-  { icon: "📻", label: "Ascolta la radio", prompt: "Ascolta la radio" },
-  { icon: "🙏", label: "Richieste di preghiera", prompt: "Apri le richieste di preghiera" },
-  { icon: "📚", label: "Studi biblici", prompt: "Apri gli studi biblici" },
-  { icon: "📰", label: "Ultime notizie", prompt: "Mostrami le ultime notizie" },
-  { icon: "💭", label: "Meditazioni", prompt: "Apri le meditazioni" },
-  { icon: "👤", label: "Il mio profilo", prompt: "Apri il mio profilo" },
-  { icon: "⚙️", label: "Impostazioni", prompt: "Apri le impostazioni" },
-];
-
 const HIDDEN_ROOTS = ["welcome", "auth", "login", "invite", "reset-password", "admin", "player"];
 // While the user is reading (Bible reader, CMS articles, news) the bubble fades
 // to a discreet, semi-transparent state so it never covers the text.
@@ -319,7 +307,6 @@ export default function Timoteo() {
 
   if (hidden) return null;
 
-  const showSuggestions = messages.length <= 1;
   const lastMsg = messages[messages.length - 1];
   const streamingNow = !!(lastMsg && lastMsg.role === "assistant" && lastMsg.streaming);
 
@@ -394,16 +381,6 @@ export default function Timoteo() {
                     </View>
                   </View>
                 ))}
-
-                {showSuggestions && (
-                  <View style={styles.suggWrap}>
-                    {QUICK.map((q) => (
-                      <Pressable key={q.label} testID={`timoteo-quick-${q.label}`} onPress={() => send(q.prompt)} style={styles.chip}>
-                        <Text style={styles.chipText}>{q.icon}  {q.label}</Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                )}
 
                 {loading && !streamingNow && (
                   <View style={[styles.bubbleRow, styles.rowLeft]}>
