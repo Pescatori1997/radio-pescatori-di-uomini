@@ -621,3 +621,9 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Problema: cambiando sezione, per qualche secondo un collaboratore vedeva TUTTE le voci del menu e il contenuto, prima che `adminMe()` risolvesse (role/perms non ancora noti → mostrava NAV completa).
 - Fix in `AdminShell.tsx`: stato `ready` (settato in `.finally` di adminMe). Finché `!ready`: `navItems=[]` (nessun menu) e `showContent=false` (spinner). Nuovo gate `showContent = ready && allowedHere` dove `allowedHere = admin || sotto-schermata non-in-NAV || (collaboratore con permesso)`; il contenuto reale (`children`) è renderizzato solo se permesso, altrimenti spinner + redirect alla prima sezione consentita. Redirect effect ora attende `ready`.
 - Verificato: admin vede tutto senza blocchi; niente più flash del menu completo. (Backend già protegge i dati con 403.)
+
+## Fix Diretta: tasto riduci + descrizione (2026-06/08)
+- Tasto "riduci" (chevron giù): faceva solo router.back() → no-op se aperto senza cronologia (link diretto/refresh). Ora: se non c'è cronologia fa `router.replace("/(tabs)")`, così esce sempre dalla Diretta e mostra il mini-player. Aggiunto `backBtn` (44x44, zIndex 20) per tap affidabile.
+- Descrizione: la Diretta ora mostra `subtitle` + descrizione con fallback `description || long_description` (nell'editor ci sono due campi: "Descrizione" e "Descrizione completa"). Backend `/live/now` ora include anche `long_description`.
+- Verificato: descrizione+sottotitolo mostrati; tasto riduci → torna a /palinsesto con mini visibile.
+- IMPORTANTE: l'utente vedeva il problema in PRODUCTION perché le modifiche precedenti (descrizione in /live/now) non erano ancora ripubblicate. Serve Publish.

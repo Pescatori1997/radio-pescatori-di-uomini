@@ -161,7 +161,7 @@ export default function Diretta() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.topBar}>
-        <Pressable testID="diretta-back" onPress={() => { if ((onAir && data?.media) || fillerMedia || embedUrl) mini.open(); router.back(); }} hitSlop={12}><Ionicons name="chevron-down" size={28} color={colors.white} /></Pressable>
+        <Pressable testID="diretta-back" onPress={() => { if ((onAir && data?.media) || fillerMedia || embedUrl) mini.open(); if (router.canGoBack()) router.back(); else router.replace("/(tabs)" as any); }} hitSlop={16} style={styles.backBtn}><Ionicons name="chevron-down" size={28} color={colors.white} /></Pressable>
         <View style={styles.liveTag}><View style={styles.liveDot} /><Text style={styles.liveTagText}>DIRETTA</Text></View>
         <View style={{ width: 28 }} />
       </View>
@@ -203,9 +203,10 @@ export default function Diretta() {
           )}
           <View style={styles.info}>
             <Text style={styles.progTitle} numberOfLines={2}>{prog?.title}</Text>
+            {!!(prog?.subtitle && prog.subtitle.trim()) && <Text style={styles.progHost} numberOfLines={1}>{prog.subtitle}</Text>}
             {!!prog?.host && <Text style={styles.progHost} numberOfLines={1}>con {prog.host}</Text>}
             {!!(prog?.start_time && prog?.end_time) && <Text style={styles.progTime}>{prog.start_time} – {prog.end_time}{data?.media?.is_live ? "  ·  LIVE" : ""}</Text>}
-            {!!prog?.description && <Text style={styles.progDesc}>{prog.description}</Text>}
+            {!!(prog?.description || prog?.long_description) && <Text style={styles.progDesc}>{prog.description || prog.long_description}</Text>}
           </View>
           {UpNext}
          </View>
@@ -263,7 +264,8 @@ export default function Diretta() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.navy },
-  topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
+  topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, zIndex: 20 },
+  backBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center", marginLeft: -8, zIndex: 20 },
   liveTag: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(239,68,68,0.15)", paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999 },
   liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.error },
   liveTagText: { color: colors.white, fontSize: 12, fontWeight: "900", letterSpacing: 1 },
