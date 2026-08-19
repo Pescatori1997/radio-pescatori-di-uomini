@@ -14,6 +14,8 @@ import { ensureIconFontFaces } from "@/src/iconFonts";
 import { setupPWA } from "@/src/utils/pwa";
 import { AuthProvider, useAuth } from "@/src/context/AuthContext";
 import { PlayerProvider } from "@/src/context/PlayerContext";
+import { LiveMiniProvider } from "@/src/context/LiveMiniContext";
+import GlobalLiveMini from "@/src/components/live/GlobalLiveMini";
 import { WeatherProvider } from "@/src/weather/WeatherContext";
 import { SettingsProvider } from "@/src/context/SettingsContext";
 import InstallPrompt from "@/src/components/InstallPrompt";
@@ -132,6 +134,7 @@ export default function RootLayout() {
           <SettingsProvider>
           <PlayerProvider>
             <WeatherProvider>
+            <LiveMiniProvider>
             <StatusBar style="light" />
             <AuthGate />
             <PushListeners />
@@ -169,8 +172,10 @@ export default function RootLayout() {
               <Stack.Screen name="admin" />
             </Stack>
             <GlobalTabBar />
+            <GlobalLiveMini />
             <Timoteo />
             </DesktopFrame>
+            </LiveMiniProvider>
             </WeatherProvider>
           </PlayerProvider>
           </SettingsProvider>

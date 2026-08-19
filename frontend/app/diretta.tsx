@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, ActivityIndicator, Pressable, Platform } from "react-native";
+import { View, Text, StyleSheet, ActivityIndicator, Pressable, Platform, ScrollView, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { useVideoPlayer, VideoView } from "expo-video";
@@ -8,11 +8,15 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, absUrl } from "@/src/api";
 import { detectProvider, liveEmbedSrc } from "@/src/utils/embeds";
 import EmbedFrame from "@/src/components/live/EmbedFrame";
+import { useLiveMini } from "@/src/context/LiveMiniContext";
 import { colors, spacing, radius } from "@/src/theme";
 
 export default function Diretta() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isWide = width >= 768;
+  const mini = useLiveMini();
   const [data, setData] = useState<any>(null);
   const [loaded, setLoaded] = useState(false);
   const [embedUrl, setEmbedUrl] = useState<string | null>(null);
@@ -106,6 +110,9 @@ export default function Diretta() {
 
   useEffect(() => { try { player.muted = muted; } catch {} }, [muted, player]);
 
+  // Opening the full Diretta closes the floating mini (avoid double audio).
+  useEffect(() => { mini.close(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   useFocusEffect(
     useCallback(() => {
       fetchLive();
@@ -154,7 +161,7 @@ export default function Diretta() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.topBar}>
-        <Pressable testID="diretta-back" onPress={() => router.back()} hitSlop={12}><Ionicons name="chevron-down" size={28} color={colors.white} /></Pressable>
+        <Pressable testID="diretta-back" onPress={() => { if ((onAir && data?.media) || fillerMedia || embedUrl) mini.open(); router.back(); }} hitSlop={12}><Ionicons name="chevron-down" size={28} color={colors.white} /></Pressable>
         <View style={styles.liveTag}><View style={styles.liveDot} /><Text style={styles.liveTagText}>DIRETTA</Text></View>
         <View style={{ width: 28 }} />
       </View>
@@ -162,7 +169,8 @@ export default function Diretta() {
       {!loaded ? (
         <View style={styles.center}><ActivityIndicator color={colors.brandSecondary} size="large" /></View>
       ) : onAir && data?.media ? (
-        <View style={styles.stage}>
+        <ScrollView style={styles.stage} contentContainerStyle={styles.stageContent}>
+         <View style={[styles.col, isWide && styles.colWide]}>
           {embedUrl ? (
             <View style={styles.video}><EmbedFrame url={embedUrl} testID="diretta-embed" /></View>
           ) : isVideo ? (
@@ -197,9 +205,11 @@ export default function Diretta() {
             <Text style={styles.progTitle} numberOfLines={2}>{prog?.title}</Text>
             {!!prog?.host && <Text style={styles.progHost} numberOfLines={1}>con {prog.host}</Text>}
             {!!(prog?.start_time && prog?.end_time) && <Text style={styles.progTime}>{prog.start_time} – {prog.end_time}{data?.media?.is_live ? "  ·  LIVE" : ""}</Text>}
+            {!!prog?.description && <Text style={styles.progDesc}>{prog.description}</Text>}
           </View>
           {UpNext}
-        </View>
+         </View>
+        </ScrollView>
       ) : fillerMedia ? (
         <View style={styles.stage}>
           {embedUrl ? (
@@ -259,7 +269,10 @@ const styles = StyleSheet.create({
   liveTagText: { color: colors.white, fontSize: 12, fontWeight: "900", letterSpacing: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl, gap: spacing.md },
   stage: { flex: 1 },
-  video: { width: "100%", aspectRatio: 16 / 9, backgroundColor: "#000", marginTop: spacing.md },
+  stageContent: { paddingBottom: spacing.xl, alignItems: "center" },
+  col: { width: "100%" },
+  colWide: { maxWidth: 820, alignSelf: "center" },
+  video: { width: "100%", aspectRatio: 16 / 9, backgroundColor: "#000", marginTop: spacing.md, alignSelf: "center", ...(Platform.OS === "web" ? { maxHeight: 460 } as any : {}) },
   vidOverlay: { position: "absolute", top: 8, right: 8, flexDirection: "row", gap: 8 },
   vidBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center" },
   tapPlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", gap: 10 },
@@ -274,6 +287,7 @@ const styles = StyleSheet.create({
   progTitle: { color: colors.white, fontSize: 24, fontWeight: "900" },
   progHost: { color: "#CBD5E1", fontSize: 15, fontWeight: "600" },
   progTime: { color: colors.brandSecondary, fontSize: 14, fontWeight: "700", marginTop: 4 },
+  progDesc: { color: "#CBD5E1", fontSize: 14, lineHeight: 21, marginTop: spacing.sm },
   offIcon: { width: 100, height: 100, borderRadius: 50, backgroundColor: colors.navySoft, alignItems: "center", justifyContent: "center" },
   offTitle: { color: colors.white, fontSize: 20, fontWeight: "800", marginTop: spacing.sm },
   offSub: { color: "#94A3B8", fontSize: 15, textAlign: "center", lineHeight: 22, paddingHorizontal: spacing.lg },

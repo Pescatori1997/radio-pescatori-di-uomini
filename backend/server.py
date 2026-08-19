@@ -278,6 +278,8 @@ async def live_now():
         "on_air": True,
         "program": {"id": on_air["id"], "title": on_air["title"], "host": on_air.get("host") or "",
                     "hero_image": on_air.get("hero_image") or "", "slug": on_air.get("slug"),
+                    "description": on_air.get("description") or "", "subtitle": on_air.get("subtitle") or "",
+                    "category": on_air.get("category") or "",
                     "start_time": start, "end_time": end},
         "media": media, "offset_seconds": offset, "duration_seconds": duration, "ends_in_seconds": ends_in,
     })

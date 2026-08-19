@@ -76,8 +76,10 @@ export default function Palinsesto() {
     const photos = ((p.presenters || []).map((pr: any) => imgUri(pr?.image)).filter(Boolean)) as string[];
     if (photos.length === 0) { const f = imgUri(p.images && p.images[0]); if (f) photos.push(f); }
     const shown = photos.slice(0, 3);
+    const hasBroadcast = !!(p.broadcast_media_url || p.broadcast_is_live);
+    const openProgram = () => router.push((live && hasBroadcast ? "/diretta" : `/programma/${p.slug || p.id}`) as any);
     return (
-      <Pressable key={p.id} testID={`prog-${p.id}`} onPress={() => router.push(`/programma/${p.slug || p.id}` as any)} style={[styles.card, live && styles.cardLive]}>
+      <Pressable key={p.id} testID={`prog-${p.id}`} onPress={openProgram} style={[styles.card, live && styles.cardLive]}>
         <View style={[styles.thumbWrap, shown.length > 1 && { width: 60 + (shown.length - 1) * 22 }]}>
           {shown.length === 0 ? (
             <View style={[styles.thumb, styles.thumbEmpty]}><Ionicons name="mic" size={24} color={ACCENT} /></View>

@@ -587,3 +587,16 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Problema: un video YouTube programmato ripartiva sempre da 0 per chi entrava dopo (l'embed iframe non riceveva l'offset).
 - Fix: `liveEmbedSrc(url, provider, startSeconds)` ora aggiunge `&start=<sec>` (YouTube) / `#t=<sec>s` (Vimeo). In `diretta.tsx` l'offset (`offset_seconds`) viene calcolato sempre per gli embed (a prescindere da is_live) e passato come start. L'embedUrl viene impostato SOLO quando cambia la sorgente (`lastEmbedBase` ref), così l'iframe non si ricarica ad ogni polling (15s) evitando il restart.
 - Verificato: iframe src = `youtube.com/embed/<id>?...&autoplay=1&mute=1&start=579`, invariato dopo 16s (nessun reload). Chi entra dopo parte dal punto sincronizzato.
+
+## Diretta: descrizione, sizing desktop, link Palinsesto (2026-06/08)
+- #1 Descrizione: `/live/now` ora restituisce `program.description/subtitle/category`; `diretta.tsx` mostra la descrizione sotto titolo/host/orario (stile progDesc).
+- #3 Sizing desktop: `diretta.tsx` on-air ora è in ScrollView con colonna centrata `colWide` (maxWidth 820) e video maxHeight ~460 su web → non più gigante, leggibile, scrollabile, con fullscreen (bottone per file / controlli YouTube per embed). Verificato desktop 1200px: iframe 820x460, descrizione visibile.
+- #4 Link Palinsesto→Diretta: in `(tabs)/palinsesto.tsx` il tap su un programma LIVE che ha broadcast (`broadcast_media_url` o `broadcast_is_live`) apre `/diretta` invece di `/programma/[slug]`. Verificato: tap su programma in onda → URL /diretta.
+- #2 PiP mini-player: DA FARE (in attesa conferma approccio/scope con l'utente — feature grande, web-first).
+
+## Mini-player Diretta flottante e trascinabile (PiP) (2026-06/08)
+- Richiesta: mini-player stile YouTube, trascinabile liberamente, che continua mentre si naviga (ovunque).
+- Approccio: poiché la Diretta è sincronizzata al tempo, un'istanza indipendente del player riproduce `/live/now` allo stesso offset → sembra "continui". Montato nel ROOT layout così persiste tra le navigazioni in-app.
+- File nuovi: `src/context/LiveMiniContext.tsx` (provider `visible/open/close`), `src/components/live/GlobalLiveMini.tsx` (finestra flottante 224px, drag con PanResponder+Animated, barra con titolo + Espandi + Chiudi; embed YouTube via EmbedFrame o file via expo-video con sync offset). Montato in `app/_layout.tsx` sotto LiveMiniProvider, accanto a GlobalTabBar/Timoteo.
+- `diretta.tsx`: il pulsante "riduci" (chevron giù) apre il mini prima di router.back(); all'apertura della Diretta il mini si chiude (niente doppio audio). Il mini è nascosto quando si è sulla rotta `diretta` (via useSegments).
+- Verificato (web): minimize da Diretta → torna a palinsesto con mini visibile (iframe + tasti); navigazione in-app su Home → mini PERSISTE; Espandi → torna a /diretta e mini nascosto (no doppio audio). Nota: su native i video YouTube nel mini non sono interattivi (tap = espandi), i video caricati sì.
