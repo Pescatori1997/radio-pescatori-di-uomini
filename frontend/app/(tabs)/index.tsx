@@ -11,6 +11,7 @@ import { api, audioSrc } from "@/src/api";
 import { currentProgram } from "@/src/utils/onair";
 import { usePlayer } from "@/src/context/PlayerContext";
 import { useSettings } from "@/src/context/SettingsContext";
+import { useSiteText } from "@/src/context/SiteTextsContext";
 import WeatherWidget from "@/src/components/WeatherWidget";
 import Collaborators from "@/src/components/Collaborators";
 import WhatsAppSection from "@/src/components/WhatsAppSection";
@@ -37,6 +38,7 @@ export default function Home() {
   const isDesktop = width >= 768;
   const { playLive, playTrack, track, isPlaying, liveInfo } = usePlayer();
   const { sectionVisible, settings } = useSettings();
+  const { st } = useSiteText();
   const t = useLabel();
   const [podcasts, setPodcasts] = useState<any[]>([]);
   const [programs, setPrograms] = useState<any[]>([]);
@@ -84,7 +86,7 @@ export default function Home() {
       case "podcast":
         return (
           <>
-            <SectionHeader title={t("home_podcast")} onPress={() => router.push("/podcast")} />
+            <SectionHeader title={t("home_podcast")} seeAll={st("home", "see_all")} onPress={() => router.push("/podcast")} />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hRow}>
               {podcasts.slice(0, 6).map((p) => (
                 <PressableScale key={p.id} testID={`home-podcast-${p.id}`} style={styles.podCard}
@@ -102,7 +104,7 @@ export default function Home() {
       case "palinsesto":
         return (
           <>
-            <SectionHeader title={t("home_palinsesto")} onPress={() => router.push("/palinsesto")} />
+            <SectionHeader title={t("home_palinsesto")} seeAll={st("home", "see_all")} onPress={() => router.push("/palinsesto")} />
             <View style={half ? undefined : { paddingHorizontal: spacing.lg }}>
               <PressableScale testID="home-onair" style={styles.onAirCard} onPress={() => router.push("/palinsesto")}>
                 {onAir ? (
@@ -128,8 +130,8 @@ export default function Home() {
                   <>
                     <View style={[styles.onAirAvatar, styles.onAirAvatarEmpty]}><Ionicons name="radio-outline" size={22} color={colors.muted} /></View>
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={styles.onAirTitle} numberOfLines={2}>Nessun programma in onda</Text>
-                      <Text style={styles.onAirHost} numberOfLines={2}>Visualizza il palinsesto completo</Text>
+                      <Text style={styles.onAirTitle} numberOfLines={2}>{st("home", "no_program_title")}</Text>
+                      <Text style={styles.onAirHost} numberOfLines={2}>{st("home", "no_program_sub")}</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={20} color={colors.muted} />
                   </>
@@ -137,7 +139,7 @@ export default function Home() {
               </PressableScale>
               <PressableScale testID="home-view-schedule" style={styles.scheduleBtn} onPress={() => router.push("/palinsesto")}>
                 <Ionicons name="calendar-outline" size={18} color={colors.brandPrimary} />
-                <Text style={styles.scheduleBtnText}>Visualizza palinsesto</Text>
+                <Text style={styles.scheduleBtnText}>{st("home", "schedule_btn")}</Text>
               </PressableScale>
             </View>
           </>
@@ -159,14 +161,14 @@ export default function Home() {
           <>
             <Pressable testID="prayer-cta" style={[styles.prayerCta, half && styles.ctaHalf]} onPress={() => router.push("/prayer")}>
               <Ionicons name="heart" size={20} color={colors.brandPrimary} />
-              <Text style={styles.prayerCtaText} numberOfLines={2}>Invia una richiesta di preghiera</Text>
+              <Text style={styles.prayerCtaText} numberOfLines={2}>{st("home", "prayer_cta")}</Text>
               <Ionicons name="chevron-forward" size={18} color={colors.muted} />
             </Pressable>
             <Pressable testID="prayer-board-cta" style={[styles.boardCta, half && styles.ctaHalf]} onPress={() => router.push("/prayer-board")}>
               <View style={styles.boardIcon}><Ionicons name="heart" size={20} color={colors.white} /></View>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.boardTitle} numberOfLines={2}>Bacheca delle Richieste di Preghiera</Text>
-                <Text style={styles.boardSub} numberOfLines={2}>Prega per i tuoi fratelli e sorelle</Text>
+                <Text style={styles.boardTitle} numberOfLines={2}>{st("home", "board_title")}</Text>
+                <Text style={styles.boardSub} numberOfLines={2}>{st("home", "board_sub")}</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.7)" />
             </Pressable>
@@ -229,40 +231,40 @@ export default function Home() {
             <Logo size={52} shadow />
           </View>
           <View>
-            <Text style={styles.brandName}>Pescatori di Uomini</Text>
-            <Text style={styles.slogan}>La radio che annuncia il Vangelo</Text>
+            <Text style={styles.brandName}>{st("home", "brand_name")}</Text>
+            <Text style={styles.slogan}>{st("home", "slogan")}</Text>
           </View>
         </Animated.View>
 
         <Animated.View entering={FadeInDown.duration(500).delay(120)} style={styles.liveBadge} testID="live-indicator">
           {isLive ? <PulsingDot color={colors.success} size={8} /> : <View style={[styles.dot, { backgroundColor: colors.error }]} />}
-          <Text style={styles.liveText}>{liveInfo?.live_mode ? "IN DIRETTA" : live?.is_live ? "IN DIRETTA ORA" : "NON IN ONDA"}</Text>
+          <Text style={styles.liveText}>{liveInfo?.live_mode ? st("home", "badge_live_mode") : live?.is_live ? st("home", "badge_live") : st("home", "badge_offline")}</Text>
         </Animated.View>
 
         {liveInfo?.live_mode ? (
           <>
             <Animated.View entering={FadeInDown.duration(500).delay(180)} testID="live-now-banner">
-              <Text style={styles.liveNowTitle}>🔴 Siamo in diretta</Text>
-              <Text style={styles.liveNowSub}>Guarda la diretta streaming ora in corso</Text>
+              <Text style={styles.liveNowTitle}>{st("home", "live_now_title")}</Text>
+              <Text style={styles.liveNowSub}>{st("home", "live_now_sub")}</Text>
             </Animated.View>
             <Animated.View style={ctaPulse}>
               <PressableScale testID="watch-live-button" style={styles.cta} onPress={() => router.push("/live")}>
                 <Ionicons name="videocam" size={22} color={colors.navy} />
-                <Text style={styles.ctaText}>Guarda la diretta</Text>
+                <Text style={styles.ctaText}>{st("home", "cta_watch_live")}</Text>
               </PressableScale>
             </Animated.View>
           </>
         ) : (
           <>
             <Animated.View entering={FadeInDown.duration(500).delay(180)}>
-              <Text style={styles.nowLabel}>ORA IN ONDA</Text>
+              <Text style={styles.nowLabel}>{st("home", "now_label")}</Text>
               <Text style={styles.nowTitle} numberOfLines={1}>{live?.title}</Text>
               <Text style={styles.nowArtist} numberOfLines={1}>{live?.artist}</Text>
             </Animated.View>
             <Animated.View style={ctaPulse}>
               <PressableScale testID="listen-live-button" style={styles.cta} onPress={onListen}>
                 <Ionicons name={isLivePlaying ? "pause" : "play"} size={22} color={colors.navy} />
-                <Text style={styles.ctaText}>{isLivePlaying ? "In riproduzione" : "Ascolta la Diretta"}</Text>
+                <Text style={styles.ctaText}>{isLivePlaying ? st("home", "cta_listening") : st("home", "cta_listen")}</Text>
               </PressableScale>
             </Animated.View>
           </>
@@ -286,11 +288,11 @@ export default function Home() {
   );
 }
 
-function SectionHeader({ title, onPress }: { title: string; onPress: () => void }) {
+function SectionHeader({ title, seeAll, onPress }: { title: string; seeAll: string; onPress: () => void }) {
   return (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionTitle}>{title}</Text>
-      <Pressable onPress={onPress} hitSlop={8}><Text style={styles.seeAll}>Vedi tutti</Text></Pressable>
+      <Pressable onPress={onPress} hitSlop={8}><Text style={styles.seeAll}>{seeAll}</Text></Pressable>
     </View>
   );
 }

@@ -627,3 +627,13 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Descrizione: la Diretta ora mostra `subtitle` + descrizione con fallback `description || long_description` (nell'editor ci sono due campi: "Descrizione" e "Descrizione completa"). Backend `/live/now` ora include anche `long_description`.
 - Verificato: descrizione+sottotitolo mostrati; tasto riduci → torna a /palinsesto con mini visibile.
 - IMPORTANTE: l'utente vedeva il problema in PRODUCTION perché le modifiche precedenti (descrizione in /live/now) non erano ancora ripubblicate. Serve Publish.
+
+## Personalizzazione Sito — Fase 2: Testi Home + Player (2026-06)
+- Completata la Fase 2 del sistema "Personalizzazione sito": l'admin può ora modificare i testi (titoli, sottotitoli, pulsanti, etichette, messaggi) di **Home** e **Player** dal pannello, senza toccare il codice.
+- **Schema centralizzato** `src/siteTexts.ts` (`SITE_TEXT_SCHEMA` + `SITE_TEXT_DEFAULTS`): unica fonte di verità per chiavi, etichette e testi predefiniti. Aggiungere un campo qui lo rende editabile in Admin e leggibile nell'app.
+- **Provider** `src/context/SiteTextsContext.tsx` (`SiteTextsProvider` + `useSiteText().st(group,key)`): fetch di `/api/site-settings` una sola volta, cache del gruppo `texts`. Ogni lookup fa **fallback sicuro** al testo hardcoded originale se il campo è vuoto/mancante o la richiesta fallisce → l'app non si rompe mai. Montato in `_layout.tsx` dentro `SettingsProvider`.
+- **Editor admin** `app/admin/site-texts.tsx`: form raggruppato (Home/Player) con placeholder = testo predefinito; salva via `PUT /admin/site-settings` (deep-merge server-side, tocca solo i gruppi `texts.home`/`texts.player`, preserva tutto il resto). Voce "Testi del sito" attivata nella Hub `/admin/site.tsx` (prima era "prossimamente").
+- Applicato a `app/(tabs)/index.tsx` (hero: nome/slogan/badge diretta/live-now/CTA/ora-in-onda; sezioni: Vedi tutti, palinsesto vuoto, pulsante palinsesto, CTA preghiera, bacheca titolo/sottotitolo) e `app/player.tsx` (etichette top, tag diretta/riconnessione/offline, in onda adesso/dopo, ultimi brani, nessun dato, empty state, chiudi).
+- Backend invariato (endpoint `GET /site-settings` + `PUT /admin/site-settings` con `_deep_merge` già presenti dalla Fase 1; perm `site`).
+- Verificato: Home renderizza con fallback corretti; round-trip Admin API (PUT slogan/cta_listen/top_label → GET → Home mostra i nuovi testi "La radio del Vangelo per tutti"/"Ascolta ora"); reset a "" ripristina i default. Nessuna regressione, design invariato.
+- **Prossimo (Fase 3)**: estendere i testi editabili a tutte le altre sezioni (Podcast, Notizie, Meditazioni, Palinsesto, ecc.) + eventualmente metadati sezione e aspetto.

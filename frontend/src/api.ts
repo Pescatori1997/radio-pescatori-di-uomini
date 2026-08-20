@@ -334,6 +334,8 @@ export const api = {
   agendaAttachDelete: (aid: string) => request(`/agenda/attachments/${aid}`, { method: "DELETE" }, true),
   agendaAudit: (eid: string) => request(`/agenda/events/${eid}/audit`, {}, true),
   adminStats: () => request("/admin/stats", {}, true),
+  siteSettings: () => request("/site-settings"),
+  adminUpdateSiteSettings: (body: any) => request("/admin/site-settings", { method: "PUT", body: JSON.stringify(body) }, true),
   adminApplications: (status?: string, sort?: string, search?: string) => {
     const q = new URLSearchParams();
     if (status) q.set("status", status);

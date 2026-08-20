@@ -10,6 +10,7 @@ import PressableScale from "@/src/components/PressableScale";
 import { colors, spacing, radius } from "@/src/theme";
 
 const SECTIONS: { key: string; label: string }[] = [
+  { key: "site", label: "Personalizzazione sito" },
   { key: "podcasts", label: "Podcast" },
   { key: "meditations", label: "Meditazioni" },
   { key: "content", label: "Contenuti (Galleria, Eventi, ecc.)" },

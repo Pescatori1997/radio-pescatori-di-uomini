@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePlayer } from "@/src/context/PlayerContext";
+import { useSiteText } from "@/src/context/SiteTextsContext";
 import PressableScale from "@/src/components/PressableScale";
 import LiveListeners from "@/src/components/community/LiveListeners";
 import { colors, spacing, radius } from "@/src/theme";
@@ -66,11 +67,13 @@ export default function PlayerScreen() {
   const router = useRouter();
   const { track, isPlaying, isBuffering, togglePlay, volume, setVolume, position, duration, seekTo, liveInfo, connection } = usePlayer();
 
+  const { st } = useSiteText();
+
   if (!track) {
     return (
       <View style={[styles.container, styles.center]}>
-        <Text style={styles.emptyText}>Nessun contenuto in riproduzione</Text>
-        <Pressable style={styles.closeEmpty} onPress={() => router.back()}><Text style={styles.closeEmptyText}>Chiudi</Text></Pressable>
+        <Text style={styles.emptyText}>{st("player", "empty")}</Text>
+        <Pressable style={styles.closeEmpty} onPress={() => router.back()}><Text style={styles.closeEmptyText}>{st("player", "close")}</Text></Pressable>
       </View>
     );
   }
@@ -91,7 +94,7 @@ export default function PlayerScreen() {
           <Pressable testID="player-close" onPress={() => router.back()} hitSlop={12}>
             <Ionicons name="chevron-down" size={28} color={colors.white} />
           </Pressable>
-          <Text style={styles.topLabel}>{track.isLive ? "DIRETTA RADIO" : "PODCAST"}</Text>
+          <Text style={styles.topLabel}>{track.isLive ? st("player", "top_label_live") : st("player", "top_label_podcast")}</Text>
           <Pressable testID="player-share" onPress={onShare} hitSlop={12}>
             <Ionicons name="share-outline" size={24} color={colors.white} />
           </Pressable>
@@ -110,7 +113,7 @@ export default function PlayerScreen() {
             <View style={[styles.liveTag, connection === "reconnecting" ? styles.tagWarn : connection === "offline" ? styles.tagErr : null]}>
               <View style={[styles.liveDotSm, connection === "reconnecting" ? { backgroundColor: colors.warning } : connection === "offline" ? { backgroundColor: colors.error } : null]} />
               <Text style={[styles.liveTagText, connection === "reconnecting" ? { color: colors.warning } : connection === "offline" ? { color: colors.error } : null]}>
-                {connection === "reconnecting" ? "RICONNESSIONE..." : connection === "offline" ? "NON IN ONDA" : "IN DIRETTA"}
+                {connection === "reconnecting" ? st("player", "tag_reconnecting") : connection === "offline" ? st("player", "tag_offline") : st("player", "tag_live")}
               </Text>
             </View>
             {typeof liveInfo?.listeners === "number" && liveInfo.listeners > 0 && (
@@ -152,7 +155,7 @@ export default function PlayerScreen() {
               <View style={styles.infoCard}>
                 <View style={styles.infoHead}>
                   <Ionicons name="radio" size={15} color={colors.brandSecondary} />
-                  <Text style={styles.infoLabel}>IN ONDA ADESSO</Text>
+                  <Text style={styles.infoLabel}>{st("player", "on_air_now")}</Text>
                 </View>
                 <Text style={styles.infoTitle} numberOfLines={1}>{liveInfo.current_program.title}</Text>
                 {!!liveInfo.current_program.host && (
@@ -168,7 +171,7 @@ export default function PlayerScreen() {
             <View style={styles.infoCard}>
               <View style={styles.infoHead}>
                 <Ionicons name="play-forward" size={15} color={colors.brandSecondary} />
-                <Text style={styles.infoLabel}>IN ONDA DOPO</Text>
+                <Text style={styles.infoLabel}>{st("player", "on_air_next")}</Text>
               </View>
               {liveInfo?.playing_next?.title || liveInfo?.playing_next?.artist ? (
                 <>
@@ -186,7 +189,7 @@ export default function PlayerScreen() {
                   )}
                 </>
               ) : (
-                <Text style={styles.infoEmpty}>Nessun dato disponibile</Text>
+                <Text style={styles.infoEmpty}>{st("player", "no_data")}</Text>
               )}
             </View>
 
@@ -194,7 +197,7 @@ export default function PlayerScreen() {
             <View style={styles.historyWrap}>
               <View style={styles.infoHead}>
                 <Ionicons name="time-outline" size={16} color={colors.brandSecondary} />
-                <Text style={styles.infoLabel}>ULTIMI BRANI TRASMESSI</Text>
+                <Text style={styles.infoLabel}>{st("player", "recent_songs")}</Text>
               </View>
               {liveInfo?.song_history && liveInfo.song_history.length > 0 ? (
                 liveInfo.song_history.map((h, i) => (
@@ -212,7 +215,7 @@ export default function PlayerScreen() {
               ) : (
                 <View style={styles.emptyBox}>
                   <Ionicons name="musical-notes-outline" size={22} color={colors.muted} />
-                  <Text style={styles.infoEmpty}>Nessun dato disponibile</Text>
+                  <Text style={styles.infoEmpty}>{st("player", "no_data")}</Text>
                 </View>
               )}
             </View>

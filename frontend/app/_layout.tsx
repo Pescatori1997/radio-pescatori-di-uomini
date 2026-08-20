@@ -18,6 +18,7 @@ import { LiveMiniProvider } from "@/src/context/LiveMiniContext";
 import GlobalLiveMini from "@/src/components/live/GlobalLiveMini";
 import { WeatherProvider } from "@/src/weather/WeatherContext";
 import { SettingsProvider } from "@/src/context/SettingsContext";
+import { SiteTextsProvider } from "@/src/context/SiteTextsContext";
 import InstallPrompt from "@/src/components/InstallPrompt";
 import Timoteo from "@/src/components/timoteo/Timoteo";
 import GlobalTabBar from "@/src/components/GlobalTabBar";
@@ -132,6 +133,7 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <AuthProvider>
           <SettingsProvider>
+          <SiteTextsProvider>
           <PlayerProvider>
             <WeatherProvider>
             <LiveMiniProvider>
@@ -178,6 +180,7 @@ export default function RootLayout() {
             </LiveMiniProvider>
             </WeatherProvider>
           </PlayerProvider>
+          </SiteTextsProvider>
           </SettingsProvider>
         </AuthProvider>
       </SafeAreaProvider>

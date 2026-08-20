@@ -17,6 +17,7 @@ const CMS_NAV = CMS_SECTIONS.map((s) => ({
 
 const NAV = [
   { key: "dash", label: "Dashboard", icon: "view-dashboard", route: "/admin", perm: "dashboard" },
+  { key: "site", label: "Personalizzazione sito", icon: "tune-variant", route: "/admin/site", perm: "site" },
   { key: "stats", label: "Statistiche", icon: "chart-line", route: "/admin/statistiche", perm: "stats" },
   { key: "agenda", label: "Agenda", icon: "calendar-check", route: "/admin/agenda", perm: "agenda.view" },
   { key: "team", label: "Team", icon: "anchor", route: "/admin/team", perm: "team" },

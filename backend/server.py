@@ -1086,7 +1086,7 @@ async def get_history(authorization: Optional[str] = Header(None)):
 ADMIN_EMAILS = [e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()]
 ROLE_ADMIN, ROLE_COLLAB, ROLE_LISTENER = "administrator", "collaborator", "listener"
 # Sections that can be delegated to a collaborator (each maps to an existing admin area).
-PERM_SECTIONS = ["podcasts", "meditations", "news", "showcase", "merch", "schedule", "prayers", "messages", "team", "radio", "verses", "plans", "achievements", "finance", "agenda", "content", "dashboard", "stats", "users", "activity", "settings", "home_layout", "nav_icons", "section_names", "donations", "donate_config", "notifications", "reports", "library_folders", "content_folders"]
+PERM_SECTIONS = ["podcasts", "meditations", "news", "showcase", "merch", "schedule", "prayers", "messages", "team", "radio", "verses", "plans", "achievements", "finance", "agenda", "content", "dashboard", "stats", "users", "activity", "settings", "home_layout", "nav_icons", "section_names", "donations", "donate_config", "notifications", "reports", "library_folders", "content_folders", "site"]
 
 # Granular Agenda permissions (configurable per collaborator by the Super Admin).
 AGENDA_PERMS = [
@@ -2213,6 +2213,49 @@ async def get_testimonies():
         {"_id": 0, "admin_notes": 0},
     ).sort("published_at", -1).to_list(200)
     return docs
+
+
+# ---------------- Centralized Site Settings (extensible CMS foundation) ----------------
+# Non-destructive: stored as a single document `site_settings/site` with grouped
+# sub-objects. New keys can be added over time without migrations. Existing
+# feature-specific settings (general settings, home_layout, nav, section names)
+# remain untouched; this is an additive layer that the frontend can read.
+SITE_SETTINGS_GROUPS = ["navigation", "sections", "home", "texts", "images", "icons", "features", "appearance"]
+
+
+def _site_defaults() -> dict:
+    return {g: {} for g in SITE_SETTINGS_GROUPS}
+
+
+def _deep_merge(base: dict, patch: dict) -> dict:
+    """Recursively merge patch into base (patch wins). Non-destructive: keys not
+    present in patch are kept. Used so admins can update one field at a time."""
+    out = dict(base or {})
+    for k, v in (patch or {}).items():
+        if isinstance(v, dict) and isinstance(out.get(k), dict):
+            out[k] = _deep_merge(out[k], v)
+        else:
+            out[k] = v
+    return out
+
+
+@api_router.get("/site-settings")
+async def get_site_settings():
+    doc = await db.site_settings.find_one({"_id": "site"}) or {}
+    doc.pop("_id", None)
+    return _deep_merge(_site_defaults(), doc)
+
+
+@api_router.put("/admin/site-settings")
+async def update_site_settings(payload: Dict[str, Any], admin=Depends(require_perm("site"))):
+    """Deep-merge the provided partial config into the stored document. Only the
+    provided keys are changed; everything else is preserved."""
+    current = await db.site_settings.find_one({"_id": "site"}) or {}
+    current.pop("_id", None)
+    merged = _deep_merge(_deep_merge(_site_defaults(), current), payload or {})
+    await db.site_settings.update_one({"_id": "site"}, {"$set": merged}, upsert=True)
+    return {"ok": True, "site_settings": merged}
+
 
 
 # ---------------- Public: Settings ----------------
