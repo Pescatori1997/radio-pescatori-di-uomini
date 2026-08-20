@@ -88,7 +88,9 @@ export default function AdminSectionMeta() {
               </View>
               {!!s.hint && <Text style={styles.hint}>{s.hint}</Text>}
 
-              <AInput testID={`meta-name-${s.key}`} label="Nome visualizzato" value={m.name ?? ""} onChangeText={(v: string) => setField(s.key, "name", v)} placeholder={s.defaultName} />
+              {s.supportsName !== false && (
+                <AInput testID={`meta-name-${s.key}`} label="Nome visualizzato" value={m.name ?? ""} onChangeText={(v: string) => setField(s.key, "name", v)} placeholder={s.defaultName} />
+              )}
 
               {s.supportsSubtitle && (
                 <AInput testID={`meta-subtitle-${s.key}`} label="Sottotitolo" value={m.subtitle ?? ""} onChangeText={(v: string) => setField(s.key, "subtitle", v)} placeholder={s.defaultSubtitle || "(nessuno)"} />

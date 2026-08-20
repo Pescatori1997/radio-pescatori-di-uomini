@@ -13,6 +13,7 @@ export type SectionMetaDef = {
   visKey?: string; // matching section_visibility key (existing), if any
   defaultName: string; // fallback header title
   defaultSubtitle?: string; // fallback subtitle (screens that already show one)
+  supportsName?: boolean; // default true; set false for sections without an editable title
   supportsSubtitle?: boolean;
   supportsDescription?: boolean;
   supportsImage?: boolean;
@@ -20,6 +21,7 @@ export type SectionMetaDef = {
 };
 
 export const SECTION_META_CATALOG: SectionMetaDef[] = [
+  { key: "home", label: "Home — Intestazione", defaultName: "", supportsName: false, supportsImage: true, hint: "Foto di sfondo dell'intestazione in cima alla Home. Lascia vuoto per l'immagine predefinita." },
   { key: "podcast", label: "Podcast", visKey: "podcast", defaultName: "Podcast", supportsSubtitle: true, supportsDescription: true, supportsImage: true, hint: "Titolo, sottotitolo, descrizione e copertina in cima alla schermata Podcast." },
   { key: "news", label: "Notizie", visKey: "news", defaultName: "Notizie", supportsSubtitle: true, supportsDescription: true, supportsImage: true, hint: "Intestazione della schermata Notizie." },
   { key: "palinsesto", label: "Palinsesto", visKey: "palinsesto", defaultName: "PALINSESTO", supportsSubtitle: true, hint: "Etichetta e sottotitolo in cima al Palinsesto." },

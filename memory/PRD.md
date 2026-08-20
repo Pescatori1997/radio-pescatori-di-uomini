@@ -658,3 +658,10 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Hub `/admin/site.tsx`: "Aspetto" ora attivo (non più "prossimamente").
 - Verificato: entry gira su web (console log), applica il colore ovunque; round-trip backend appearance OK; default ripristinato a 'sky'.
 - **CONFIG PROTETTA MODIFICATA**: `package.json main` = `index.js` (era `expo-router/entry`). index.js fa `require("expo-router/entry")` dopo la mutazione. Se compare "Cannot resolve entry file", ripristinare questa relazione.
+
+## Personalizzazione Sito — Foto intestazione Home (2026-06)
+- Richiesta utente: poter cambiare la foto di sfondo dell'intestazione (hero) in cima alla Home (prima fissa: `assets/images/studio.png`).
+- Implementato riusando l'infrastruttura Metadati sezione: aggiunta voce catalogo `home` (`SECTION_META_CATALOG` in `src/sectionMeta.ts`) con `supportsImage:true` e `supportsName:false` (solo immagine, nessun titolo). Aggiunto flag `supportsName` (default true) e reso condizionale il campo Nome in `app/admin/section-meta.tsx`.
+- Wiring Home `app/(tabs)/index.tsx`: `const heroImg = sm("home").image;` e `<Image source={heroImg ? { uri: heroImg } : STUDIO} .../>`. Fallback sicuro alla foto predefinita se vuoto. Overlay/gradient invariati.
+- Salvataggio in `site_settings.sections.home.image` (base64 via AImagePicker, quality 0.6). L'Admin la trova in Metadati sezione, card "Home — Intestazione" (in cima).
+- Verificato: round-trip backend OK; screenshot Home conferma lo swap dell'immagine hero; reset a vuoto ripristina la foto default. Nessuna regressione.

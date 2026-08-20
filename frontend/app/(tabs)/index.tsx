@@ -38,7 +38,8 @@ export default function Home() {
   const isDesktop = width >= 768;
   const { playLive, playTrack, track, isPlaying, liveInfo } = usePlayer();
   const { sectionVisible, settings } = useSettings();
-  const { st } = useSiteText();
+  const { st, sm } = useSiteText();
+  const heroImg = sm("home").image;
   const t = useLabel();
   const [podcasts, setPodcasts] = useState<any[]>([]);
   const [programs, setPrograms] = useState<any[]>([]);
@@ -221,7 +222,7 @@ export default function Home() {
     >
       {/* HERO (fixed, not part of the configurable layout) */}
       <View style={[styles.hero, { paddingTop: insets.top + spacing.lg }]}>
-        <Image source={STUDIO} style={StyleSheet.absoluteFill} contentFit="cover" contentPosition="top" blurRadius={1} />
+        <Image source={heroImg ? { uri: heroImg } : STUDIO} style={StyleSheet.absoluteFill} contentFit="cover" contentPosition="top" blurRadius={1} />
         <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(10,17,40,0.65)" }]} />
         <LinearGradient colors={["rgba(10,17,40,0.35)", "rgba(10,17,40,0.92)"]} style={StyleSheet.absoluteFill} />
         <Animated.View pointerEvents="none" style={[styles.heroGlow, glowStyle]} />
