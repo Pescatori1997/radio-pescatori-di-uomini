@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { api } from "@/src/api";
 import { SITE_TEXT_DEFAULTS, SiteTextGroupKey } from "@/src/siteTexts";
+import { cachePaletteKey } from "@/src/appearance";
 
 type TextsShape = Record<string, Record<string, string>>;
 type SectionsShape = Record<string, Record<string, string>>;
@@ -35,6 +36,9 @@ export function SiteTextsProvider({ children }: { children: React.ReactNode }) {
     api.siteSettings().then((d: any) => {
       setTexts((d?.texts as TextsShape) || {});
       setSections((d?.sections as SectionsShape) || {});
+      // Cache the selected accent palette so it applies from the next app launch.
+      const paletteKey = d?.appearance?.palette;
+      if (typeof paletteKey === "string" && paletteKey) cachePaletteKey(paletteKey);
     }).catch(() => {});
   }, []);
 

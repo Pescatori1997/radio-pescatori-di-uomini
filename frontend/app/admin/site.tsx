@@ -37,12 +37,7 @@ const GROUPS: { title: string; items: { label: string; desc: string; icon: any; 
     items: [
       { label: "Testi del sito", desc: "Modifica titoli, pulsanti e messaggi (Home, Player e sezioni)", icon: "format-text", route: "/admin/site-texts" },
       { label: "Metadati sezione", desc: "Nome, sottotitolo, descrizione, copertina e visibilità di ogni sezione", icon: "card-text-outline", route: "/admin/section-meta" },
-    ],
-  },
-  {
-    title: "In arrivo (prossime fasi)",
-    items: [
-      { label: "Aspetto", desc: "Colori e stile compatibili con il design attuale", icon: "palette", soon: true },
+      { label: "Aspetto", desc: "Scegli il colore principale dell'app (palette pronte all'uso)", icon: "palette", route: "/admin/appearance" },
     ],
   },
 ];
