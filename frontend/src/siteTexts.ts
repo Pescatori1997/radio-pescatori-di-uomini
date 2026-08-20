@@ -5,7 +5,7 @@
 // (or the field was never saved), the app shows exactly the original text.
 
 export type SiteTextField = { key: string; label: string; default: string; multiline?: boolean };
-export type SiteTextGroupKey = "home" | "player";
+export type SiteTextGroupKey = string;
 export type SiteTextGroup = { group: SiteTextGroupKey; title: string; hint?: string; fields: SiteTextField[] };
 
 export const SITE_TEXT_SCHEMA: SiteTextGroup[] = [
@@ -50,6 +50,42 @@ export const SITE_TEXT_SCHEMA: SiteTextGroup[] = [
       { key: "no_data", label: "Messaggio nessun dato", default: "Nessun dato disponibile" },
       { key: "empty", label: "Messaggio nessun contenuto", default: "Nessun contenuto in riproduzione" },
       { key: "close", label: "Pulsante chiudi", default: "Chiudi" },
+    ],
+  },
+  {
+    group: "podcast",
+    title: "Podcast",
+    hint: "Testi della schermata Podcast (il titolo si gestisce in Metadati sezione).",
+    fields: [
+      { key: "search_placeholder", label: "Segnaposto ricerca", default: "Cerca podcast, studi, testimonianze..." },
+      { key: "empty", label: "Nessun risultato", default: "Nessun podcast trovato" },
+      { key: "featured", label: "Titolo 'In evidenza'", default: "In evidenza" },
+    ],
+  },
+  {
+    group: "news",
+    title: "Notizie",
+    hint: "Testi della schermata Notizie (il titolo si gestisce in Metadati sezione).",
+    fields: [
+      { key: "search_placeholder", label: "Segnaposto ricerca", default: "Cerca notizie..." },
+      { key: "empty", label: "Nessun risultato", default: "Nessuna notizia trovata" },
+      { key: "read_more", label: "Link 'Leggi di più'", default: "Leggi di più ›" },
+    ],
+  },
+  {
+    group: "palinsesto",
+    title: "Palinsesto",
+    hint: "Testi della schermata Palinsesto (l'etichetta si gestisce in Metadati sezione).",
+    fields: [
+      { key: "empty", label: "Nessun programma", default: "Nessun programma in griglia oggi · Radio H24 in diretta" },
+    ],
+  },
+  {
+    group: "merch",
+    title: "Merchandising",
+    hint: "Testi della vetrina Merchandising (titolo/descrizione in Metadati sezione).",
+    fields: [
+      { key: "kicker", label: "Etichetta in alto", default: "SHOP UFFICIALE" },
     ],
   },
 ];

@@ -5,12 +5,15 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/src/api";
 import { useAuth } from "@/src/context/AuthContext";
+import { useSiteText } from "@/src/context/SiteTextsContext";
 import { colors, spacing, radius } from "@/src/theme";
 
 export default function Messages() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
+  const { sm } = useSiteText();
+  const meta = sm("messages");
   const [type, setType] = useState<"message" | "testimony">("message");
   const [text, setText] = useState("");
   const [name, setName] = useState("");
@@ -37,11 +40,11 @@ export default function Messages() {
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <Pressable testID="messages-back" onPress={() => router.back()} hitSlop={12}><Ionicons name="arrow-back" size={24} color={colors.onSurface} /></Pressable>
-        <Text style={styles.headerTitle}>Messaggi</Text>
+        <Text style={styles.headerTitle}>{meta.name ?? "Messaggi"}</Text>
         <View style={{ width: 24 }} />
       </View>
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }} keyboardShouldPersistTaps="handled">
-        <Text style={styles.intro}>Invia un messaggio o una testimonianza: la leggeremo durante le dirette.</Text>
+        <Text style={styles.intro}>{meta.subtitle ?? "Invia un messaggio o una testimonianza: la leggeremo durante le dirette."}</Text>
 
         {!user && (
           <Pressable testID="msg-login-prompt" style={styles.guestPrompt} onPress={() => router.push("/login")}>

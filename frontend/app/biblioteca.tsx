@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import PressableScale from "@/src/components/PressableScale";
 import { useLabel } from "@/src/utils/labels";
+import { useSiteText } from "@/src/context/SiteTextsContext";
 import { useAuth } from "@/src/context/AuthContext";
 import { api } from "@/src/api";
 import { colors, spacing, radius } from "@/src/theme";
@@ -14,6 +15,8 @@ export default function Biblioteca() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const t = useLabel();
+  const { sm } = useSiteText();
+  const meta = sm("biblioteca");
   const { user } = useAuth();
   const [groups, setGroups] = useState<any[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -34,8 +37,8 @@ export default function Biblioteca() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 180 }} showsVerticalScrollIndicator={false}>
-        <Text style={styles.h1}>{t("library_title")}</Text>
-        <Text style={styles.sub}>Qui trovi i contenuti che hai messo tra i preferiti, ordinati per cartella.</Text>
+        <Text style={styles.h1}>{meta.name ?? t("library_title")}</Text>
+        <Text style={styles.sub}>{meta.subtitle ?? "Qui trovi i contenuti che hai messo tra i preferiti, ordinati per cartella."}</Text>
 
         {!user ? (
           <View style={styles.empty}>

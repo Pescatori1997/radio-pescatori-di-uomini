@@ -6,12 +6,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { api } from "@/src/api";
+import { useSiteText } from "@/src/context/SiteTextsContext";
 import PressableScale from "@/src/components/PressableScale";
 import { colors, spacing, radius } from "@/src/theme";
 
 export default function PodcastScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { st, sm } = useSiteText();
+  const meta = sm("podcast");
   const [items, setItems] = useState<any[]>([]);
   const [featured, setFeatured] = useState<any[]>([]);
   const [cats, setCats] = useState<string[]>(["Tutti"]);
@@ -41,12 +44,15 @@ export default function PodcastScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
-        <Text style={styles.h1}>Podcast</Text>
+        <Text style={styles.h1}>{meta.name ?? "Podcast"}</Text>
+        {!!meta.subtitle && <Text style={styles.hSubtitle}>{meta.subtitle}</Text>}
+        {!!meta.description && <Text style={styles.hDesc}>{meta.description}</Text>}
+        {!!meta.image && <Image source={{ uri: meta.image }} style={styles.hCover} contentFit="cover" />}
         <View style={styles.searchBox}>
           <Ionicons name="search" size={18} color={colors.muted} />
           <TextInput
             testID="podcast-search"
-            placeholder="Cerca podcast, studi, testimonianze..."
+            placeholder={st("podcast", "search_placeholder")}
             placeholderTextColor={colors.muted}
             value={search}
             onChangeText={setSearch}
@@ -70,7 +76,7 @@ export default function PodcastScreen() {
       {loading ? (
         <View style={styles.center}><ActivityIndicator color={colors.brandPrimary} size="large" /></View>
       ) : items.length === 0 ? (
-        <View style={styles.center}><Text style={styles.empty}>Nessun podcast trovato</Text></View>
+        <View style={styles.center}><Text style={styles.empty}>{st("podcast", "empty")}</Text></View>
       ) : (
         <FlatList
           data={listData}
@@ -82,7 +88,7 @@ export default function PodcastScreen() {
           ListHeaderComponent={
             featured.length > 0 && !search && cat === "Tutti" ? (
               <View style={{ marginBottom: spacing.lg }}>
-                <Text style={styles.featTitle}>In evidenza</Text>
+                <Text style={styles.featTitle}>{st("podcast", "featured")}</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featRow}>
                   {featured.map((fp) => (
                     <PressableScale key={fp.id} testID={`featured-podcast-${fp.id}`} style={styles.featCard} onPress={() => router.push(`/podcast/${fp.id}`)}>
@@ -125,6 +131,9 @@ const CARD_W = "48%";
 const styles = StyleSheet.create({
   header: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm, backgroundColor: colors.surface },
   h1: { fontSize: 30, fontWeight: "800", color: colors.onSurface, marginBottom: spacing.md },
+  hSubtitle: { fontSize: 15, color: colors.onSurfaceSecondary, marginTop: -spacing.sm, marginBottom: spacing.md, fontWeight: "600" },
+  hDesc: { fontSize: 13.5, color: colors.muted, lineHeight: 19, marginTop: -spacing.xs, marginBottom: spacing.md },
+  hCover: { width: "100%", aspectRatio: 16 / 9, borderRadius: radius.lg, marginBottom: spacing.md, backgroundColor: colors.surfaceTertiary },
   searchBox: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.surfaceTertiary, borderRadius: radius.md, paddingHorizontal: spacing.md, height: 44 },
   searchInput: { flex: 1, color: colors.onSurface, fontSize: 15 },
   chipsScroll: { marginTop: spacing.md, marginHorizontal: -spacing.lg },

@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { api } from "@/src/api";
 import { getClientId } from "@/src/utils/clientId";
+import { useSiteText } from "@/src/context/SiteTextsContext";
 import { FishingNet, SeaWaves, SunriseGlow } from "@/src/components/marine";
 import PressableScale from "@/src/components/PressableScale";
 import { colors, spacing, radius } from "@/src/theme";
@@ -15,6 +16,8 @@ import { colors, spacing, radius } from "@/src/theme";
 export default function PrayerBoard() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { sm } = useSiteText();
+  const meta = sm("prayer_board");
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -50,10 +53,10 @@ export default function PrayerBoard() {
         {w > 0 && (<><SunriseGlow width={w} height={150} /><FishingNet width={w} height={150} gap={28} opacity={0.06} /><SeaWaves width={w} height={54} /></>)}
         <View style={styles.topBar}>
           <PressableScale testID="board-back" onPress={() => goBackOrHome()} style={styles.iconBtn}><Ionicons name="arrow-back" size={22} color={colors.white} /></PressableScale>
-          <Text style={styles.topTitle}>Bacheca di Preghiera</Text>
+          <Text style={styles.topTitle}>{meta.name ?? "Bacheca di Preghiera"}</Text>
           <PressableScale testID="board-add" onPress={() => router.push("/prayer")} style={styles.iconBtn}><Ionicons name="add" size={22} color={colors.white} /></PressableScale>
         </View>
-        <Text style={styles.heroSub}>❤️ Preghiamo gli uni per gli altri</Text>
+        <Text style={styles.heroSub}>{meta.subtitle ?? "❤️ Preghiamo gli uni per gli altri"}</Text>
       </View>
 
       {loading ? <View style={styles.center}><ActivityIndicator color={colors.brandPrimary} size="large" /></View> : (

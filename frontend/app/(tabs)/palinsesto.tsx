@@ -5,6 +5,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { api, mediaUrl } from "@/src/api";
+import { useSiteText } from "@/src/context/SiteTextsContext";
 import { DAYS, romeNow, romeDay, isOnAir } from "@/src/utils/onair";
 import { colors, spacing, radius } from "@/src/theme";
 
@@ -40,6 +41,8 @@ function dayChipLabel(offset: number): string {
 export default function Palinsesto() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { st, sm } = useSiteText();
+  const meta = sm("palinsesto");
   const [programs, setPrograms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(romeNow());
@@ -107,8 +110,9 @@ export default function Palinsesto() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
       <View style={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 6 }}>
-        <Text style={styles.kicker}>PALINSESTO</Text>
+        <Text style={styles.kicker}>{meta.name ?? "PALINSESTO"}</Text>
         <Text style={styles.date}>{dayInfo.dateLabel}</Text>
+        {!!meta.subtitle && <Text style={styles.headerSub}>{meta.subtitle}</Text>}
       </View>
 
       <View>
@@ -131,7 +135,7 @@ export default function Palinsesto() {
           {dayPrograms.length === 0 && (
             <View style={styles.emptyBanner}>
               <Ionicons name="radio-outline" size={18} color={colors.muted} />
-              <Text style={styles.emptyText}>Nessun programma in griglia oggi · Radio H24 in diretta</Text>
+              <Text style={styles.emptyText}>{st("palinsesto", "empty")}</Text>
             </View>
           )}
           {hours.map((h) => {
@@ -161,6 +165,7 @@ export default function Palinsesto() {
 const styles = StyleSheet.create({
   kicker: { color: ACCENT, fontSize: 12, fontWeight: "900", letterSpacing: 2 },
   date: { color: colors.onSurface, fontSize: 22, fontWeight: "900", marginTop: 2 },
+  headerSub: { color: colors.muted, fontSize: 13.5, marginTop: 4, lineHeight: 18 },
   chip: { paddingHorizontal: 18, paddingVertical: 9, borderRadius: 999, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.surfaceSecondary },
   chipActive: { backgroundColor: ACCENT, borderColor: ACCENT },
   chipText: { color: colors.onSurface, fontSize: 14, fontWeight: "800" },

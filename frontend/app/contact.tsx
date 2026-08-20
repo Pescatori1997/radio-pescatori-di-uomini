@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/src/api";
+import { useSiteText } from "@/src/context/SiteTextsContext";
 import { colors, spacing, radius } from "@/src/theme";
 
 const digits = (s: string) => (s || "").replace(/[^\d+]/g, "").replace(/^\+/, "");
@@ -24,6 +25,8 @@ function buildChannels(s: Record<string, string>) {
 export default function Contact() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { sm } = useSiteText();
+  const meta = sm("contact");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
@@ -50,10 +53,11 @@ export default function Contact() {
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <Pressable testID="contact-back" onPress={() => router.back()} hitSlop={12}><Ionicons name="arrow-back" size={24} color={colors.onSurface} /></Pressable>
-        <Text style={styles.headerTitle}>Contatti</Text>
+        <Text style={styles.headerTitle}>{meta.name ?? "Contatti"}</Text>
         <View style={{ width: 24 }} />
       </View>
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }} keyboardShouldPersistTaps="handled">
+        {!!meta.subtitle && <Text style={styles.headerSub}>{meta.subtitle}</Text>}
         {channels.length > 0 && (
           <View style={styles.channels}>
             {channels.map((c) => (
@@ -86,6 +90,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
   headerTitle: { fontSize: 17, fontWeight: "800", color: colors.onSurface },
+  headerSub: { fontSize: 14, color: colors.onSurfaceSecondary, lineHeight: 20, marginBottom: spacing.lg },
   channels: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, overflow: "hidden" },
   channelRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.border },
   channelLabel: { fontSize: 15, fontWeight: "700", color: colors.onSurface },

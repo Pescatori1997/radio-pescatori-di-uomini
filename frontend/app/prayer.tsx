@@ -5,12 +5,15 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/src/api";
 import { useAuth } from "@/src/context/AuthContext";
+import { useSiteText } from "@/src/context/SiteTextsContext";
 import { colors, spacing, radius } from "@/src/theme";
 
 export default function Prayer() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
+  const { sm } = useSiteText();
+  const meta = sm("prayer");
   const [text, setText] = useState("");
   const [name, setName] = useState("");
   const [visibility, setVisibility] = useState<"board" | "private">("private");
@@ -55,11 +58,11 @@ export default function Prayer() {
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <Pressable testID="prayer-back" onPress={() => router.back()} hitSlop={12}><Ionicons name="arrow-back" size={24} color={colors.onSurface} /></Pressable>
-        <Text style={styles.headerTitle}>Richiesta di Preghiera</Text>
+        <Text style={styles.headerTitle}>{meta.name ?? "Richiesta di Preghiera"}</Text>
         <Pressable testID="open-prayer-board" onPress={() => router.push("/prayer-board")} hitSlop={12}><Ionicons name="heart-circle" size={26} color={colors.brandPrimary} /></Pressable>
       </View>
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }} keyboardShouldPersistTaps="handled">
-        <Text style={styles.intro}>Condividi ciò che hai nel cuore. La tua richiesta arriverà al nostro team di preghiera.</Text>
+        <Text style={styles.intro}>{meta.subtitle ?? "Condividi ciò che hai nel cuore. La tua richiesta arriverà al nostro team di preghiera."}</Text>
 
         {!user && (
           <Pressable testID="prayer-login-prompt" style={styles.guestPrompt} onPress={() => router.push("/login")}>

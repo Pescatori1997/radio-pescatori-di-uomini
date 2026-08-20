@@ -7,6 +7,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { api } from "@/src/api";
+import { useSiteText } from "@/src/context/SiteTextsContext";
 import PressableScale from "@/src/components/PressableScale";
 import { colors, spacing, radius } from "@/src/theme";
 
@@ -21,6 +22,8 @@ const AVAIL: Record<string, { label: string; color: string }> = {
 export default function Merch() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { st, sm } = useSiteText();
+  const meta = sm("merch");
   const { width } = useWindowDimensions();
   const scrollRef = useRef<ScrollView>(null);
   const gridY = useRef(0);
@@ -74,9 +77,9 @@ export default function Merch() {
             </PressableScale>
           </View>
           <Animated.View entering={FadeInDown.duration(500)} style={{ marginTop: spacing.xl }}>
-            <View style={styles.kicker}><Ionicons name="storefront" size={13} color={colors.brandSecondary} /><Text style={styles.kickerText}>SHOP UFFICIALE</Text></View>
-            <Text style={styles.heroTitle}>Merchandising</Text>
-            <Text style={styles.heroSub}>Indossa la missione. Ogni acquisto sostiene Radio Pescatori di Uomini e contribuisce alla diffusione del Vangelo.</Text>
+            <View style={styles.kicker}><Ionicons name="storefront" size={13} color={colors.brandSecondary} /><Text style={styles.kickerText}>{st("merch", "kicker")}</Text></View>
+            <Text style={styles.heroTitle}>{meta.name ?? "Merchandising"}</Text>
+            <Text style={styles.heroSub}>{meta.subtitle ?? "Indossa la missione. Ogni acquisto sostiene Radio Pescatori di Uomini e contribuisce alla diffusione del Vangelo."}</Text>
             <PressableScale testID="merch-cta" style={styles.heroCta} onPress={() => scrollRef.current?.scrollTo({ y: gridY.current - 12, animated: true })}>
               <Text style={styles.heroCtaText}>Scopri la collezione</Text>
               <Ionicons name="arrow-down" size={18} color={colors.navy} />

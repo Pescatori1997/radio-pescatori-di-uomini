@@ -35,13 +35,13 @@ const GROUPS: { title: string; items: { label: string; desc: string; icon: any; 
   {
     title: "Testi & Contenuti",
     items: [
-      { label: "Testi del sito", desc: "Modifica titoli, pulsanti e messaggi (Home + Player)", icon: "format-text", route: "/admin/site-texts" },
+      { label: "Testi del sito", desc: "Modifica titoli, pulsanti e messaggi (Home, Player e sezioni)", icon: "format-text", route: "/admin/site-texts" },
+      { label: "Metadati sezione", desc: "Nome, sottotitolo, descrizione, copertina e visibilità di ogni sezione", icon: "card-text-outline", route: "/admin/section-meta" },
     ],
   },
   {
     title: "In arrivo (prossime fasi)",
     items: [
-      { label: "Metadati sezione", desc: "Sottotitolo, descrizione, copertina e colore per ogni sezione", icon: "card-text-outline", soon: true },
       { label: "Aspetto", desc: "Colori e stile compatibili con il design attuale", icon: "palette", soon: true },
     ],
   },

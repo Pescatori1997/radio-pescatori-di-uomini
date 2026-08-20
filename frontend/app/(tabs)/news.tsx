@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/src/api";
+import { useSiteText } from "@/src/context/SiteTextsContext";
 import PressableScale from "@/src/components/PressableScale";
 import { useThumbAspect } from "@/src/hooks/useThumbAspect";
 import { colors, spacing, radius } from "@/src/theme";
@@ -13,6 +14,8 @@ import { colors, spacing, radius } from "@/src/theme";
 export default function NewsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { st, sm } = useSiteText();
+  const meta = sm("news");
   const [items, setItems] = useState<any[]>([]);
   const [featured, setFeatured] = useState<any[]>([]);
   const [cats, setCats] = useState<string[]>(["Tutte"]);
@@ -40,10 +43,13 @@ export default function NewsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
-        <Text style={styles.h1}>Notizie</Text>
+        <Text style={styles.h1}>{meta.name ?? "Notizie"}</Text>
+        {!!meta.subtitle && <Text style={styles.hSubtitle}>{meta.subtitle}</Text>}
+        {!!meta.description && <Text style={styles.hDesc}>{meta.description}</Text>}
+        {!!meta.image && <Image source={{ uri: meta.image }} style={styles.hCover} contentFit="cover" />}
         <View style={styles.searchBox}>
           <Ionicons name="search" size={18} color={colors.muted} />
-          <TextInput testID="news-search-input" value={search} onChangeText={setSearch} placeholder="Cerca notizie..." placeholderTextColor={colors.muted} style={styles.searchInput} />
+          <TextInput testID="news-search-input" value={search} onChangeText={setSearch} placeholder={st("news", "search_placeholder")} placeholderTextColor={colors.muted} style={styles.searchInput} />
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow} style={styles.chipsScroll}>
           {cats.map((c) => (
@@ -74,7 +80,7 @@ export default function NewsScreen() {
               </PressableScale>
             ) : null
           }
-          ListEmptyComponent={<Text style={styles.empty}>Nessuna notizia trovata</Text>}
+          ListEmptyComponent={<Text style={styles.empty}>{st("news", "empty")}</Text>}
           renderItem={({ item }) => (
             <Pressable testID={`news-card-${item.id}`} style={styles.row} onPress={() => router.push(`/news/${item.id}`)}>
               {item.image ? (
@@ -86,7 +92,7 @@ export default function NewsScreen() {
                 {!!item.category && <Text style={styles.rowCat}>{String(item.category).toUpperCase()}</Text>}
                 <Text style={styles.rowTitle} numberOfLines={2}>{item.title}</Text>
                 {!!item.excerpt && <Text style={styles.rowExcerpt} numberOfLines={2}>{item.excerpt}</Text>}
-                <Text style={styles.readMore}>Leggi di più ›</Text>
+                <Text style={styles.readMore}>{st("news", "read_more")}</Text>
               </View>
             </Pressable>
           )}
@@ -99,6 +105,9 @@ export default function NewsScreen() {
 const styles = StyleSheet.create({
   header: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
   h1: { fontSize: 30, fontWeight: "800", color: colors.onSurface, marginBottom: spacing.md },
+  hSubtitle: { fontSize: 15, color: colors.onSurfaceSecondary, marginTop: -spacing.sm, marginBottom: spacing.md, fontWeight: "600" },
+  hDesc: { fontSize: 13.5, color: colors.muted, lineHeight: 19, marginTop: -spacing.xs, marginBottom: spacing.md },
+  hCover: { width: "100%", aspectRatio: 16 / 9, borderRadius: radius.lg, marginBottom: spacing.md, backgroundColor: colors.surfaceTertiary },
   searchBox: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.surfaceTertiary, borderRadius: radius.md, paddingHorizontal: spacing.md, height: 44 },
   searchInput: { flex: 1, color: colors.onSurface, fontSize: 15 },
   chipsScroll: { marginTop: spacing.md, marginHorizontal: -spacing.lg },

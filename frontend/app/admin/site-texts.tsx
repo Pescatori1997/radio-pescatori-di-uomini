@@ -38,8 +38,8 @@ export default function AdminSiteTexts() {
   const save = async () => {
     setSaving(true);
     try {
-      // Send only the two managed groups; deep-merge on the server preserves the rest.
-      await api.adminUpdateSiteSettings({ texts: { home: texts.home || {}, player: texts.player || {} } });
+      // Send the full texts map; deep-merge on the server preserves the rest.
+      await api.adminUpdateSiteSettings({ texts });
       alertMessage("Salvato", "I testi sono stati aggiornati. Riapri l'app per vederli ovunque.");
     } catch (e: any) {
       alertMessage("Errore", e?.message || "Impossibile salvare i testi.");

@@ -1,0 +1,52 @@
+{
+  "summary": "Phase 3 'Personalizzazione sito' testing. Backend: 7/7 pytest passed in /app/backend/tests/test_site_settings_phase3.py — GET /api/site-settings returns all 8 groups (navigation/sections/home/texts/images/icons/features/appearance), PUT /api/admin/site-settings deep-merge is non-destructive (updating sections.podcast preserves texts.home and vice-versa), PUT /api/admin/site-settings requires require_perm('site') (401 without auth, 401 with invalid token), and section_visibility toggle podcast=false → GET /api/settings reflects it, restore to true works. Frontend: admin email/password login OK (pescatoridiuomini@outlook.it / Admin1234!), Hub /admin/site shows both tiles 'Testi del sito' and 'Metadati sezione' (both with testID and clickable). /admin/section-meta: setting Podcast name='Podcast UI TEST' + subtitle='UI TEST sottotitolo podcast' saves successfully (message 'Salvato ✓ Attivo subito' shown), persists after reload, and the public /podcast screen (guest mode) reflects the new title AND subtitle correctly. Fallback verified: after clearing sections.podcast.name to '' via API, public /podcast reverts to default header 'Podcast'. News + Palinsesto + Home + Player render correctly (no regressions). CRITICAL FRONTEND BUG FOUND in /admin/site-texts: the save() only sends the 'home' and 'player' groups (site-texts.tsx line 42) — Podcast/News/Palinsesto/Merch fields defined in SITE_TEXT_SCHEMA are rendered in the form but their edits are silently DROPPED on save. This is a Phase 3 blocker: filling 'Podcast > Segnaposto ricerca' in the UI does not persist. Confirmation Alert on web is displayed via window.alert (Playwright auto-dismisses).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "/app/frontend/app/admin/site-texts.tsx",
+        "issue": "save() envia solo { texts: { home, player } } — i gruppi Podcast/News/Palinsesto/Merch mostrati nel form vengono SILENZIOSAMENTE SCARTATI. Fix: sostituire con `await api.adminUpdateSiteSettings({ texts })` (invia l'intero stato texts) o iterare SITE_TEXT_SCHEMA per costruire il payload. Riferimento: site-texts.tsx:42",
+        "testID": "site-texts-save",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Admin edits podcast search_placeholder in /admin/site-texts → Save → public /podcast should show new placeholder",
+        "issue": "La modifica non arriva al backend: dopo il salvataggio, GET /api/site-settings mostra texts.podcast vuoto e la schermata pubblica continua a mostrare il placeholder di default 'Cerca podcast, studi, testimonianze...'. Causa: filtro home/player in save().",
+        "affected_testIDs": ["site-text-podcast-search_placeholder", "site-texts-save"]
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_site_settings_phase3.py",
+    "/app/test_reports/pytest/iteration_49_site_settings.xml"
+  ],
+  "action_items": [
+    "FIX /app/frontend/app/admin/site-texts.tsx save(): sostituire `await api.adminUpdateSiteSettings({ texts: { home: texts.home || {}, player: texts.player || {} } })` con `await api.adminUpdateSiteSettings({ texts })` così TUTTI i gruppi editabili (home, player, podcast, news, palinsesto, merch) vengano deep-merge lato server.",
+    "Dopo il fix, riverificare che modificando 'Podcast > Segnaposto ricerca' nella UI di /admin/site-texts la stringa venga persistita in site_settings.texts.podcast.search_placeholder e riflessa sulla schermata /podcast (input placeholder cambiato)."
+  ],
+  "critical_code_review_comments": [
+    "Backend deep-merge (_deep_merge in server.py:2230) è ricorsivo e non-distruttivo: verificato via test 'test_partial_update_preserves_other_fields' — aggiornare texts.podcast lascia intatto texts.home.",
+    "SectionMeta context (SiteTextsContext.tsx:52) applica correttamente il fallback: solo stringhe non vuote sovrascrivono i default, quindi svuotare un campo ripristina automaticamente il testo hardcoded.",
+    "PUT /api/admin/site-settings è protetto correttamente da require_perm('site') (verificato: 401 senza token e con token invalido).",
+    "site-texts.tsx: il form MOSTRA i gruppi Podcast/News/Palinsesto/Merch (righe 69-88) ma save() (riga 42) whitelist-a SOLO { home, player } → discrepanza UX/persistenza. Bug logico chiaro."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_site_settings_phase3.py (nuovo, 7 test)"
+  ],
+  "success_rate": {
+    "backend": "100% (7/7)",
+    "frontend": "80% — admin UI hub OK, section-meta save+persist+fallback OK, public reflection OK, MA site-texts non salva i gruppi Podcast/News/Palinsesto/Merch"
+  },
+  "seed_data_creation": "Nessun seed permanente. I test hanno usato valori TEST_ e sono ripristinati in teardown. La UI di test ha impostato Podcast name/subtitle temporaneamente e poi riportati a stringa vuota via API (verificato: GET /api/site-settings.sections.podcast = {name:'', subtitle:''}).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Password admin per UI login: 'Admin1234!' (non 'AdminTestPwd1!' del prompt). Il backend è OK; l'unico bug è nel FE /admin/site-texts save() che filtra i gruppi. Il fix è di 1 riga (rimuovere il whitelist).",
+  "rca_of_issue": "RCA: In /app/frontend/app/admin/site-texts.tsx, il save() invia solo `{ texts: { home: texts.home || {}, player: texts.player || {} } }`. Questo era corretto in Fase 2 (solo Home+Player) ma non è stato aggiornato in Fase 3 quando sono stati aggiunti i gruppi podcast/news/palinsesto/merch al SITE_TEXT_SCHEMA. Il deep-merge del backend accetta qualunque gruppo, quindi la fix è banale: `await api.adminUpdateSiteSettings({ texts })`. Riproduzione: 1) login admin, 2) /admin/site-texts, 3) modificare campo 'Segnaposto ricerca' del gruppo Podcast, 4) click 'Salva testi', 5) GET /api/site-settings → texts.podcast è vuoto. Mitigazione temporanea: il valore può essere impostato via curl a /api/admin/site-settings finché il fix non è applicato."
+}
