@@ -632,6 +632,8 @@ export const api = {
     request(`/bible/resolve?reference=${encodeURIComponent(reference)}${translation ? `&translation=${translation}` : ""}`),
   bibleSearch: (q: string, book?: number, translation?: string) =>
     request(`/bible/search?q=${encodeURIComponent(q)}${book ? `&book=${book}` : ""}${translation ? `&translation=${translation}` : ""}`),
+  bibleXrefs: (book: number, chapter: number, verse: number, translation?: string) =>
+    request(`/bible/xrefs?book=${book}&chapter=${chapter}&verse=${verse}${translation ? `&translation=${translation}` : ""}`),
   getBibleState: () => request("/me/bible/state", {}, true),
   setBibleState: (body: { translation?: string; book_nr: number; chapter: number; verse?: number }) =>
     request("/me/bible/state", { method: "PUT", body: JSON.stringify(body) }, true),

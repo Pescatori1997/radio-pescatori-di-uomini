@@ -83,6 +83,23 @@ async def _seed_one(db, logger, tr):
     logger.info("bible seed: imported %d books, %d verses (%s)", len(books_docs), len(verse_docs), code)
 
 
+async def _seed_xrefs(db, logger):
+    """Seed cross-references (OpenBible.info, CC-BY) once. Idempotent."""
+    await db.bible_xrefs.create_index([("b", 1), ("c", 1), ("v", 1)], unique=True)
+    if await db.bible_xrefs.estimated_document_count() > 0:
+        return
+    path = os.path.join(DATA_DIR, "xrefs.json")
+    if not os.path.exists(path):
+        logger.warning("bible xrefs: data file missing (%s)", path)
+        return
+    with open(path, "r", encoding="utf-8") as fh:
+        rows = json.load(fh)
+    B = 5000
+    for i in range(0, len(rows), B):
+        await db.bible_xrefs.insert_many(rows[i:i + B])
+    logger.info("bible xrefs: imported %d source verses", len(rows))
+
+
 async def seed_bible(db, logger):
     for tr in TRANSLATIONS:
         try:
@@ -90,3 +107,7 @@ async def seed_bible(db, logger):
         except Exception as e:
             logger.warning("bible seed failed for %s: %s", tr.get("code"), e)
     await _ensure_indices(db, logger)
+    try:
+        await _seed_xrefs(db, logger)
+    except Exception as e:
+        logger.warning("bible xrefs seed failed: %s", e)

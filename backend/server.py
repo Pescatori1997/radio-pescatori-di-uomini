@@ -5775,6 +5775,42 @@ async def bible_search(q: str, translation: str = DEFAULT_BIBLE, book: Optional[
     return {"results": results, "count": len(results)}
 
 
+@api_router.get("/bible/xrefs")
+async def bible_xrefs(book: int, chapter: int, verse: int, translation: str = DEFAULT_BIBLE):
+    """Cross-references ('Vedi anche') for a verse. Data: OpenBible.info (CC-BY).
+    Returns targets resolved to the requested translation's book names + a short
+    text preview of the starting verse. Never raises: empty list if none."""
+    doc = await db.bible_xrefs.find_one({"b": book, "c": chapter, "v": verse}, {"_id": 0, "refs": 1})
+    refs = (doc or {}).get("refs", []) if doc else []
+    if not refs:
+        return {"refs": []}
+    # Resolve book names for the translation (fallback to default if missing).
+    names = {}
+    async for b in db.bible_books.find({"translation": translation}, {"_id": 0, "book_nr": 1, "name": 1}):
+        names[b["book_nr"]] = b["name"]
+    if not names:
+        async for b in db.bible_books.find({"translation": DEFAULT_BIBLE}, {"_id": 0, "book_nr": 1, "name": 1}):
+            names[b["book_nr"]] = b["name"]
+    # Batch-fetch preview texts (starting verse of each ref) in one query.
+    ors = [{"translation": translation, "book_nr": r["b"], "chapter": r["c"], "verse": r["v"]} for r in refs]
+    texts = {}
+    async for v in db.bible_verses.find({"$or": ors}, {"_id": 0, "book_nr": 1, "chapter": 1, "verse": 1, "text": 1}):
+        texts[(v["book_nr"], v["chapter"], v["verse"])] = v["text"]
+    out = []
+    for r in refs:
+        nm = names.get(r["b"])
+        if not nm:
+            continue
+        ve = r.get("ve", r["v"])
+        ref_label = f"{nm} {r['c']}:{r['v']}" + (f"-{ve}" if ve and ve > r["v"] else "")
+        out.append({
+            "book_nr": r["b"], "chapter": r["c"], "verse": r["v"], "verse_end": ve,
+            "reference": ref_label, "text": texts.get((r["b"], r["c"], r["v"]), ""),
+        })
+    return {"refs": out}
+
+
+
 # ---------------- Timoteo (guida intelligente) ----------------
 class TimoteoMessage(BaseModel):
     role: str

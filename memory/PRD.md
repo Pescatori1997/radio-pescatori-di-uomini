@@ -673,3 +673,14 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - `app/lettore/read.tsx`: accetta param `translation` (fallback a `bible_translation` in AsyncStorage), usato in `bibleChapter`/`bibleResolve` e mantenuto per prev/next. Annotazioni restano per posizione (libro/cap/versetto), condivise tra versioni.
 - `app/lettore/search.tsx`: la ricerca usa la versione selezionata e la propaga ai risultati.
 - Verificato E2E (screenshot): pill cliccabile → modale con Riveduta (selezionata) + Diodati 1641; selezione Diodati + apertura Genesi 1 mostra il testo Diodati ("NEL principio Iddio creò il cielo e la terra") distinto dal Riveduta. Backend `/bible/translations` = 2 voci; testi Diodati/Riveduta corretti.
+
+## Bibbia — Versetti collegati (rimandi) + Impostazioni di lettura (2026-06)
+- Richiesta utente: rimandi biblici ("Vedi anche…") toccabili nel pannello del versetto + tasto impostazioni per cambiare sfondo e colore del testo del lettore.
+### Rimandi (cross-reference)
+- Dataset: OpenBible.info cross-references (CC-BY). Scaricato, mappato al nostro numbering (66 libri, abbreviazioni OSIS→nr), ridotto ai top 12 per versetto per voti, salvato in `backend/data/xrefs.json` (29.364 versetti sorgente).
+- Backend: seed idempotente `bible_xrefs` (indice unico b,c,v) in `bible_seed.py` (`_seed_xrefs`, chiamato da `seed_bible`). Nuovo endpoint `GET /api/bible/xrefs?book=&chapter=&verse=&translation=` → risolve i nomi libro nella traduzione richiesta + anteprima testo del versetto iniziale (batch $or), etichetta "Libro c:v" (con range).
+- Frontend `app/lettore/read.tsx`: toccando il numero del versetto il pannello mostra la sezione "Versetti collegati" (lista scrollabile, anteprima testo, chevron) → tap apre il rimando (`router.push` con highlight nella traduzione corrente). Attribuzione "Rimandi: OpenBible.info (CC BY)". Il pannello ora si apre anche per gli ospiti (evidenzia/note gated con "Accedi per…"; condivisione + rimandi sempre disponibili).
+- `src/api.ts`: aggiunto `bibleXrefs`.
+### Impostazioni di lettura (solo lettore)
+- Tasto ⚙️ (icona color-palette) nell'header del lettore apre "Impostazioni di lettura": 4 temi sfondo (Bianco/Seppia/Grigio chiaro/Notte) + scelta colore testo (swatch) + anteprima live. Applicati SOLO alla schermata di lettura (sfondo root + colore testo versetti); resto app invariato. Persistiti in AsyncStorage `bible_reader_theme` + `bible_text_color`.
+- Verificato E2E (screenshot): pannello rimandi con Giovanni 1:1-3/Ebrei 11:3/Isaia 45:18 toccabili; tema Notte applica sfondo scuro + testo chiaro. Backend endpoint verificato (Gen 1:1, Gv 3:16) in entrambe le traduzioni.

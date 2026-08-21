@@ -14,6 +14,16 @@ import { colors, spacing, radius } from "@/src/theme";
 const FONT_SIZES = [15, 17, 19, 22];
 const HL_COLORS: Record<string, string> = { yellow: "#FEF3C7", green: "#D1FAE5", blue: "#DBEAFE", pink: "#FCE7F3" };
 
+// Reading themes (applied ONLY to the reader screen). bg + default text color.
+const READ_THEMES = [
+  { key: "white", name: "Bianco", bg: "#FFFFFF", text: "#0A1128" },
+  { key: "sepia", name: "Seppia", bg: "#F4ECD8", text: "#4A3B28" },
+  { key: "gray", name: "Grigio chiaro", bg: "#E9EDF2", text: "#1A2433" },
+  { key: "night", name: "Notte", bg: "#0F1522", text: "#E6EAF2" },
+];
+const TEXT_COLORS = ["#0A1128", "#4A3B28", "#1A2433", "#334155", "#5B21B6", "#E6EAF2"];
+const themeByKey = (k?: string | null) => READ_THEMES.find((t) => t.key === k) || READ_THEMES[0];
+
 export default function BibleReader() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -34,6 +44,13 @@ export default function BibleReader() {
   const [noteEditor, setNoteEditor] = useState<{ verse: number; id?: string; text: string } | null>(null);
   const [shareVerse, setShareVerse] = useState<any>(null);
   const [loginPrompt, setLoginPrompt] = useState(false);
+  const [xrefs, setXrefs] = useState<any[] | null>(null);
+  const [xrefsLoading, setXrefsLoading] = useState(false);
+  const [readSettings, setReadSettings] = useState(false);
+  const [themeKey, setThemeKey] = useState("white");
+  const [textColor, setTextColor] = useState<string | null>(null);
+  const theme = themeByKey(themeKey);
+  const vColor = textColor || theme.text;
 
   const loadAnnotations = useCallback(async (book: number, chapter: number) => {
     if (!user) { setBookmarks({}); setNotes({}); return; }
@@ -45,7 +62,11 @@ export default function BibleReader() {
     } catch { setBookmarks({}); setNotes({}); }
   }, [user]);
 
-  useEffect(() => { AsyncStorage.getItem("bible_font").then((v) => v && setFontIdx(parseInt(v, 10))); }, []);
+  useEffect(() => {
+    AsyncStorage.getItem("bible_font").then((v) => v && setFontIdx(parseInt(v, 10)));
+    AsyncStorage.getItem("bible_reader_theme").then((v) => v && setThemeKey(v));
+    AsyncStorage.getItem("bible_text_color").then((v) => v && setTextColor(v));
+  }, []);
 
   const loadChapter = useCallback(async (book: number, chapter: number) => {
     setLoading(true);
@@ -97,7 +118,22 @@ export default function BibleReader() {
 
   const verseText = (n: number) => (data?.verses.find((v: any) => v.verse === n)?.text) || "";
   const refOf = (n: number) => `${data?.book_name} ${data?.chapter}:${n}`;
-  const openPanel = (verse: number) => { if (!user) { setLoginPrompt(true); return; } setSelected(verse); };
+  const openPanel = (verse: number) => {
+    setSelected(verse);
+    setXrefs(null);
+    if (data) {
+      setXrefsLoading(true);
+      api.bibleXrefs(data.book_nr, data.chapter, verse, data.translation)
+        .then((r: any) => setXrefs(r.refs || []))
+        .catch(() => setXrefs([]))
+        .finally(() => setXrefsLoading(false));
+    }
+  };
+
+  const openXref = (r: any) => {
+    setSelected(null);
+    router.push(`/lettore/read?book=${r.book_nr}&chapter=${r.chapter}&highlight=${r.verse}${r.verse_end && r.verse_end > r.verse ? `&highlightEnd=${r.verse_end}` : ""}&translation=${data?.translation || ""}`);
+  };
 
   const setHighlight = async (color: string) => {
     if (selected == null || !data) return;
@@ -130,7 +166,7 @@ export default function BibleReader() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.surface }}>
+    <View style={{ flex: 1, backgroundColor: theme.bg }}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <LinearGradient colors={["#0B2A4A", "#0A1128"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
         <View style={styles.topBar}>
@@ -142,6 +178,7 @@ export default function BibleReader() {
           <View style={styles.fontBtns}>
             <PressableScale testID="font-dec" onPress={decFont} style={styles.iconBtnSm}><Text style={styles.aA}>−</Text></PressableScale>
             <PressableScale testID="font-inc" onPress={incFont} style={styles.iconBtnSm}><Text style={styles.aA}>+</Text></PressableScale>
+            <PressableScale testID="read-settings" onPress={() => setReadSettings(true)} style={styles.iconBtnSm}><Ionicons name="color-palette-outline" size={18} color={colors.white} /></PressableScale>
           </View>
         </View>
       </View>
@@ -161,7 +198,7 @@ export default function BibleReader() {
                 <Pressable testID={`verse-num-${v.verse}`} onPress={() => openPanel(v.verse)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Text style={[styles.vnum, { fontSize: fs - 5 }, bg ? { color: colors.navy } : null]}>{v.verse}</Text>
                 </Pressable>
-                <Text style={[styles.vtext, { fontSize: fs, lineHeight: fs * 1.55 }, bg ? { color: colors.navy } : null]}>{v.text}</Text>
+                <Text style={[styles.vtext, { fontSize: fs, lineHeight: fs * 1.55, color: vColor }, bg ? { color: colors.navy } : null]}>{v.text}</Text>
                 {note ? <Ionicons name="document-text" size={14} color={colors.brandPrimary} style={{ marginTop: 3 }} /> : null}
               </View>
             );
@@ -201,23 +238,52 @@ export default function BibleReader() {
               <>
                 <Text style={styles.sheetTitle}>{refOf(selected)}</Text>
                 <Text style={styles.sheetVerse} numberOfLines={3}>{verseText(selected)}</Text>
-                <Text style={styles.sheetLabel}>Evidenzia</Text>
-                <View style={styles.swatchRow}>
-                  {Object.keys(HL_COLORS).map((c) => (
-                    <PressableScale key={c} testID={`hl-${c}`} style={[styles.swatch, { backgroundColor: HL_COLORS[c] }, bookmarks[selected]?.color === c && styles.swatchOn]} onPress={() => setHighlight(c)} />
-                  ))}
-                  {bookmarks[selected] && (
-                    <PressableScale testID="hl-remove" style={styles.swatchRemove} onPress={removeHighlight}><Ionicons name="close" size={18} color={colors.error} /></PressableScale>
-                  )}
-                </View>
-                <PressableScale testID="verse-note" style={styles.sheetAction} onPress={() => { const v = selected!; setSelected(null); setNoteEditor({ verse: v, id: notes[v]?.id, text: notes[v]?.note || "" }); }}>
-                  <Ionicons name="create-outline" size={20} color={colors.navy} />
-                  <Text style={styles.sheetActionText}>{notes[selected] ? "Modifica nota" : "Aggiungi nota"}</Text>
-                </PressableScale>
+                {user ? (
+                  <>
+                    <Text style={styles.sheetLabel}>Evidenzia</Text>
+                    <View style={styles.swatchRow}>
+                      {Object.keys(HL_COLORS).map((c) => (
+                        <PressableScale key={c} testID={`hl-${c}`} style={[styles.swatch, { backgroundColor: HL_COLORS[c] }, bookmarks[selected]?.color === c && styles.swatchOn]} onPress={() => setHighlight(c)} />
+                      ))}
+                      {bookmarks[selected] && (
+                        <PressableScale testID="hl-remove" style={styles.swatchRemove} onPress={removeHighlight}><Ionicons name="close" size={18} color={colors.error} /></PressableScale>
+                      )}
+                    </View>
+                    <PressableScale testID="verse-note" style={styles.sheetAction} onPress={() => { const v = selected!; setSelected(null); setNoteEditor({ verse: v, id: notes[v]?.id, text: notes[v]?.note || "" }); }}>
+                      <Ionicons name="create-outline" size={20} color={colors.navy} />
+                      <Text style={styles.sheetActionText}>{notes[selected] ? "Modifica nota" : "Aggiungi nota"}</Text>
+                    </PressableScale>
+                  </>
+                ) : (
+                  <PressableScale testID="verse-login" style={styles.sheetAction} onPress={() => { setSelected(null); setLoginPrompt(true); }}>
+                    <Ionicons name="bookmark-outline" size={20} color={colors.navy} />
+                    <Text style={styles.sheetActionText}>Accedi per evidenziare e annotare</Text>
+                  </PressableScale>
+                )}
                 <PressableScale testID="verse-share2" style={styles.sheetAction} onPress={() => { const v = selected!; setSelected(null); setShareVerse({ text: verseText(v), reference: refOf(v) }); }}>
                   <Ionicons name="share-social-outline" size={20} color={colors.navy} />
                   <Text style={styles.sheetActionText}>Condividi versetto</Text>
                 </PressableScale>
+
+                <Text style={[styles.sheetLabel, { marginTop: spacing.md }]}>Versetti collegati</Text>
+                {xrefsLoading ? (
+                  <ActivityIndicator color={colors.brandPrimary} style={{ marginVertical: spacing.md }} />
+                ) : (xrefs && xrefs.length > 0) ? (
+                  <ScrollView style={{ maxHeight: 240 }} contentContainerStyle={{ paddingBottom: spacing.sm }}>
+                    {xrefs.map((r, i) => (
+                      <PressableScale key={i} testID={`xref-${i}`} style={styles.xrefRow} onPress={() => openXref(r)}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.xrefRef}>{r.reference}</Text>
+                          {!!r.text && <Text style={styles.xrefText} numberOfLines={2}>{r.text}</Text>}
+                        </View>
+                        <Ionicons name="chevron-forward" size={16} color={colors.muted} />
+                      </PressableScale>
+                    ))}
+                  </ScrollView>
+                ) : (
+                  <Text style={styles.xrefEmpty}>Nessun rimando per questo versetto.</Text>
+                )}
+                {xrefs && xrefs.length > 0 && <Text style={styles.xrefCredit}>Rimandi: OpenBible.info (CC BY)</Text>}
               </>
             )}
           </Pressable>
@@ -251,6 +317,37 @@ export default function BibleReader() {
             <PressableScale style={[styles.sheetAction, { justifyContent: "center", marginTop: spacing.md }]} onPress={() => { setLoginPrompt(false); router.push("/profilo"); }}>
               <Text style={styles.sheetActionText}>Accedi / Registrati</Text>
             </PressableScale>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Reading settings: background + text color (reader only) */}
+      <Modal visible={readSettings} transparent animationType="fade" onRequestClose={() => setReadSettings(false)}>
+        <Pressable style={styles.sheetBackdrop} onPress={() => setReadSettings(false)}>
+          <Pressable style={styles.sheet} onPress={() => {}}>
+            <Text style={styles.sheetTitle}>Impostazioni di lettura</Text>
+            <Text style={styles.sheetLabel}>Sfondo</Text>
+            <View style={styles.themeRow}>
+              {READ_THEMES.map((t) => (
+                <PressableScale key={t.key} testID={`read-theme-${t.key}`}
+                  style={[styles.themeChip, { backgroundColor: t.bg }, themeKey === t.key && styles.themeChipOn]}
+                  onPress={() => { setThemeKey(t.key); setTextColor(null); AsyncStorage.setItem("bible_reader_theme", t.key).catch(() => {}); AsyncStorage.removeItem("bible_text_color").catch(() => {}); }}>
+                  <Text style={[styles.themeAa, { color: t.text }]}>Aa</Text>
+                  <Text style={[styles.themeName, { color: t.text }]}>{t.name}</Text>
+                </PressableScale>
+              ))}
+            </View>
+            <Text style={[styles.sheetLabel, { marginTop: spacing.md }]}>Colore del testo</Text>
+            <View style={styles.swatchRow}>
+              {TEXT_COLORS.map((c) => (
+                <PressableScale key={c} testID={`text-color-${c}`}
+                  style={[styles.textSwatch, { backgroundColor: c }, vColor.toLowerCase() === c.toLowerCase() && styles.swatchOn]}
+                  onPress={() => { setTextColor(c); AsyncStorage.setItem("bible_text_color", c).catch(() => {}); }} />
+              ))}
+            </View>
+            <View style={[styles.readPreview, { backgroundColor: theme.bg }]}>
+              <Text style={{ color: vColor, fontSize: fs, lineHeight: fs * 1.55 }}>«Lampada al mio piede è la tua parola, e luce al mio sentiero.»</Text>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -294,6 +391,18 @@ const styles = StyleSheet.create({
   swatchRemove: { width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: colors.error, alignItems: "center", justifyContent: "center" },
   sheetAction: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingVertical: spacing.md, borderTopWidth: 1, borderTopColor: colors.border },
   sheetActionText: { color: colors.navy, fontSize: 15, fontWeight: "800" },
+  xrefRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
+  xrefRef: { color: colors.brandPrimary, fontSize: 14, fontWeight: "800" },
+  xrefText: { color: colors.onSurfaceSecondary, fontSize: 13, lineHeight: 18, marginTop: 2 },
+  xrefEmpty: { color: colors.muted, fontSize: 13, fontStyle: "italic", paddingVertical: spacing.sm },
+  xrefCredit: { color: colors.muted, fontSize: 10.5, marginTop: 6 },
+  themeRow: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.sm },
+  themeChip: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: spacing.md, borderRadius: radius.md, borderWidth: 2, borderColor: colors.border },
+  themeChipOn: { borderColor: colors.brandPrimary },
+  themeAa: { fontSize: 20, fontWeight: "900" },
+  themeName: { fontSize: 11, fontWeight: "700", marginTop: 2 },
+  textSwatch: { width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: colors.border },
+  readPreview: { marginTop: spacing.md, padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   noteSheet: { backgroundColor: colors.surface, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: spacing.lg, paddingBottom: spacing.xl },
   notePrivate: { color: colors.muted, fontSize: 12, marginBottom: spacing.md },
   noteInput: { minHeight: 120, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, color: colors.onSurface, fontSize: 15, textAlignVertical: "top" },
