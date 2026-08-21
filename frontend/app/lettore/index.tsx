@@ -135,7 +135,7 @@ export default function BibleHome() {
               <PressableScale key={t.code} testID={`bible-tr-${t.code}`} style={[styles.trRow, t.code === trCode && styles.trRowOn]} onPress={() => selectTranslation(t)}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.trRowName}>{t.name}</Text>
-                  <Text style={styles.trRowMeta}>{t.short} · Pubblico dominio</Text>
+                  <Text style={styles.trRowMeta}>{t.short}</Text>
                 </View>
                 {t.code === trCode
                   ? <Ionicons name="checkmark-circle" size={22} color={colors.brandPrimary} />

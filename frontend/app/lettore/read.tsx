@@ -283,7 +283,6 @@ export default function BibleReader() {
                 ) : (
                   <Text style={styles.xrefEmpty}>Nessun rimando per questo versetto.</Text>
                 )}
-                {xrefs && xrefs.length > 0 && <Text style={styles.xrefCredit}>Rimandi: OpenBible.info (CC BY)</Text>}
               </>
             )}
           </Pressable>
