@@ -17,9 +17,10 @@ const HL_COLORS: Record<string, string> = { yellow: "#FEF3C7", green: "#D1FAE5",
 export default function BibleReader() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const params = useLocalSearchParams<{ book?: string; chapter?: string; highlight?: string; highlightEnd?: string; ref?: string }>();
+  const params = useLocalSearchParams<{ book?: string; chapter?: string; highlight?: string; highlightEnd?: string; ref?: string; translation?: string }>();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const trRef = useRef<string | undefined>(params.translation as string | undefined);
   const [fontIdx, setFontIdx] = useState(1);
   const [picker, setPicker] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
@@ -49,7 +50,7 @@ export default function BibleReader() {
   const loadChapter = useCallback(async (book: number, chapter: number) => {
     setLoading(true);
     try {
-      const d = await api.bibleChapter(book, chapter);
+      const d = await api.bibleChapter(book, chapter, trRef.current);
       setData(d);
       loadAnnotations(d.book_nr, d.chapter);
       const pos = { translation: d.translation, book_nr: d.book_nr, book_name: d.book_name, chapter: d.chapter };
@@ -66,10 +67,13 @@ export default function BibleReader() {
 
   useEffect(() => {
     (async () => {
+      if (!trRef.current) {
+        trRef.current = (await AsyncStorage.getItem("bible_translation").catch(() => null)) || undefined;
+      }
       let book = params.book ? parseInt(params.book as string, 10) : null;
       let chapter = params.chapter ? parseInt(params.chapter as string, 10) : 1;
       if (!book && params.ref) {
-        try { const r = await api.bibleResolve(params.ref as string); book = r.book_nr; chapter = r.chapter; } catch {}
+        try { const r = await api.bibleResolve(params.ref as string, trRef.current); book = r.book_nr; chapter = r.chapter; } catch {}
       }
       if (book) loadChapter(book, chapter);
       else setLoading(false);

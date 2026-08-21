@@ -19,15 +19,47 @@ export default function BibleHome() {
   const [last, setLast] = useState<any>(null);
   const [picker, setPicker] = useState<any>(null); // selected book for chapter picker
   const [w, setW] = useState(0);
+  const [translations, setTranslations] = useState<any[]>([]);
+  const [trCode, setTrCode] = useState<string>("riveduta_1927");
+  const [trName, setTrName] = useState<string>("Riveduta (Luzzi 1927)");
+  const [trPicker, setTrPicker] = useState(false);
+
+  const loadBooks = useCallback((code: string) => {
+    setLoading(true);
+    api.bibleBooks(code).then(setBooks).catch(() => {}).finally(() => setLoading(false));
+  }, []);
 
   useFocusEffect(useCallback(() => {
-    api.bibleBooks().then(setBooks).catch(() => {}).finally(() => setLoading(false));
+    let mounted = true;
+    (async () => {
+      const stored = await AsyncStorage.getItem("bible_translation").catch(() => null);
+      let list: any[] = [];
+      try { list = await api.bibleTranslations(); } catch {}
+      if (!mounted) return;
+      setTranslations(list || []);
+      const def = (list || []).find((t: any) => t.is_default) || (list || [])[0];
+      const code = stored || def?.code || "riveduta_1927";
+      const cur = (list || []).find((t: any) => t.code === code) || def;
+      setTrCode(cur?.code || "riveduta_1927");
+      setTrName(cur?.name || "Riveduta (Luzzi 1927)");
+      loadBooks(cur?.code || "riveduta_1927");
+    })();
     AsyncStorage.getItem("bible_last").then((c) => c && setLast(JSON.parse(c))).catch(() => {});
-  }, []));
+    return () => { mounted = false; };
+  }, [loadBooks]));
+
+  const selectTranslation = (t: any) => {
+    setTrPicker(false);
+    if (t.code === trCode) return;
+    setTrCode(t.code);
+    setTrName(t.name);
+    AsyncStorage.setItem("bible_translation", t.code).catch(() => {});
+    loadBooks(t.code);
+  };
 
   const openChapter = (book: any, chapter: number) => {
     setPicker(null);
-    router.push(`/lettore/read?book=${book.book_nr}&chapter=${chapter}`);
+    router.push(`/lettore/read?book=${book.book_nr}&chapter=${chapter}&translation=${trCode}`);
   };
 
   const list = tab === "AT" ? books.at : books.nt;
@@ -46,13 +78,17 @@ export default function BibleHome() {
             <PressableScale testID="bible-search-open" onPress={() => router.push("/lettore/search")} style={styles.iconBtn}><Ionicons name="search" size={20} color={colors.white} /></PressableScale>
           </View>
         </View>
-        <Text style={styles.heroSub}>Riveduta (Luzzi 1927)</Text>
+        <PressableScale testID="bible-translation-btn" onPress={() => setTrPicker(true)} style={styles.trBtn}>
+          <Ionicons name="book-outline" size={13} color={colors.brandSecondary} />
+          <Text style={styles.heroSub}>{trName}</Text>
+          <Ionicons name="chevron-down" size={15} color={colors.brandSecondary} />
+        </PressableScale>
       </View>
 
       {loading ? <View style={styles.center}><ActivityIndicator color={colors.brandPrimary} size="large" /></View> : (
         <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
           {last && (
-            <PressableScale testID="bible-continue" style={styles.continueCard} onPress={() => router.push(`/lettore/read?book=${last.book_nr}&chapter=${last.chapter}`)}>
+            <PressableScale testID="bible-continue" style={styles.continueCard} onPress={() => router.push(`/lettore/read?book=${last.book_nr}&chapter=${last.chapter}&translation=${trCode}`)}>
               <View style={styles.continueIcon}><Ionicons name="book" size={20} color={colors.white} /></View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.continueLabel}>Continua a leggere</Text>
@@ -90,6 +126,26 @@ export default function BibleHome() {
         </ScrollView>
       )}
 
+      {/* Translation picker */}
+      <Modal visible={trPicker} transparent animationType="fade" onRequestClose={() => setTrPicker(false)}>
+        <Pressable style={styles.sheetBackdrop} onPress={() => setTrPicker(false)}>
+          <Pressable style={styles.sheet} onPress={() => {}}>
+            <Text style={styles.sheetTitle}>Versione della Bibbia</Text>
+            {translations.map((t) => (
+              <PressableScale key={t.code} testID={`bible-tr-${t.code}`} style={[styles.trRow, t.code === trCode && styles.trRowOn]} onPress={() => selectTranslation(t)}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.trRowName}>{t.name}</Text>
+                  <Text style={styles.trRowMeta}>{t.short} · Pubblico dominio</Text>
+                </View>
+                {t.code === trCode
+                  ? <Ionicons name="checkmark-circle" size={22} color={colors.brandPrimary} />
+                  : <Ionicons name="ellipse-outline" size={22} color={colors.muted} />}
+              </PressableScale>
+            ))}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* Chapter picker */}
       <Modal visible={!!picker} transparent animationType="fade" onRequestClose={() => setPicker(null)}>
         <Pressable style={styles.sheetBackdrop} onPress={() => setPicker(null)}>
@@ -114,7 +170,12 @@ const styles = StyleSheet.create({
   topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   iconBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.12)", alignItems: "center", justifyContent: "center" },
   topTitle: { color: colors.white, fontSize: 18, fontWeight: "800" },
-  heroSub: { color: colors.brandSecondary, fontSize: 13, fontWeight: "700", marginTop: spacing.sm },
+  heroSub: { color: colors.brandSecondary, fontSize: 13, fontWeight: "700" },
+  trBtn: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", marginTop: spacing.sm, backgroundColor: "rgba(255,255,255,0.10)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill },
+  trRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.md, paddingHorizontal: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.sm },
+  trRowOn: { borderColor: colors.brandPrimary, backgroundColor: colors.brandTertiary },
+  trRowName: { color: colors.onSurface, fontSize: 15.5, fontWeight: "800" },
+  trRowMeta: { color: colors.muted, fontSize: 12, marginTop: 2 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   continueCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.brandTertiary, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.lg },
   continueIcon: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },

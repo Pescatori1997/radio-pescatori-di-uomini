@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TextInput, ActivityIndicator } from
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api } from "@/src/api";
 import PressableScale from "@/src/components/PressableScale";
 import { colors, spacing, radius } from "@/src/theme";
@@ -14,11 +15,14 @@ export default function BibleSearch() {
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [trCode, setTrCode] = useState<string | undefined>(undefined);
 
   const run = async () => {
     if (q.trim().length < 2) return;
     setLoading(true); setSearched(true);
-    try { const d = await api.bibleSearch(q.trim()); setResults(d.results || []); }
+    let tr = trCode;
+    if (tr === undefined) { tr = (await AsyncStorage.getItem("bible_translation").catch(() => null)) || undefined; setTrCode(tr || ""); }
+    try { const d = await api.bibleSearch(q.trim(), undefined, tr || undefined); setResults(d.results || []); }
     catch { setResults([]); }
     finally { setLoading(false); }
   };
@@ -55,7 +59,7 @@ export default function BibleSearch() {
               {results.length > 0 && <Text style={styles.count}>{results.length} risultati</Text>}
               {results.map((r, i) => (
                 <PressableScale key={i} testID={`bible-result-${i}`} style={styles.row}
-                  onPress={() => router.push(`/lettore/read?book=${r.book_nr}&chapter=${r.chapter}&highlight=${r.verse}`)}>
+                  onPress={() => router.push(`/lettore/read?book=${r.book_nr}&chapter=${r.chapter}&highlight=${r.verse}${trCode ? `&translation=${trCode}` : ""}`)}>
                   <Text style={styles.ref}>{r.book_name} {r.chapter}:{r.verse}</Text>
                   {highlight(r.text)}
                 </PressableScale>
