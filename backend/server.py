@@ -5677,8 +5677,44 @@ async def _autosave_recordings():
         logger.info("autosaved recording episode for program %s", p["id"])
 
 
+AGENDA_REMINDER_MINUTES = 30  # remind invitees this many minutes before an event starts
+
+
+async def _send_agenda_reminders():
+    """Notify an event's invitees (+organizer) shortly before it starts.
+    Reuses push_inbox (native + web + in-app). Idempotent: once per event."""
+    now = datetime.now(_ROME_TZ)
+    today_s = now.date().isoformat()
+    events = await db.agenda_events.find(
+        {"date": today_s, "start_time": {"$nin": ["", None]}}, {"_id": 0}
+    ).to_list(500)
+    for ev in events:
+        start = ev.get("start_time") or ""
+        try:
+            sh, sm = int(start[:2]), int(start[3:5])
+        except Exception:
+            continue
+        start_dt = now.replace(hour=sh, minute=sm, second=0, microsecond=0)
+        delta = (start_dt - now).total_seconds()
+        if not (0 <= delta <= AGENDA_REMINDER_MINUTES * 60):
+            continue
+        key = f"{ev['id']}:{today_s}"
+        if await db.agenda_reminder_sent.find_one({"key": key}):
+            continue
+        await db.agenda_reminder_sent.insert_one({"key": key, "at": now_utc()})
+        recipients = list(set((ev.get("invitees") or []) + [ev.get("organizer_id")]))
+        if not recipients:
+            continue
+        mins = max(1, round(delta / 60))
+        loc = ev.get("location") or ""
+        body = f"Inizia tra circa {mins} min" + (f" · {start}" if start else "") + (f" · {loc}" if loc else "")
+        await push_inbox(recipients, "agenda_reminder", f"⏰ Tra poco: {ev.get('title','')}",
+                         body, f"/admin/agenda/{ev['id']}", ev["id"], None)
+
+
 async def _live_notif_scheduler():
-    """Background loop: pre-live notifications + auto-save recordings, every minute."""
+    """Background loop: pre-live notifications + auto-save recordings + agenda
+    reminders, every minute."""
     await asyncio.sleep(30)
     while True:
         try:
@@ -5689,6 +5725,10 @@ async def _live_notif_scheduler():
             await _autosave_recordings()
         except Exception as e:
             logger.warning("autosave recordings error: %s", e)
+        try:
+            await _send_agenda_reminders()
+        except Exception as e:
+            logger.warning("agenda reminder scheduler error: %s", e)
         await asyncio.sleep(60)
 
 

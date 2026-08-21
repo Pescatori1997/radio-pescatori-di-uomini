@@ -684,3 +684,9 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 ### Impostazioni di lettura (solo lettore)
 - Tasto ⚙️ (icona color-palette) nell'header del lettore apre "Impostazioni di lettura": 4 temi sfondo (Bianco/Seppia/Grigio chiaro/Notte) + scelta colore testo (swatch) + anteprima live. Applicati SOLO alla schermata di lettura (sfondo root + colore testo versetti); resto app invariato. Persistiti in AsyncStorage `bible_reader_theme` + `bible_text_color`.
 - Verificato E2E (screenshot): pannello rimandi con Giovanni 1:1-3/Ebrei 11:3/Isaia 45:18 toccabili; tema Notte applica sfondo scuro + testo chiaro. Backend endpoint verificato (Gen 1:1, Gv 3:16) in entrambe le traduzioni.
+
+## Agenda — Notifiche push agli invitati + promemoria pre-evento (2026-06)
+- Chiarito con l'utente: le push dell'Agenda vanno SOLO ai membri selezionati (invitati), non a tutti.
+- STATO: le notifiche push per l'Agenda erano GIÀ ATTIVE. `push_inbox` (usata da create/update/delete evento, task, RSVP) invia notifica in-app + push nativa + web push ai destinatari (dedup self-actor). Verificato: creando un evento con invitato, l'invitato riceve "Nuovo invito — Sei stato invitato a: <titolo>" (notifica in-app confermata via DB; in preview la push nativa non parte perché EMERGENT_PUSH_KEY=placeholder, in produzione parte).
+- AGGIUNTO: promemoria pre-evento. `_send_agenda_reminders()` (backend/server.py) integrato nel loop esistente `_live_notif_scheduler` (ogni 60s): per gli eventi di oggi con `start_time`, quando mancano ≤ `AGENDA_REMINDER_MINUTES` (30') invia push_inbox a invitati+organizzatore ("⏰ Tra poco: <titolo>"), idempotente via collezione `agenda_reminder_sent` (key=event:date).
+- Nessuna nuova integrazione (riusa il sistema push Emergent-managed esistente). Le push funzionano solo su build reali iOS/Android; Android richiede google-services.json; l'invitato deve aver concesso il permesso notifiche.
