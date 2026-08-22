@@ -62,7 +62,12 @@ export default function ProgramDetail() {
     api.favoriteProgramIds().then((ids: string[]) => setFav(ids.includes(p.id))).catch(() => {});
   }, [user, p]);
 
-  const shareUrl = `https://evangelic-stream.emergent.host/programma/${slug}`;
+  // Best public link to share: prefer the program's live/watch URL (opens the
+  // live directly), else the canonical program page.
+  const extUrl = (u?: string) => (u && /^https?:\/\//i.test(u) && !/emergent|\/api\//i.test(u)) ? u : "";
+  const liveLink = extUrl(p?.broadcast_media_url) || extUrl(p?.social?.youtube) || extUrl(p?.social?.facebook) || extUrl(p?.social?.instagram);
+  const shareUrl = liveLink || `https://evangelic-stream.emergent.host/programma/${slug}`;
+  const goBack = useCallback(() => { if (router.canGoBack()) router.back(); else router.replace("/" as any); }, [router]);
   const doShare = useCallback(async () => {
     try { await Share.share({ message: `${p?.title} · Pescatori di Uomini\n${shareUrl}`, url: shareUrl }); } catch {}
   }, [p, shareUrl]);
@@ -72,9 +77,11 @@ export default function ProgramDetail() {
     try { const r = await api.toggleFavoriteProgram(p.id); setFav(r.favorited); } catch { setFav((v) => !v); }
   }, [user, p, router]);
   const contact = useCallback(() => {
-    const c = p?.contact_url || "";
-    if (c) Linking.openURL(c.includes("@") && !c.startsWith("mailto") ? `mailto:${c}` : c).catch(() => {});
-    else router.push("/contact" as any);
+    const c = (p?.contact_url || "").trim();
+    if (c.includes("@")) { Linking.openURL(c.startsWith("mailto:") ? c : `mailto:${c}`).catch(() => {}); return; }
+    if (/^https?:\/\//i.test(c)) { Linking.openURL(c).catch(() => {}); return; }
+    // Empty or invalid value (e.g. "test") -> open the in-app Contatti page.
+    router.push("/contact" as any);
   }, [p, router]);
   const playEpisode = useCallback((ep: any) => { if (ep?.audio_url) setPlaying(ep); }, []);
 
@@ -82,7 +89,7 @@ export default function ProgramDetail() {
   if (!p) return (
     <View style={[styles.screen, styles.center, { paddingTop: insets.top }]}>
       <Text style={{ color: TEXT }}>Programma non trovato.</Text>
-      <Pressable onPress={() => router.back()} style={styles.backChip}><Text style={{ color: ACCENT, fontWeight: "800" }}>Indietro</Text></Pressable>
+      <Pressable onPress={goBack} style={styles.backChip}><Text style={{ color: ACCENT, fontWeight: "800" }}>Indietro</Text></Pressable>
     </View>
   );
 
@@ -105,7 +112,7 @@ export default function ProgramDetail() {
           {hero ? <Image source={{ uri: hero }} style={StyleSheet.absoluteFill} contentFit="cover" /> : <LinearGradient colors={[ACCENT, colors.navy]} style={StyleSheet.absoluteFill} />}
           <LinearGradient colors={["rgba(10,17,40,0.15)", "rgba(10,17,40,0.55)", "rgba(10,17,40,0.9)"]} locations={[0, 0.5, 1]} style={StyleSheet.absoluteFill} />
           <View style={[styles.heroTop, { paddingTop: insets.top + 8 }]}>
-            <Pressable onPress={() => router.back()} hitSlop={10} style={styles.iconBtn}><Ionicons name="chevron-back" size={24} color="#fff" /></Pressable>
+            <Pressable onPress={goBack} hitSlop={10} style={styles.iconBtn}><Ionicons name="chevron-back" size={24} color="#fff" /></Pressable>
             <Pressable onPress={doShare} hitSlop={10} style={styles.iconBtn}><Ionicons name="share-social-outline" size={22} color="#fff" /></Pressable>
           </View>
           <View style={styles.heroText}>
