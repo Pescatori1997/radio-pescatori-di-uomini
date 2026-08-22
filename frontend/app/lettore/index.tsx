@@ -73,7 +73,6 @@ export default function BibleHome() {
           <PressableScale onPress={() => router.back()} style={styles.iconBtn}><Ionicons name="arrow-back" size={22} color={colors.white} /></PressableScale>
           <Text style={styles.topTitle}>Bibbia</Text>
           <View style={{ flexDirection: "row", gap: spacing.sm }}>
-            <PressableScale testID="bible-plans-open" onPress={() => router.push("/lettore/piani")} style={styles.iconBtn}><Ionicons name="reader" size={18} color={colors.white} /></PressableScale>
             <PressableScale testID="bible-saved-open" onPress={() => router.push("/lettore/salvati")} style={styles.iconBtn}><Ionicons name="bookmark" size={18} color={colors.white} /></PressableScale>
             <PressableScale testID="bible-search-open" onPress={() => router.push("/lettore/search")} style={styles.iconBtn}><Ionicons name="search" size={20} color={colors.white} /></PressableScale>
           </View>

@@ -105,7 +105,7 @@ export default function Home() {
       case "palinsesto":
         return (
           <>
-            <SectionHeader title={t("home_palinsesto")} seeAll={st("home", "see_all")} onPress={() => router.push("/palinsesto")} />
+            <SectionHeader title={t("home_palinsesto")} />
             <View style={half ? undefined : { paddingHorizontal: spacing.lg }}>
               <PressableScale testID="home-onair" style={styles.onAirCard} onPress={() => router.push("/palinsesto")}>
                 {onAir ? (
@@ -137,10 +137,6 @@ export default function Home() {
                     <Ionicons name="chevron-forward" size={20} color={colors.muted} />
                   </>
                 )}
-              </PressableScale>
-              <PressableScale testID="home-view-schedule" style={styles.scheduleBtn} onPress={() => router.push("/palinsesto")}>
-                <Ionicons name="calendar-outline" size={18} color={colors.brandPrimary} />
-                <Text style={styles.scheduleBtnText}>{st("home", "schedule_btn")}</Text>
               </PressableScale>
             </View>
           </>
@@ -289,11 +285,11 @@ export default function Home() {
   );
 }
 
-function SectionHeader({ title, seeAll, onPress }: { title: string; seeAll: string; onPress: () => void }) {
+function SectionHeader({ title, seeAll, onPress }: { title: string; seeAll?: string; onPress?: () => void }) {
   return (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionTitle}>{title}</Text>
-      <Pressable onPress={onPress} hitSlop={8}><Text style={styles.seeAll}>{seeAll}</Text></Pressable>
+      {onPress ? <Pressable onPress={onPress} hitSlop={8}><Text style={styles.seeAll}>{seeAll}</Text></Pressable> : null}
     </View>
   );
 }
