@@ -17,7 +17,7 @@ import { FishingNet, SeaWaves, Bubbles, Blob } from "@/src/components/marine";
 import { colors, spacing, radius } from "@/src/theme";
 
 const WHATSAPP_URL =
-  "https://wa.me/393517556255?text=Ciao%20Radio%20Pescatori%20di%20Uomini!%20Vi%20scrivo...";
+  "https://wa.me/393272715214?text=Ciao%20Radio%20Pescatori%20di%20Uomini!%20Vi%20scrivo...";
 const WA_GREEN = "#25D366";
 const WA_GREEN_DARK = "#1EBE5D";
 
