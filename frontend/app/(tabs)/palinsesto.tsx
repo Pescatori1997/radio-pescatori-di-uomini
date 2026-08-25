@@ -70,7 +70,7 @@ export default function Palinsesto() {
   const days = Array.from({ length: 14 }, (_, i) => i);
   const hours = Array.from({ length: 24 }, (_, h) => h); // full 24h timeline
 
-  const renderCard = (p: any) => {
+  const renderCard = (p: any, offsetMin: number = 0) => {
     const live = isToday && isOnAir(p);
     const startMin = toMin(p.start_time);
     const endMin = p.end_time && p.end_time <= p.start_time ? toMin(p.end_time) + 1440 : toMin(p.end_time || p.start_time);
@@ -82,7 +82,7 @@ export default function Palinsesto() {
     const hasBroadcast = !!(p.broadcast_media_url || p.broadcast_is_live);
     const openProgram = () => router.push((live && hasBroadcast ? "/diretta" : `/programma/${p.slug || p.id}`) as any);
     return (
-      <Pressable key={p.id} testID={`prog-${p.id}`} onPress={openProgram} style={[styles.card, live && styles.cardLive]}>
+      <Pressable key={p.id} testID={`prog-${p.id}`} onPress={openProgram} style={[styles.card, live && styles.cardLive, offsetMin > 0 && { marginTop: offsetMin }]}>
         <View style={[styles.thumbWrap, shown.length > 1 && { width: 60 + (shown.length - 1) * 22 }]}>
           {shown.length === 0 ? (
             <View style={[styles.thumb, styles.thumbEmpty]}><Ionicons name="mic" size={24} color={ACCENT} /></View>
@@ -151,7 +151,7 @@ export default function Palinsesto() {
                   <View style={styles.lineBottom} />
                 </View>
                 <View style={styles.hourContent}>
-                  {inHour.length === 0 ? <View style={styles.emptySlot} /> : inHour.map(renderCard)}
+                  {inHour.length === 0 ? <View style={styles.emptySlot} /> : inHour.map((p, i) => renderCard(p, i === 0 ? (toMin(p.start_time) % 60) : 0))}
                 </View>
               </View>
             );

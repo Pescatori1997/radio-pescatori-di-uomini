@@ -51,11 +51,13 @@ export function liveEmbedSrc(url: string, provider?: string | null, startSeconds
   const start = Math.max(0, Math.floor(startSeconds || 0));
   if (base.includes("youtube.com/embed")) {
     const sep = base.includes("?") ? "&" : "?";
-    return `${base}${sep}autoplay=1&mute=1${start > 0 ? `&start=${start}` : ""}`;
+    // controls=0 + disablekb=1 + fs=0 => no progress bar / no seeking (everyone
+    // watches the synced live position, nobody can skip forward/back).
+    return `${base}${sep}autoplay=1&mute=1&controls=0&disablekb=1&fs=0&modestbranding=1&iv_load_policy=3${start > 0 ? `&start=${start}` : ""}`;
   }
   if (base.includes("player.vimeo.com")) {
     const sep = base.includes("?") ? "&" : "?";
-    return `${base}${sep}autoplay=1&muted=1${start > 0 ? `#t=${start}s` : ""}`;
+    return `${base}${sep}autoplay=1&muted=1&controls=0${start > 0 ? `#t=${start}s` : ""}`;
   }
   return base;
 }
