@@ -722,3 +722,7 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - `src/components/live/EmbedFrame.tsx`: su NATIVO Twitch viene caricato via HTML+baseUrl (baseUrl host = evangelic-stream.emergent.host) così il parent è valido; su WEB usa l'URL diretto (host pagina già whitelisted).
 - Admin Palinsesto (schedule/[id].tsx) già accetta URL grezzo e cita Twitch: nessuna modifica. L'admin incolla il link canale e attiva la Modalità Diretta.
 - NB: per vederlo nell'app pubblicata serve Publish (aggiorna il bundle JS). Verificato bundle pulito; playback live reale non E2E-testabile qui.
+
+## Fix Twitch "Connessione negata" (parent) (2026-06)
+- Sintomo: player Twitch mostra "Connessione negata da player.twitch.tv" → il param `parent` non combaciava con l'host reale della finestra/app.
+- Fix: embedSrc twitch ora costruisce i `parent` includendo anche `window.location.hostname` a runtime (web), oltre agli host noti. Su nativo EmbedFrame usa già html+baseUrl=evangelic-stream.emergent.host (parent valido). Serve Publish per applicare in produzione.

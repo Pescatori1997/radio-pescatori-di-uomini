@@ -25,8 +25,16 @@ export function embedSrc(url: string, provider?: string | null): string | null {
   }
   if (provider === "twitch") {
     // Twitch requires a `parent` param matching the host of the embedding page.
-    // We include all app hosts (prod, preview, localhost + the native baseUrl host).
-    const parents = "parent=evangelic-stream.emergent.host&parent=evangelic-stream.preview.emergentagent.com&parent=localhost";
+    // Include the known app hosts + the ACTUAL runtime hostname (web), so it
+    // works whatever domain currently serves the app. On native, EmbedFrame
+    // wraps the player in an HTML page whose baseUrl host is the first one below.
+    const hosts = ["evangelic-stream.emergent.host", "evangelic-stream.preview.emergentagent.com", "localhost"];
+    try {
+      // @ts-ignore - web only
+      const h = typeof window !== "undefined" && window.location && window.location.hostname;
+      if (h && !hosts.includes(h)) hosts.push(h);
+    } catch {}
+    const parents = hosts.map((h) => `parent=${h}`).join("&");
     const vid = url.match(/twitch\.tv\/videos\/(\d+)/);
     if (vid) return `https://player.twitch.tv/?video=${vid[1]}&${parents}&autoplay=true&muted=true`;
     const clip = url.match(/clips\.twitch\.tv\/([A-Za-z0-9_-]+)/) || url.match(/twitch\.tv\/\w+\/clip\/([A-Za-z0-9_-]+)/);
