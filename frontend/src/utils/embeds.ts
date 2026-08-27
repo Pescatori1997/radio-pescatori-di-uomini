@@ -40,7 +40,12 @@ export function embedSrc(url: string, provider?: string | null): string | null {
     const clip = url.match(/clips\.twitch\.tv\/([A-Za-z0-9_-]+)/) || url.match(/twitch\.tv\/\w+\/clip\/([A-Za-z0-9_-]+)/);
     if (clip) return `https://clips.twitch.tv/embed?clip=${clip[1]}&${parents}&autoplay=true&muted=true`;
     const ch = url.match(/twitch\.tv\/([A-Za-z0-9_]{2,25})/);
-    if (ch) return `https://player.twitch.tv/?channel=${ch[1]}&${parents}&autoplay=true&muted=true&controls=false`;
+    if (ch) return `https://player.twitch.tv/?channel=${ch[1]}&${parents}&autoplay=true&muted=true`;
+  }
+  if (provider === "restream") {
+    // Restream embed player (from Restream "Embed" feature) is already an
+    // iframe-ready URL (e.g. https://player.restream.io?token=...): pass through.
+    return url;
   }
   if (yt) return `https://www.youtube.com/embed/${yt[1]}?rel=0&playsinline=1`;
   return null;
@@ -55,6 +60,7 @@ export function detectProvider(url: string): string | null {
   if (u.includes("instagram.com")) return "instagram";
   if (u.includes("facebook.com") || u.includes("fb.watch")) return "facebook";
   if (u.includes("twitch.tv")) return "twitch";
+  if (u.includes("restream.io")) return "restream";
   if (u.includes("spotify.com")) return "spotify";
   return null;
 }
@@ -71,13 +77,13 @@ export function liveEmbedSrc(url: string, provider?: string | null, startSeconds
   const start = Math.max(0, Math.floor(startSeconds || 0));
   if (base.includes("youtube.com/embed")) {
     const sep = base.includes("?") ? "&" : "?";
-    // controls=0 + disablekb=1 + fs=0 => no progress bar / no seeking (everyone
-    // watches the synced live position, nobody can skip forward/back).
-    return `${base}${sep}autoplay=1&mute=1&controls=0&disablekb=1&fs=0&modestbranding=1&iv_load_policy=3${start > 0 ? `&start=${start}` : ""}`;
+    // Keep the standard controls so viewers can unmute and go fullscreen.
+    // On a LIVE stream there is no forward-seek by nature (everyone stays synced).
+    return `${base}${sep}autoplay=1&mute=1&modestbranding=1&iv_load_policy=3${start > 0 ? `&start=${start}` : ""}`;
   }
   if (base.includes("player.vimeo.com")) {
     const sep = base.includes("?") ? "&" : "?";
-    return `${base}${sep}autoplay=1&muted=1&controls=0${start > 0 ? `#t=${start}s` : ""}`;
+    return `${base}${sep}autoplay=1&muted=1${start > 0 ? `#t=${start}s` : ""}`;
   }
   return base;
 }
@@ -89,6 +95,7 @@ export const PROVIDER_LABEL: Record<string, string> = {
   instagram: "Instagram",
   facebook: "Facebook",
   twitch: "Twitch",
+  restream: "Restream",
   spotify: "Spotify",
   upload: "File caricato",
 };

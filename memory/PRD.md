@@ -726,3 +726,6 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 ## Fix Twitch "Connessione negata" (parent) (2026-06)
 - Sintomo: player Twitch mostra "Connessione negata da player.twitch.tv" → il param `parent` non combaciava con l'host reale della finestra/app.
 - Fix: embedSrc twitch ora costruisce i `parent` includendo anche `window.location.hostname` a runtime (web), oltre agli host noti. Su nativo EmbedFrame usa già html+baseUrl=evangelic-stream.emergent.host (parent valido). Serve Publish per applicare in produzione.
+
+## Fix player: ripristino audio + fullscreen (2026-06)
+- Il precedente controls=0 (per bloccare il seek) nascondeva anche audio e schermo intero su YouTube/Twitch/Vimeo. Ripristinati i controlli standard: YouTube `autoplay=1&mute=1&modestbranding=1&iv_load_policy=3` (niente più controls=0/disablekb/fs=0); Vimeo controls di default; Twitch tolto controls=false. Su LIVE non c'è forward-seek per natura. Registrati nativi restano senza controlli (nativeControls=false).
