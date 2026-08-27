@@ -715,3 +715,10 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - FIX (minimo, non invasivo): `index.js` ora registra il root SINCRONAMENTE su nativo (`require("expo-router/entry")` fuori dal Promise) e mantiene il defer solo su web (Platform.OS === 'web'). La palette viene applicata best-effort: su nativo prende effetto dal launch successivo (comportamento già previsto), su web resta immediata. Nessuna modifica a design/funzionalità/PWA.
 - Verificato: web si avvia regolarmente (welcome gate + colori brand). Il crash nativo si risolve alla nuova build.
 - NB: non ho accesso a logcat/EAS logs dall'ambiente; causa dedotta dal codice (regressione coincidente con 1.0.1). expo-notifications senza googleServicesFile NON causa crash all'avvio (solo FCM non attivo).
+
+## Diretta: supporto Twitch aggiunto (2026-06)
+- Richiesta: usare Twitch come canale live temporaneo (YouTube si sblocca domani).
+- `src/utils/embeds.ts`: aggiunto provider "twitch" in detectProvider, PROVIDER_LABEL e embedSrc. embedSrc costruisce l'URL player Twitch con i `parent` richiesti (evangelic-stream.emergent.host, evangelic-stream.preview.emergentagent.com, localhost). Supporta canale (twitch.tv/NAME), VOD (twitch.tv/videos/ID) e clip. autoplay+muted; canale con controls=false. liveEmbedSrc restituisce il base twitch invariato.
+- `src/components/live/EmbedFrame.tsx`: su NATIVO Twitch viene caricato via HTML+baseUrl (baseUrl host = evangelic-stream.emergent.host) così il parent è valido; su WEB usa l'URL diretto (host pagina già whitelisted).
+- Admin Palinsesto (schedule/[id].tsx) già accetta URL grezzo e cita Twitch: nessuna modifica. L'admin incolla il link canale e attiva la Modalità Diretta.
+- NB: per vederlo nell'app pubblicata serve Publish (aggiorna il bundle JS). Verificato bundle pulito; playback live reale non E2E-testabile qui.

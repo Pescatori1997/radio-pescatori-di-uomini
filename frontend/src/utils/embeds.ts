@@ -23,6 +23,17 @@ export function embedSrc(url: string, provider?: string | null): string | null {
   if (provider === "facebook") {
     return `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=false`;
   }
+  if (provider === "twitch") {
+    // Twitch requires a `parent` param matching the host of the embedding page.
+    // We include all app hosts (prod, preview, localhost + the native baseUrl host).
+    const parents = "parent=evangelic-stream.emergent.host&parent=evangelic-stream.preview.emergentagent.com&parent=localhost";
+    const vid = url.match(/twitch\.tv\/videos\/(\d+)/);
+    if (vid) return `https://player.twitch.tv/?video=${vid[1]}&${parents}&autoplay=true&muted=true`;
+    const clip = url.match(/clips\.twitch\.tv\/([A-Za-z0-9_-]+)/) || url.match(/twitch\.tv\/\w+\/clip\/([A-Za-z0-9_-]+)/);
+    if (clip) return `https://clips.twitch.tv/embed?clip=${clip[1]}&${parents}&autoplay=true&muted=true`;
+    const ch = url.match(/twitch\.tv\/([A-Za-z0-9_]{2,25})/);
+    if (ch) return `https://player.twitch.tv/?channel=${ch[1]}&${parents}&autoplay=true&muted=true&controls=false`;
+  }
   if (yt) return `https://www.youtube.com/embed/${yt[1]}?rel=0&playsinline=1`;
   return null;
 }
@@ -35,6 +46,7 @@ export function detectProvider(url: string): string | null {
   if (u.includes("tiktok.com")) return "tiktok";
   if (u.includes("instagram.com")) return "instagram";
   if (u.includes("facebook.com") || u.includes("fb.watch")) return "facebook";
+  if (u.includes("twitch.tv")) return "twitch";
   if (u.includes("spotify.com")) return "spotify";
   return null;
 }
@@ -68,6 +80,7 @@ export const PROVIDER_LABEL: Record<string, string> = {
   tiktok: "TikTok",
   instagram: "Instagram",
   facebook: "Facebook",
+  twitch: "Twitch",
   spotify: "Spotify",
   upload: "File caricato",
 };
