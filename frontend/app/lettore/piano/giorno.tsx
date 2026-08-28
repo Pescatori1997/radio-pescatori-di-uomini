@@ -117,6 +117,27 @@ export default function PlanDayPage() {
 
   const goDay = (d: number) => router.replace(`/lettore/piano/giorno?id=${id}&day=${d}`);
 
+  // Mark the current day as read (never un-marks here). Returns true on success.
+  const markDone = async () => {
+    if (!user) { requireLogin(); return false; }
+    if (!enrollment) { try { await api.enrollPlan(id!); } catch { /* noop */ } }
+    if (!done.has(dayNum)) {
+      const next = new Set(done); next.add(dayNum);
+      setEnrollment((e: any) => ({ ...(e || { completed_days: [] }), completed_days: Array.from(next) }));
+      try { await api.togglePlanDay(id!, dayNum, true); }
+      catch (e: any) { setEnrollment((prev: any) => ({ ...prev, completed_days: Array.from(done) })); alertMessage("Errore", e?.message || "Riprova"); return false; }
+    }
+    return true;
+  };
+
+  const finishAndContinue = async () => {
+    const ok = await markDone();
+    if (!ok) return;
+    if (dayNum < (plan?.duration_days || (plan?.days?.length ?? 0))) { goDay(dayNum + 1); return; }
+    alertMessage("Piano completato 🎉", "Hai completato tutte le giornate di questo piano. Continua a camminare nella Parola!");
+    router.back();
+  };
+
   if (loading) return <View style={styles.center}><ActivityIndicator color={colors.brandPrimary} size="large" /></View>;
   if (!plan || !dayObj) return (
     <View style={styles.center}>
@@ -197,6 +218,15 @@ export default function PlanDayPage() {
               style={styles.reflectInput}
             />
 
+            {/* End-of-day confirmation: mark read and move on (read several days in a row). */}
+            <PressableScale testID="day-finish" onPress={finishAndContinue} style={[styles.finishBtn, isDone && styles.finishBtnDone]}>
+              <Ionicons name={isDone ? "checkmark-circle" : "checkmark-circle-outline"} size={20} color="#fff" />
+              <Text style={styles.finishText}>
+                {isDone ? (hasNext ? "Vai alla giornata successiva" : "Torna al piano") : (hasNext ? "Ho letto · Vai al giorno successivo" : "Ho letto · Completa il piano")}
+              </Text>
+              <Ionicons name="arrow-forward" size={18} color="rgba(255,255,255,0.85)" />
+            </PressableScale>
+
             <Ornament />
           </Animated.View>
         </ScrollView>
@@ -255,6 +285,10 @@ const styles = StyleSheet.create({
   readWholeText: { flex: 1, color: RIBBON, fontSize: 13.5, fontWeight: "700" },
 
   reflectInput: { backgroundColor: "rgba(255,255,255,0.5)", borderWidth: 1, borderColor: "#D8C49A", borderRadius: radius.md, padding: spacing.md, minHeight: 90, color: INK, fontSize: 14.5, lineHeight: 22, fontFamily: serif, textAlignVertical: "top" },
+
+  finishBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: RIBBON, borderRadius: radius.pill, paddingVertical: 14, paddingHorizontal: spacing.lg, marginTop: spacing.xl },
+  finishBtnDone: { backgroundColor: "#1B7A46" },
+  finishText: { color: "#fff", fontSize: 14.5, fontWeight: "800" },
 
   footer: { position: "absolute", left: 0, right: 0, bottom: 0, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.md, backgroundColor: "rgba(10,17,40,0.96)", borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.08)" },
   turnBtn: { flexDirection: "row", alignItems: "center", gap: 2, paddingVertical: 8 },

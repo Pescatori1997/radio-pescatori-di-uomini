@@ -757,3 +757,7 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - **Admin**: l'editor piani supporta già copertina (image picker) + categoria → i libri veri si creano dal pannello. Le copertine verticali (ritratto) rendono meglio nel formato libro.
 - **Demo (SOLO preview)**: `backend/demo_plans_seed.py` inserisce 8 piani dimostrativi (flag `demo:true`) su 5 categorie per mostrare gli scaffali. NON presenti in produzione; l'utente creerà i propri piani da admin.
 - Verificato via screenshot: scaffali per categoria con mensole, indice con segnalibri a nastro, pagina-giornata pergamena con testo versetti reale. Lint pulito.
+
+## Updated (2026-06 — Pagina-giornata: conferma lettura + leggi più giorni di fila)
+- Aggiunto pulsante di conferma **in fondo** al contenuto della giornata (`day-finish`): "Ho letto · Vai al giorno successivo" (segna completato E apre la giornata seguente → si possono leggere più giorni di fila). Se la giornata è già completata: "Vai alla giornata successiva"; sull'ultima giornata: "Ho letto · Completa il piano" → messaggio "Piano completato 🎉" e ritorno all'indice. Funzione `markDone` (non de-marca mai, auto-enroll se necessario) + `finishAndContinue`. La barra fissa in basso (Precedente/Successiva + toggle) resta per la navigazione.
+- Admin: ritaglio copertina piano cambiato da 16:9 a **3:4 (verticale)** per combaciare col formato libro. Formato copertina consigliato: 3:4, 1200×1600px, soggetto centrato, fascia inferiore libera (overlay "N GIORNI").
