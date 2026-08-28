@@ -111,7 +111,7 @@ export default function AdminPlanEditor() {
     <AdminShell title={isNew ? "Nuovo piano" : "Modifica piano"} activeKey="plans">
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
         <AInput label="Titolo *" value={title} onChangeText={setTitle} placeholder="Es. Incontra Gesù – 7 giorni nei Vangeli" testID="plan-title" />
-        <AImagePicker testID="plan-cover" label="Immagine di copertina" value={cover} onChange={(v: string) => setCover(v)} aspect={[16, 9]} />
+        <AImagePicker testID="plan-cover" label="Immagine di copertina" value={cover} onChange={(v: string) => setCover(v)} aspect={[3, 4]} />
         <AInput label="Sottotitolo" value={subtitle} onChangeText={setSubtitle} placeholder="Breve descrizione in una riga" testID="plan-subtitle" />
         <AInput label="Descrizione" value={description} onChangeText={setDescription} multiline placeholder="Descrizione del piano" testID="plan-description" />
         <AInput label="Categoria" value={category} onChangeText={setCategory} placeholder="Es. Vangeli, Speranza" testID="plan-category" />
