@@ -14,13 +14,7 @@ import SharePlanSheet from "@/src/components/SharePlanSheet";
 import { confirmAsync, alertMessage } from "@/src/utils/confirm";
 import { colors, spacing, radius } from "@/src/theme";
 
-const FEATURES = [
-  ["book-outline", "Struttura a libro per un'esperienza immersiva"],
-  ["bookmark-outline", "Segnalibri per ogni giornata del piano"],
-  ["time-outline", "Letture brevi e mirate (5-7 minuti)"],
-  ["create-outline", "Spazio per la riflessione personale"],
-  ["share-social-outline", "Condividi le meditazioni che ti toccano"],
-];
+const RECOMMEND_LIMIT = 8;
 
 // Ribbon-shaped bookmark tab for a single day.
 function Ribbon({ day, title, done, current, onPress }: { day: number; title?: string; done: boolean; current: boolean; onPress: () => void }) {
@@ -46,6 +40,7 @@ export default function PlanDetail() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [sharePlanOpen, setSharePlanOpen] = useState(false);
+  const [allPlans, setAllPlans] = useState<any[]>([]);
   const [w, setW] = useState(0);
 
   const load = useCallback(() => {
@@ -53,6 +48,7 @@ export default function PlanDetail() {
     setLoading(true);
     api.readingPlan(id).then((p: any) => { setPlan(p); setEnrollment(p.enrollment || null); })
       .catch(() => {}).finally(() => setLoading(false));
+    api.readingPlans().then((all: any[]) => setAllPlans(all || [])).catch(() => {});
   }, [id]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -64,6 +60,11 @@ export default function PlanDetail() {
   const days = plan?.days || [];
   const resumeDay = days.map((d: any) => d.day).find((d: number) => !done.has(d)) || 1;
   const resumeObj = days.find((d: any) => d.day === resumeDay);
+  const others = allPlans.filter((p: any) => p.id !== id);
+  const recommended = [
+    ...others.filter((p: any) => plan?.category && p.category === plan.category),
+    ...others.filter((p: any) => !(plan?.category && p.category === plan.category)),
+  ].slice(0, RECOMMEND_LIMIT);
 
   const requireLogin = () => {
     alertMessage("Accedi per continuare", "Crea un account gratuito per iniziare i piani di lettura e salvare i tuoi progressi.");
@@ -124,7 +125,7 @@ export default function PlanDetail() {
 
           <View style={styles.metaRow}>
             <View style={styles.metaPill}><Ionicons name="calendar-outline" size={13} color="rgba(255,255,255,0.8)" /><Text style={styles.metaText}>{duration} Giorni</Text></View>
-            <View style={styles.metaPill}><Ionicons name="time-outline" size={13} color="rgba(255,255,255,0.8)" /><Text style={styles.metaText}>5-7 min al giorno</Text></View>
+            <View style={styles.metaPill}><Ionicons name="time-outline" size={13} color="rgba(255,255,255,0.8)" /><Text style={styles.metaText}>{plan.reading_time || "5-7 min al giorno"}</Text></View>
             <View style={styles.metaPill}><Ionicons name="bookmark-outline" size={13} color="rgba(255,255,255,0.8)" /><Text style={styles.metaText}>{duration} Segnalibri</Text></View>
           </View>
 
@@ -157,16 +158,20 @@ export default function PlanDetail() {
             )}
           </PressableScale>
 
-          {/* Features */}
-          <View style={styles.featureCard}>
-            <Text style={styles.featureHead}>CARATTERISTICHE</Text>
-            {FEATURES.map(([icon, text]) => (
-              <View key={text} style={styles.featureRow}>
-                <Ionicons name={icon as any} size={16} color="#F6C560" />
-                <Text style={styles.featureText}>{text}</Text>
-              </View>
-            ))}
-          </View>
+          {/* Recommended plans */}
+          {recommended.length > 0 && (
+            <View style={{ marginTop: spacing.xl }}>
+              <Text style={styles.blockLabel}>PIANI CONSIGLIATI</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 4, paddingRight: spacing.lg }}>
+                {recommended.map((p: any) => (
+                  <View key={p.id} style={styles.recCell}>
+                    <BookCover plan={p} width={112} onPress={() => router.push(`/lettore/piano/${p.id}`)} />
+                    <Text numberOfLines={2} style={styles.recTitle}>{p.title}</Text>
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          )}
         </View>
 
         {w > 0 && <SeaWaves width={w} height={40} />}
@@ -211,8 +216,6 @@ const styles = StyleSheet.create({
   continueTitle: { color: colors.white, fontSize: 13, fontWeight: "900", letterSpacing: 0.5 },
   continueSub: { color: "rgba(255,255,255,0.65)", fontSize: 12.5, marginTop: 2 },
 
-  featureCard: { backgroundColor: "rgba(255,255,255,0.04)", borderWidth: 1, borderColor: "rgba(255,255,255,0.08)", borderRadius: radius.md, padding: spacing.lg, marginTop: spacing.xl, gap: spacing.md },
-  featureHead: { color: "rgba(255,255,255,0.55)", fontSize: 11, fontWeight: "800", letterSpacing: 1.5, marginBottom: 2 },
-  featureRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-  featureText: { flex: 1, color: "rgba(255,255,255,0.85)", fontSize: 13.5, fontWeight: "600", lineHeight: 19 },
+  recCell: { width: 112, marginRight: 12 },
+  recTitle: { color: "rgba(255,255,255,0.85)", fontSize: 12, fontWeight: "700", marginTop: 6, lineHeight: 15 },
 });

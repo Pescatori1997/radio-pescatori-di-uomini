@@ -26,6 +26,7 @@ export default function AdminPlanEditor() {
   const [description, setDescription] = useState("");
   const [cover, setCover] = useState<string | null>(null);
   const [category, setCategory] = useState("");
+  const [readingTime, setReadingTime] = useState("");
   const [featured, setFeatured] = useState(false);
   const [status, setStatus] = useState("draft");
   const [order, setOrder] = useState("0");
@@ -44,6 +45,7 @@ export default function AdminPlanEditor() {
       setTitle(p.title || ""); setSubtitle(p.subtitle || ""); setDescription(p.description || "");
       setCover(p.cover || null);
       setCategory(p.category || ""); setFeatured(!!p.featured); setStatus(p.status || "draft");
+      setReadingTime(p.reading_time || "");
       setOrder(String(p.order ?? 0));
       setDays((p.days && p.days.length ? p.days : [emptyDay(1)]).map((d: any, i: number) => ({
         day: i + 1, title: d.title || "", meditation: d.meditation || "",
@@ -89,6 +91,7 @@ export default function AdminPlanEditor() {
       title: title.trim(), subtitle: subtitle.trim() || undefined, description: description.trim() || undefined,
       cover: cover || undefined,
       category: category.trim() || undefined, featured, status, order: parseInt(order, 10) || 0, days: cleanDays,
+      reading_time: readingTime.trim() || undefined,
     };
     setSaving(true);
     try {
@@ -115,6 +118,7 @@ export default function AdminPlanEditor() {
         <AInput label="Sottotitolo" value={subtitle} onChangeText={setSubtitle} placeholder="Breve descrizione in una riga" testID="plan-subtitle" />
         <AInput label="Descrizione" value={description} onChangeText={setDescription} multiline placeholder="Descrizione del piano" testID="plan-description" />
         <AInput label="Categoria" value={category} onChangeText={setCategory} placeholder="Es. Vangeli, Speranza" testID="plan-category" />
+        <AInput label="Tempo di lettura giornaliero" value={readingTime} onChangeText={setReadingTime} placeholder="Es. 5-7 min, 10 min, 15 minuti" testID="plan-reading-time" />
         <AInput label="Ordine" value={order} onChangeText={setOrder} keyboardType="number-pad" testID="plan-order" />
         <ASwitch label="In evidenza" value={featured} onValueChange={setFeatured} testID="plan-featured" />
 

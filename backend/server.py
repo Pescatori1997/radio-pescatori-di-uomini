@@ -6053,6 +6053,7 @@ class ReadingPlanIn(BaseModel):
     description: Optional[str] = None
     cover: Optional[str] = None
     category: Optional[str] = None
+    reading_time: Optional[str] = None  # daily reading time label, e.g. "5-7 min"
     days: List[PlanDay] = []
     featured: bool = False
     status: str = "draft"  # draft | published
@@ -6065,6 +6066,7 @@ def _plan_public(p: dict) -> dict:
         "id": p["id"], "title": p.get("title"), "subtitle": p.get("subtitle"),
         "description": p.get("description"), "cover": p.get("cover"),
         "category": p.get("category"), "featured": p.get("featured", False),
+        "reading_time": p.get("reading_time"),
         "duration_days": p.get("duration_days") or len(p.get("days") or []),
         "order": p.get("order", 0),
     }
@@ -6205,6 +6207,7 @@ async def admin_create_plan(body: ReadingPlanIn, admin=Depends(require_perm("pla
     doc = {
         "id": new_id("plan"), "title": body.title.strip(), "subtitle": body.subtitle,
         "description": body.description, "cover": body.cover, "category": body.category,
+        "reading_time": (body.reading_time or "").strip() or None,
         "featured": body.featured, "status": body.status, "order": body.order,
         "days": days, "duration_days": len(days),
         "created_at": now, "updated_at": now,
@@ -6226,6 +6229,7 @@ async def admin_update_plan(pid: str, body: ReadingPlanIn, admin=Depends(require
     updates = {
         "title": body.title.strip(), "subtitle": body.subtitle, "description": body.description,
         "cover": body.cover, "category": body.category, "featured": body.featured,
+        "reading_time": (body.reading_time or "").strip() or None,
         "status": body.status, "order": body.order, "days": days, "duration_days": len(days),
         "updated_at": now_utc(),
     }
