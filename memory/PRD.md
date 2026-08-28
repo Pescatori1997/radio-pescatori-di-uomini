@@ -734,3 +734,16 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Problema: il rettangolo del programma non combaciava con l'ora sulla timeline (la card partiva ~10-16px sopra la pillola dell'ora).
 - Causa: nello spineCol lineTop=16px spostava la pillola più in basso, mentre la card aveva marginTop:6 → bordo superiore card sopra la pillola.
 - Fix (`app/(tabs)/palinsesto.tsx`): lineTop height 16→0 (pillola in cima alla riga) e card marginTop 6→0 → il bordo superiore della card si allinea alla pillola dell'ora. L'offset minuti (1px/min sul primo programma della fascia) resta per gli orari non tondi (es. 09:15).
+
+## Timoteo: ottimizzazione velocità (2026-06)
+- Diagnosi: lo streaming era già attivo (frontend usa /timoteo/stream). Modello: gpt-5.4-mini è risultato il PIÙ VELOCE nei test (0.9s single-shot) vs gemini-2.5-flash (2.7s) e claude-haiku-4-5 (1.6s) → mantenuto.
+- Collo di bottiglia trovato: `_prepare_payload` eseguiva le ricerche di grounding in SEQUENZA (global_search con 4 query collezioni + bible_verse_search su 31k versetti + find_reference) prima del primo token.
+- Fix (backend/timoteo.py, nessun cambio di comportamento/qualità/persona): global_search ora esegue le 4 ricerche collezioni in parallelo (asyncio.gather); _prepare_payload esegue global_search + find_last_reference in parallelo. Prep sceso a ~0.04s (era 1-3s in produzione con contenuti reali).
+- Residuo: time-to-first-token ~3.2s è latenza intrinseca del modello (SYSTEM_PROMPT ~1k token). Ulteriore riduzione possibile solo accorciando le risposte (cap max_tokens) → da valutare con l'utente per non perdere qualità.
+
+## Fixed (2026-06, session — Timoteo "riprova più tardi" occasionale)
+- **BUG utente**: Timoteo ogni tanto rispondeva "Mi dispiace... Riprova tra poco" invece di rispondere; deve essere SEMPRE reattivo.
+- **Cause**: (1) se lo streaming LLM falliva 3 volte di fila senza produrre testo, NON c'era alcun fallback verso l'API non-streaming (percorso indipendente, spesso più affidabile quando il gateway streaming ha un hiccup); (2) frontend: un blip di rete (xhr onerror/ontimeout) mostrava subito il messaggio d'errore senza alcun tentativo di riconnessione.
+- **Fix backend (timoteo.py)**: `answer_stream` ora, se lo stream fallisce con buffer vuoto, tenta una SECONDA strada indipendente via `_run_llm_full` (non-streaming, con retry interno) prima di arrendersi; solo se anche quella fallisce mostra il messaggio graceful (costante `FALLBACK_MSG`). `_run_llm_full` ora solleva su fallimento totale (4 tentativi, backoff 0.6/1.2/1.8/2.4s) invece di restituire una stringa d'errore; `answer()` cattura e restituisce graceful. `_run_llm_stream` senza chiave solleva (→ scatta il fallback) invece di emettere l'errore come testo.
+- **Fix frontend (Timoteo.tsx)**: retry silenzioso automatico 1 volta (dopo 700ms) su `onError` se non è ancora iniziato lo streaming del testo, prima di mostrare il messaggio d'errore.
+- **Verificato**: streaming reale OK (risposta completa in italiano); fallback verificato forzando il fallimento dello streaming → la chiamata non-streaming subentra e risponde con testo reale (non l'errore); UI smoke test OK (Timoteo apre e risponde in streaming).

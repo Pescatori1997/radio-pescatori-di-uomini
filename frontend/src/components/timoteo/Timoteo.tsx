@@ -292,6 +292,13 @@ export default function Timoteo() {
       });
     };
     const onError = () => {
+      // A transient network blip shouldn't dead-end the user: retry once
+      // silently (only if no text has started streaming) before giving up.
+      if (attempt < 1 && !started) {
+        attempt += 1;
+        setTimeout(start, 700);
+        return;
+      }
       setLoading(false);
       abortRef.current = null;
       setMessages((m) => {
@@ -302,7 +309,11 @@ export default function Timoteo() {
         return copy;
       });
     };
-    abortRef.current = api.timoteoStream(payload, { onDelta, onDone, onError });
+    let attempt = 0;
+    const start = () => {
+      abortRef.current = api.timoteoStream(payload, { onDelta, onDone, onError });
+    };
+    start();
   };
 
   if (hidden) return null;

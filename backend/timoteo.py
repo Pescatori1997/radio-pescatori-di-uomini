@@ -20,6 +20,9 @@ from typing import Any, Optional
 
 logger = logging.getLogger("timoteo")
 
+# Shown to the user only when EVERY path (stream + non-stream fallback) fails.
+FALLBACK_MSG = "Mi dispiace, in questo momento ho difficoltà a rispondere. Riprova tra poco."
+
 # ---- Swappable AI engine (config-driven) ----
 TIMOTEO_PROVIDER = os.environ.get("TIMOTEO_PROVIDER", "openai")
 TIMOTEO_MODEL = os.environ.get("TIMOTEO_MODEL", "gpt-5.4-mini")
@@ -88,17 +91,18 @@ async def global_search(db, q: str, limit: int = 12) -> list[dict]:
     if len(q) < 2:
         return []
     now_iso = __import__("datetime").datetime.utcnow().isoformat()
+    import asyncio
+    groups = await asyncio.gather(
+        _search_collection(db, "podcasts", q, lambda d: f"/podcast/{d.get('id')}", "Podcast", _pub()),
+        _search_collection(db, "meditations", q, lambda d: f"/meditazioni/{d.get('id')}", "Meditazione", {"published": True}),
+        _search_collection(db, "news", q, lambda d: f"/news/{d.get('id')}", "Notizia", _pub()),
+        _search_collection(db, "contents", q, lambda d: f"/c/{d.get('section')}/{d.get('id')}", "Contenuto", {"status": "published", "visibility": {"$ne": "private"}}),
+        return_exceptions=True,
+    )
     results: list[dict] = []
-    results += await _search_collection(
-        db, "podcasts", q, lambda d: f"/podcast/{d.get('id')}", "Podcast", _pub())
-    results += await _search_collection(
-        db, "meditations", q, lambda d: f"/meditazioni/{d.get('id')}", "Meditazione",
-        {"published": True})
-    results += await _search_collection(
-        db, "news", q, lambda d: f"/news/{d.get('id')}", "Notizia", _pub())
-    results += await _search_collection(
-        db, "contents", q, lambda d: f"/c/{d.get('section')}/{d.get('id')}",
-        "Contenuto", {"status": "published", "visibility": {"$ne": "private"}})
+    for g in groups:
+        if isinstance(g, list):
+            results += g
     return results[:limit]
 
 
@@ -336,10 +340,13 @@ async def _prepare_payload(db, messages: list[dict], ctx: dict) -> tuple[str, di
             last_user = (m.get("content") or "").strip()
             break
 
-    content_hits = await global_search(db, last_user)
+    import asyncio
+    content_hits, passage_ref = await asyncio.gather(
+        global_search(db, last_user),
+        find_last_reference(db, messages),
+    )
     candidates = {f"C{i+1}": c for i, c in enumerate(content_hits)}
 
-    passage_ref = await find_last_reference(db, messages)
     passage_text: list[dict] = []
     passage_name = None
     if passage_ref:
@@ -389,7 +396,11 @@ async def _prepare_payload(db, messages: list[dict], ctx: dict) -> tuple[str, di
 async def answer(db, messages: list[dict], ctx: dict) -> dict:
     """Non-streaming entry (kept as a fallback): grounding + LLM + safe actions."""
     user_payload, candidates = await _prepare_payload(db, messages, ctx)
-    full = await _run_llm_full(user_payload)
+    try:
+        full = await _run_llm_full(user_payload)
+    except Exception as e:
+        logger.warning("timoteo answer failed: %s", e)
+        return {"reply": FALLBACK_MSG, "actions": []}
     reply_text, raw_actions = _split_reply_actions(full)
     actions = await _validate_actions(db, raw_actions, candidates)
     return {"reply": reply_text, "actions": actions}
@@ -432,9 +443,21 @@ async def answer_stream(db, messages: list[dict], ctx: dict):
     except Exception as e:  # stream failed mid-way -> graceful fallback
         logger.warning("timoteo stream failed: %s", e)
         if not buffer.strip():
-            yield {"type": "done",
-                   "reply": "Mi dispiace, in questo momento ho difficoltà a rispondere. Riprova tra poco.",
-                   "actions": []}
+            # Nothing was streamed yet: try an INDEPENDENT second path (the
+            # non-streaming API, which retries internally). The plain call is
+            # often more reliable when the streaming gateway hiccups, so the
+            # assistant stays reactive instead of surfacing an error.
+            try:
+                full = await _run_llm_full(user_payload)
+                r_text, r_actions = _split_reply_actions(full)
+                r_actions = await _validate_actions(db, r_actions, candidates)
+                if r_text.strip():
+                    yield {"type": "delta", "text": r_text}
+                    yield {"type": "done", "reply": r_text, "actions": r_actions}
+                    return
+            except Exception as e2:
+                logger.warning("timoteo non-stream fallback failed: %s", e2)
+            yield {"type": "done", "reply": FALLBACK_MSG, "actions": []}
             return
 
     reply_text, raw_actions = _split_reply_actions(buffer)
@@ -454,14 +477,15 @@ def _make_chat(key: str):
 
 async def _run_llm_full(user_payload: str) -> str:
     """Non-streaming call with transparent retry (the gateway occasionally drops
-    the first call). Returns the raw model text (reply + optional actions block)."""
+    the first call). Returns the raw model text (reply + optional actions block).
+    Raises on total failure so callers can fall back gracefully."""
     key = os.environ.get("EMERGENT_LLM_KEY")
     if not key:
-        return "Al momento non riesco a rispondere. Riprova più tardi."
+        raise RuntimeError("EMERGENT_LLM_KEY missing")
     import asyncio
     from emergentintegrations.llm.chat import UserMessage
     last_err: Exception | None = None
-    for attempt in range(3):
+    for attempt in range(4):
         try:
             chat = _make_chat(key)
             raw = await chat.send_message(UserMessage(text=user_payload))
@@ -469,9 +493,8 @@ async def _run_llm_full(user_payload: str) -> str:
         except Exception as e:
             last_err = e
             logger.warning("timoteo llm attempt %s failed: %s", attempt + 1, e)
-            await asyncio.sleep(0.8 * (attempt + 1))
-    logger.warning("timoteo llm failed after retries: %s", last_err)
-    return "Mi dispiace, in questo momento ho difficoltà a rispondere. Riprova tra poco."
+            await asyncio.sleep(0.6 * (attempt + 1))
+    raise RuntimeError(f"timoteo llm failed after retries: {last_err}")
 
 
 async def _run_llm_stream(user_payload: str):
@@ -479,8 +502,7 @@ async def _run_llm_stream(user_payload: str):
     fails before producing any token (so we never duplicate partial output)."""
     key = os.environ.get("EMERGENT_LLM_KEY")
     if not key:
-        yield "Al momento non riesco a rispondere. Riprova più tardi."
-        return
+        raise RuntimeError("EMERGENT_LLM_KEY missing")
     import asyncio
     from emergentintegrations.llm.chat import UserMessage, TextDelta, StreamDone
     last_err: Exception | None = None
