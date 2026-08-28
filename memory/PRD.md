@@ -729,3 +729,8 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 
 ## Fix player: ripristino audio + fullscreen (2026-06)
 - Il precedente controls=0 (per bloccare il seek) nascondeva anche audio e schermo intero su YouTube/Twitch/Vimeo. Ripristinati i controlli standard: YouTube `autoplay=1&mute=1&modestbranding=1&iv_load_policy=3` (niente più controls=0/disablekb/fs=0); Vimeo controls di default; Twitch tolto controls=false. Su LIVE non c'è forward-seek per natura. Registrati nativi restano senza controlli (nativeControls=false).
+
+## Palinsesto: allineamento card ↔ marcatore ora (2026-06)
+- Problema: il rettangolo del programma non combaciava con l'ora sulla timeline (la card partiva ~10-16px sopra la pillola dell'ora).
+- Causa: nello spineCol lineTop=16px spostava la pillola più in basso, mentre la card aveva marginTop:6 → bordo superiore card sopra la pillola.
+- Fix (`app/(tabs)/palinsesto.tsx`): lineTop height 16→0 (pillola in cima alla riga) e card marginTop 6→0 → il bordo superiore della card si allinea alla pillola dell'ora. L'offset minuti (1px/min sul primo programma della fascia) resta per gli orari non tondi (es. 09:15).

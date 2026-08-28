@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
 
   hourRow: { flexDirection: "row", minHeight: 60 },
   spineCol: { width: 66, alignItems: "center" },
-  lineTop: { width: 2, height: 16, backgroundColor: colors.border },
+  lineTop: { width: 2, height: 0, backgroundColor: colors.border },
   lineBottom: { width: 2, flex: 1, backgroundColor: colors.border, marginTop: 2 },
   hourPill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.surface },
   hourPillNow: { backgroundColor: ACCENT, borderColor: ACCENT },
@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
   hourContent: { flex: 1, paddingBottom: 8 },
   emptySlot: { height: 44 },
 
-  card: { flexDirection: "row", alignItems: "flex-start", gap: 12, backgroundColor: colors.surfaceSecondary, borderRadius: 16, padding: 10, marginBottom: 10, marginTop: 6, borderWidth: 1, borderColor: colors.border },
+  card: { flexDirection: "row", alignItems: "flex-start", gap: 12, backgroundColor: colors.surfaceSecondary, borderRadius: 16, padding: 10, marginBottom: 10, marginTop: 0, borderWidth: 1, borderColor: colors.border },
   cardLive: { borderColor: LIVE, borderWidth: 1.5, backgroundColor: LIVE + "0D" },
   thumbWrap: { width: 60, height: 60, borderRadius: 12 },
   thumb: { width: 60, height: 60, borderRadius: 12 },
