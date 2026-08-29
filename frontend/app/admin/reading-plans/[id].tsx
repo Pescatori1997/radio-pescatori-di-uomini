@@ -7,6 +7,7 @@ import AdminShell, { ADMIN } from "@/src/components/AdminShell";
 import { AInput, ASwitch, AImagePicker } from "@/src/components/adminForm";
 import PressableScale from "@/src/components/PressableScale";
 import { confirmAsync, alertMessage } from "@/src/utils/confirm";
+import { PLAN_CATEGORIES } from "@/src/utils/planCategories";
 import { colors, spacing, radius } from "@/src/theme";
 
 type Reading = { book_nr: number; book_name?: string; chapter?: number; verse_start?: number; verse_end?: number; label?: string };
@@ -26,6 +27,7 @@ export default function AdminPlanEditor() {
   const [description, setDescription] = useState("");
   const [cover, setCover] = useState<string | null>(null);
   const [category, setCategory] = useState("");
+  const [customCat, setCustomCat] = useState(false);
   const [readingTime, setReadingTime] = useState("");
   const [shareMessage, setShareMessage] = useState("");
   const [featured, setFeatured] = useState(false);
@@ -46,6 +48,7 @@ export default function AdminPlanEditor() {
       setTitle(p.title || ""); setSubtitle(p.subtitle || ""); setDescription(p.description || "");
       setCover(p.cover || null);
       setCategory(p.category || ""); setFeatured(!!p.featured); setStatus(p.status || "draft");
+      setCustomCat(!!(p.category && !PLAN_CATEGORIES.includes(p.category)));
       setReadingTime(p.reading_time || "");
       setShareMessage(p.share_message || "");
       setOrder(String(p.order ?? 0));
@@ -122,7 +125,23 @@ export default function AdminPlanEditor() {
         <AInput label="Sottotitolo" value={subtitle} onChangeText={setSubtitle} placeholder="Breve descrizione in una riga" testID="plan-subtitle" />
         <AInput label="Descrizione" value={description} onChangeText={setDescription} multiline placeholder="Descrizione del piano" testID="plan-description" />
         <AInput label="Messaggio di condivisione" value={shareMessage} onChangeText={setShareMessage} multiline placeholder="Testo mostrato quando si condivide il piano (crea curiosità). Se vuoto, usa la descrizione." testID="plan-share-message" />
-        <AInput label="Categoria" value={category} onChangeText={setCategory} placeholder="Es. Vangeli, Speranza" testID="plan-category" />
+        <Text style={styles.fieldLabel}>Categoria</Text>
+        <View style={styles.catWrap}>
+          {PLAN_CATEGORIES.map((c) => {
+            const on = !customCat && category === c;
+            return (
+              <Pressable key={c} testID={`plan-cat-${c}`} onPress={() => { setCustomCat(false); setCategory(c); }} style={[styles.catChip, on && styles.catChipOn]}>
+                <Text style={[styles.catChipText, on && styles.catChipTextOn]}>{c}</Text>
+              </Pressable>
+            );
+          })}
+          <Pressable testID="plan-cat-custom" onPress={() => { setCustomCat(true); setCategory(""); }} style={[styles.catChip, customCat && styles.catChipOn]}>
+            <Text style={[styles.catChipText, customCat && styles.catChipTextOn]}>+ Personalizzata</Text>
+          </Pressable>
+        </View>
+        {customCat && (
+          <AInput label="" value={category} onChangeText={setCategory} placeholder="Scrivi la categoria" testID="plan-category" />
+        )}
         <AInput label="Tempo di lettura giornaliero" value={readingTime} onChangeText={setReadingTime} placeholder="Es. 5-7 min, 10 min, 15 minuti" testID="plan-reading-time" />
         <AInput label="Ordine" value={order} onChangeText={setOrder} keyboardType="number-pad" testID="plan-order" />
         <ASwitch label="In evidenza" value={featured} onValueChange={setFeatured} testID="plan-featured" />
@@ -216,6 +235,11 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   input: { backgroundColor: ADMIN.card, borderRadius: radius.md, padding: spacing.md, fontSize: 15, color: colors.white, borderWidth: 1, borderColor: ADMIN.border, marginBottom: spacing.sm },
   fieldLabel: { color: ADMIN.muted, fontSize: 13, fontWeight: "700", marginBottom: 6 },
+  catWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: spacing.md },
+  catChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.pill, backgroundColor: ADMIN.card, borderWidth: 1, borderColor: ADMIN.border },
+  catChipOn: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
+  catChipText: { color: "#CBD5E1", fontSize: 13, fontWeight: "700" },
+  catChipTextOn: { color: colors.white },
   statusRow: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.lg },
   statusBtn: { flex: 1, paddingVertical: 10, borderRadius: radius.md, backgroundColor: ADMIN.card, alignItems: "center", borderWidth: 1, borderColor: ADMIN.border },
   statusBtnOn: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },

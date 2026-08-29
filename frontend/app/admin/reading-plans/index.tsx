@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TextInput, ActivityIndicator, RefreshControl } from "react-native";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
 import { api } from "@/src/api";
 import AdminShell, { ADMIN } from "@/src/components/AdminShell";
@@ -39,7 +40,13 @@ export default function AdminPlansList() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.brandPrimary} />}>
           {filtered.length === 0 ? <Text style={styles.empty}>Nessun piano. Tocca + per crearne uno.</Text> : filtered.map((p) => (
             <PressableScale key={p.id} testID={`plan-row-${p.id}`} style={styles.row} onPress={() => router.push(`/admin/reading-plans/${p.id}`)}>
-              <View style={styles.rowIcon}><MaterialCommunityIcons name="book-open-page-variant" size={22} color={colors.white} /></View>
+              <View style={styles.rowIcon}>
+                {p.cover ? (
+                  <Image source={{ uri: p.cover }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                ) : (
+                  <MaterialCommunityIcons name="book-open-page-variant" size={22} color={colors.white} />
+                )}
+              </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.name} numberOfLines={2}>{p.title}</Text>
                 <Text style={styles.meta} numberOfLines={1}>{p.duration_days} giorni{p.category ? ` · ${p.category}` : ""}</Text>
@@ -67,7 +74,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   empty: { color: ADMIN.muted, fontSize: 14, textAlign: "center", marginTop: spacing.xl },
   row: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: ADMIN.card, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md, borderWidth: 1, borderColor: ADMIN.border },
-  rowIcon: { width: 46, height: 46, borderRadius: 12, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
+  rowIcon: { width: 44, height: 58, borderRadius: 8, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   name: { color: colors.white, fontSize: 15, fontWeight: "800" },
   meta: { color: ADMIN.muted, fontSize: 12.5, marginTop: 2 },
   tagsRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm },

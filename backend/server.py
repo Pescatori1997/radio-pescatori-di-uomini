@@ -6188,7 +6188,7 @@ async def admin_list_plans(admin=Depends(require_perm("plans"))):
     plans = await db.reading_plans.find({}, {"_id": 0, "days": 0}).sort([("order", 1), ("created_at", 1)]).to_list(500)
     for p in plans:
         p["duration_days"] = p.get("duration_days") or 0
-    return plans
+    return imageopt.lighten_list("reading_plans", plans)
 
 
 @api_router.get("/admin/reading-plans/{pid}")
