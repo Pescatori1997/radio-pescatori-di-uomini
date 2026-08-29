@@ -680,6 +680,7 @@ export const api = {
   adminReadingPlans: () => request("/admin/reading-plans", {}, true),
   adminReadingPlan: (id: string) => request(`/admin/reading-plans/${id}`, {}, true),
   adminCreatePlan: (body: any) => request("/admin/reading-plans", { method: "POST", body: JSON.stringify(body) }, true),
+  adminParseImportPlan: (zip_b64: string) => request("/admin/reading-plans/parse-import", { method: "POST", body: JSON.stringify({ zip_b64 }) }, true),
   adminUpdatePlan: (id: string, body: any) => request(`/admin/reading-plans/${id}`, { method: "PUT", body: JSON.stringify(body) }, true),
   adminDeletePlan: (id: string) => request(`/admin/reading-plans/${id}`, { method: "DELETE" }, true),
 

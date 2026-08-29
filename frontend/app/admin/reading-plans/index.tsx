@@ -29,7 +29,7 @@ export default function AdminPlansList() {
           <Ionicons name="search" size={18} color={ADMIN.muted} />
           <TextInput testID="plan-admin-search" value={search} onChangeText={setSearch} placeholder="Cerca piani..." placeholderTextColor={ADMIN.muted} style={styles.searchInput} />
         </View>
-        <PressableScale testID="plan-create" style={styles.createBtn} onPress={() => router.push("/admin/reading-plans/new")}>
+        <PressableScale testID="plan-create" style={styles.createBtn} onPress={() => router.push("/admin/reading-plans/create")}>
           <Ionicons name="add" size={22} color={colors.white} />
         </PressableScale>
       </View>

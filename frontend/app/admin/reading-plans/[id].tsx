@@ -10,9 +10,9 @@ import { confirmAsync, alertMessage } from "@/src/utils/confirm";
 import { colors, spacing, radius } from "@/src/theme";
 
 type Reading = { book_nr: number; book_name?: string; chapter?: number; verse_start?: number; verse_end?: number; label?: string };
-type Day = { day: number; title?: string; meditation?: string; readings: Reading[] };
+type Day = { day: number; title?: string; meditation?: string; talk?: string; readings: Reading[] };
 
-const emptyDay = (n: number): Day => ({ day: n, title: "", meditation: "", readings: [] });
+const emptyDay = (n: number): Day => ({ day: n, title: "", meditation: "", talk: "", readings: [] });
 
 export default function AdminPlanEditor() {
   const router = useRouter();
@@ -50,7 +50,7 @@ export default function AdminPlanEditor() {
       setShareMessage(p.share_message || "");
       setOrder(String(p.order ?? 0));
       setDays((p.days && p.days.length ? p.days : [emptyDay(1)]).map((d: any, i: number) => ({
-        day: i + 1, title: d.title || "", meditation: d.meditation || "",
+        day: i + 1, title: d.title || "", meditation: d.meditation || "", talk: d.talk || "",
         readings: (d.readings || []).map((r: any) => ({ ...r })),
       })));
     }).catch(() => {}).finally(() => setLoading(false));
@@ -77,6 +77,7 @@ export default function AdminPlanEditor() {
       day: i + 1,
       title: d.title?.trim() || undefined,
       meditation: d.meditation?.trim() || undefined,
+      talk: d.talk?.trim() || undefined,
       readings: d.readings
         .filter((r) => r.book_nr && r.chapter)
         .map((r) => {
@@ -170,6 +171,7 @@ export default function AdminPlanEditor() {
               <Ionicons name="add" size={16} color={colors.brandPrimary} />
               <Text style={styles.addReadingText}>Aggiungi lettura</Text>
             </PressableScale>
+            <TextInput testID={`plan-day-talk-${di}`} value={d.talk} onChangeText={(t) => updateDay(di, { talk: t })} placeholder="🙏 Parla con il Signore (indicazione per la preghiera, opzionale)" placeholderTextColor={ADMIN.muted} multiline style={[styles.input, { height: 64, textAlignVertical: "top", marginTop: spacing.sm }]} />
           </View>
         ))}
 

@@ -174,16 +174,8 @@ export default function PlanDayPage() {
             <Text style={styles.dayTitle}>{dayObj.title || `Giorno ${dayNum}`}</Text>
             <Ornament />
 
-            {/* Meditation */}
-            {!!dayObj.meditation && (
-              <>
-                <View style={styles.sectionRow}><Ionicons name="book-outline" size={15} color={INK_SOFT} /><Text style={styles.sectionLabel}>MEDITAZIONE</Text></View>
-                <Text style={styles.meditation}>{dayObj.meditation}</Text>
-              </>
-            )}
-
-            {/* Bible verses */}
-            <View style={[styles.sectionRow, { marginTop: spacing.xl }]}><Ionicons name="reader-outline" size={15} color={INK_SOFT} /><Text style={styles.sectionLabel}>VERSETTI BIBLICI</Text></View>
+            {/* Bible reading */}
+            <View style={styles.sectionRow}><Ionicons name="book-outline" size={15} color={INK_SOFT} /><Text style={styles.sectionLabel}>LETTURA BIBLICA DEL GIORNO</Text></View>
             {verseBlocks.map((b: any, i: number) => (
               <View key={i} style={styles.verseBlock}>
                 <Text style={styles.verseRef}>{b.ref}</Text>
@@ -206,6 +198,22 @@ export default function PlanDayPage() {
                 )}
               </View>
             ))}
+
+            {/* Talk with the Lord */}
+            {!!dayObj.talk && (
+              <>
+                <View style={[styles.sectionRow, { marginTop: spacing.xl }]}><Ionicons name="chatbubble-ellipses-outline" size={15} color={INK_SOFT} /><Text style={styles.sectionLabel}>🙏  PARLA CON IL SIGNORE</Text></View>
+                <Text style={styles.talk}>{dayObj.talk}</Text>
+              </>
+            )}
+
+            {/* Meditation */}
+            {!!dayObj.meditation && (
+              <>
+                <View style={[styles.sectionRow, { marginTop: spacing.xl }]}><Ionicons name="heart-outline" size={15} color={INK_SOFT} /><Text style={styles.sectionLabel}>💭  MEDITAZIONE</Text></View>
+                <Text style={styles.meditation}>{dayObj.meditation}</Text>
+              </>
+            )}
 
             {/* Personal reflection */}
             <View style={[styles.sectionRow, { marginTop: spacing.xl }]}><Ionicons name="create-outline" size={15} color={INK_SOFT} /><Text style={styles.sectionLabel}>RIFLESSIONE PERSONALE</Text></View>
@@ -276,6 +284,7 @@ const styles = StyleSheet.create({
   sectionRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: spacing.sm },
   sectionLabel: { color: INK_SOFT, fontSize: 11, fontWeight: "800", letterSpacing: 1.5 },
   meditation: { color: INK, fontSize: 15.5, lineHeight: 25, fontFamily: serif },
+  talk: { color: "#4A3A22", fontSize: 15, lineHeight: 24, fontFamily: serif, fontStyle: "italic" },
 
   verseBlock: { marginBottom: spacing.lg },
   verseRef: { color: INK, fontSize: 14, fontWeight: "800", fontFamily: serif, marginBottom: 3 },

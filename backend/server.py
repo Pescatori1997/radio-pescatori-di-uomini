@@ -6032,9 +6032,9 @@ async def delete_note(nid: str, authorization: Optional[str] = Header(None)):
 
 # ---------------- Bible reading plans (Piani di Lettura) ----------------
 class PlanReading(BaseModel):
-    book_nr: int
+    book_nr: Optional[int] = None
     book_name: Optional[str] = None
-    chapter: int
+    chapter: int = 1
     verse_start: Optional[int] = None
     verse_end: Optional[int] = None
     label: Optional[str] = None
@@ -6044,6 +6044,7 @@ class PlanDay(BaseModel):
     day: int
     title: Optional[str] = None
     meditation: Optional[str] = None
+    talk: Optional[str] = None  # 🙏 "Parla con il Signore"
     readings: List[PlanReading] = []
 
 
@@ -6242,6 +6243,146 @@ async def admin_update_plan(pid: str, body: ReadingPlanIn, admin=Depends(require
     await db.reading_plans.update_one({"id": pid}, {"$set": updates})
     await log_activity(admin, f"ha aggiornato il piano di lettura '{body.title}'", "plans")
     return {"ok": True}
+
+
+class ImportPlanIn(BaseModel):
+    zip_b64: str
+
+
+def _parse_bible_ref(s: str) -> dict:
+    """Parse a free-text reference like '1 Corinzi 13:4-7' into a structured
+    reading using the BOOKS map. Keeps the original string as the label."""
+    from reading_plans_seed import BOOKS
+    raw = (s or "").strip()
+    # Common Italian aliases → canonical book name in BOOKS.
+    aliases = {"salmo": "Salmi", "cantico": "Cantico dei Cantici",
+               "cantico dei cantici": "Cantico dei Cantici", "atti degli apostoli": "Atti",
+               "apocalisse di giovanni": "Apocalisse", "qoelet": "Ecclesiaste"}
+    lookup = {k.lower(): k for k in BOOKS.keys()}
+    lookup.update(aliases)
+    name = None
+    rest = raw
+    for key in sorted(lookup.keys(), key=len, reverse=True):
+        if raw.lower() == key or raw.lower().startswith(key + " ") or raw.lower().startswith(key + "\t"):
+            name = lookup[key]
+            rest = raw[len(key):].strip()
+            break
+    if not name:
+        return {"book_nr": None, "book_name": None, "chapter": 1, "verse_start": None, "verse_end": None, "label": raw}
+    m = re.match(r"(\d+)(?::(\d+)(?:\s*-\s*(\d+))?)?", rest)
+    chapter = int(m.group(1)) if (m and m.group(1)) else 1
+    vs = int(m.group(2)) if (m and m.group(2)) else None
+    ve = int(m.group(3)) if (m and m.group(3)) else None
+    return {"book_nr": BOOKS[name], "book_name": name, "chapter": chapter, "verse_start": vs, "verse_end": ve, "label": raw}
+
+
+@api_router.post("/admin/reading-plans/parse-import")
+async def admin_parse_import_plan(body: ImportPlanIn, admin=Depends(require_perm("plans"))):
+    """Parse & validate a plan ZIP (piano.json + cover image), WITHOUT saving.
+    Returns a ready-to-create plan body (cover embedded as data URI) for a preview
+    step. Errors are returned as HTTP 400 with a clear Italian message."""
+    import zipfile, io, mimetypes
+    try:
+        raw = base64.b64decode(body.zip_b64.split(",")[-1])
+    except Exception:
+        raise HTTPException(status_code=400, detail="File non valido: impossibile leggere lo ZIP.")
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(raw))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Il file non è uno ZIP valido.")
+
+    names = [n for n in zf.namelist() if not n.endswith("/") and "__MACOSX" not in n]
+    json_names = [n for n in names if n.lower().endswith(".json")]
+    if not json_names:
+        raise HTTPException(status_code=400, detail="Nello ZIP manca il file piano.json.")
+    try:
+        data = json.loads(zf.read(json_names[0]).decode("utf-8"))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Il file piano.json non è un JSON valido.")
+
+    # General fields
+    title = (data.get("title") or "").strip()
+    description = (data.get("description") or "").strip()
+    category = (data.get("category") or "").strip()
+    duration = data.get("duration_days")
+    cover_name = (data.get("cover_image") or "").strip()
+    status = (data.get("status") or "draft").strip().lower()
+    days_in = data.get("days") or []
+
+    errors = []
+    if not title: errors.append("titolo mancante")
+    if not description: errors.append("descrizione mancante")
+    if not category: errors.append("categoria mancante")
+    if not isinstance(duration, int) or duration <= 0: errors.append("numero di giorni (duration_days) mancante o non valido")
+    if not cover_name: errors.append("nome copertina (cover_image) mancante nel JSON")
+    if status not in ("draft", "published"): status = "draft"
+    if not isinstance(days_in, list) or len(days_in) == 0:
+        errors.append("elenco dei giorni mancante")
+    if errors:
+        raise HTTPException(status_code=400, detail="Controlla il file: " + "; ".join(errors) + ".")
+
+    # Cover must exist in the ZIP (match by basename, case-insensitive).
+    cover_entry = None
+    for n in names:
+        if n.split("/")[-1].lower() == cover_name.lower():
+            cover_entry = n
+            break
+    if not cover_entry:
+        raise HTTPException(status_code=400, detail=f"La copertina '{cover_name}' non è presente nello ZIP.")
+
+    # Days validation
+    if len(days_in) != duration:
+        raise HTTPException(status_code=400, detail=f"Il numero di giorni ({len(days_in)}) non corrisponde a duration_days ({duration}).")
+    seen = set()
+    day_errors = []
+    clean_days = []
+    for i, d in enumerate(days_in):
+        dn = d.get("day")
+        if not isinstance(dn, int):
+            dn = i + 1
+        if dn in seen:
+            day_errors.append(f"Giorno {dn} duplicato")
+            continue
+        seen.add(dn)
+        dtitle = (d.get("title") or "").strip()
+        dmed = (d.get("meditation") or "").strip()
+        readings_raw = d.get("bible_reading") or d.get("readings") or []
+        if isinstance(readings_raw, str):
+            readings_raw = [readings_raw]
+        if not dtitle: day_errors.append(f"Giorno {dn}: titolo mancante")
+        if not dmed: day_errors.append(f"Giorno {dn}: meditazione mancante")
+        if not readings_raw: day_errors.append(f"Giorno {dn}: nessuna lettura biblica")
+        readings = [_parse_bible_ref(r if isinstance(r, str) else (r.get("label") or "")) for r in readings_raw]
+        clean_days.append({
+            "day": dn, "title": dtitle, "meditation": dmed,
+            "talk": (d.get("talk_with_the_lord") or d.get("talk") or "").strip() or None,
+            "readings": readings,
+        })
+    # No missing days: must be exactly 1..duration
+    expected = set(range(1, duration + 1))
+    if seen != expected:
+        missing = sorted(expected - seen)
+        if missing:
+            day_errors.append("giorni mancanti: " + ", ".join(str(x) for x in missing))
+    if day_errors:
+        raise HTTPException(status_code=400, detail="Controlla i giorni: " + "; ".join(day_errors) + ".")
+
+    clean_days.sort(key=lambda x: x["day"])
+
+    # Encode cover as a data URI (same storage as manual covers → served via /api/img).
+    cover_bytes = zf.read(cover_entry)
+    mime = mimetypes.guess_type(cover_name)[0] or "image/jpeg"
+    cover_uri = f"data:{mime};base64,{base64.b64encode(cover_bytes).decode('ascii')}"
+
+    return {
+        "title": title, "description": description, "category": category,
+        "duration_days": duration, "status": status, "cover": cover_uri,
+        "reading_time": (data.get("reading_time") or "").strip() or None,
+        "share_message": (data.get("share_message") or "").strip() or None,
+        "subtitle": (data.get("subtitle") or "").strip() or None,
+        "days": clean_days,
+    }
+
 
 
 @api_router.delete("/admin/reading-plans/{pid}")
