@@ -26,11 +26,12 @@ export default function SharePlanSheet({
   const cardRef = useRef<View>(null);
 
   const cardW = Math.min(width - 48, 360);
-  const cardH = Math.round(cardW * 1.25);
+  const cardH = Math.round(cardW * (day ? 1.25 : 1.5));
 
   const isDay = !!day;
   const duration = plan?.duration_days || (plan?.days?.length ?? 0);
   const readingsLabel = isDay ? (day.readings || []).map((r: any) => r.label || `${r.book_name} ${r.chapter}`).join(" · ") : "";
+  const planMsg = plan ? (plan.share_message || plan.description || "") : "";
 
   const linkUrl = plan
     ? (isDay ? `${siteBaseUrl()}/lettore/piano/${plan.id}?day=${day.day}` : `${siteBaseUrl()}/lettore/piano/${plan.id}`)
@@ -38,12 +39,12 @@ export default function SharePlanSheet({
 
   const message = !plan ? "" : (isDay
     ? `📖 ${plan.title}\nGiorno ${day.day} di ${duration}${day.title ? ` — ${day.title}` : ""}\n${readingsLabel ? `📚 ${readingsLabel}\n` : ""}\nSegui il piano su Radio Pescatori di Uomini:\n${linkUrl}`
-    : `📖 ${plan.title}\n${plan.subtitle || `${duration} giorni`}\n${plan.description ? `\n${plan.description}\n` : ""}\nInizia il piano su Radio Pescatori di Uomini:\n${linkUrl}`);
+    : `📖 ${plan.title}\n${plan.subtitle || `${duration} giorni`}\n${planMsg ? `\n${planMsg}\n` : ""}\nInizia il piano su Radio Pescatori di Uomini:\n${linkUrl}`);
 
   const filename = isDay ? `piano-giorno-${day?.day}.png` : "piano-di-lettura.png";
 
   const { onShare, onSave, sharing, saving, ready } = useShareCard(cardRef, {
-    visible, filename, message, captureSize: { width: 1080, height: 1350 },
+    visible, filename, message, captureSize: { width: 1080, height: Math.round(1080 * (day ? 1.25 : 1.5)) },
   });
 
   if (!plan) return null;
@@ -85,14 +86,18 @@ export default function SharePlanSheet({
             ) : (
               <View style={styles.body}>
                 <Text style={styles.label}>PIANO DI LETTURA</Text>
-                {plan.cover ? (
-                  <Image source={{ uri: plan.cover }} style={styles.cover} contentFit="cover" />
-                ) : (
-                  <View style={styles.coverEmpty}><Ionicons name="book" size={40} color={colors.white} /></View>
-                )}
+                <View style={styles.bookWrap}>
+                  {plan.cover ? (
+                    <Image source={{ uri: plan.cover }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                  ) : (
+                    <View style={styles.bookFallback}><Ionicons name="book" size={40} color="rgba(255,255,255,0.6)" /></View>
+                  )}
+                  <LinearGradient colors={["rgba(255,255,255,0.30)", "rgba(255,255,255,0)"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.bookSpine} />
+                  <View style={styles.bookSpineDark} />
+                </View>
                 <Text style={styles.planTitle} numberOfLines={2}>{plan.title}</Text>
                 {!!plan.subtitle && <Text style={styles.planSub} numberOfLines={2}>{plan.subtitle}</Text>}
-                {!!plan.description && <Text style={styles.planDesc} numberOfLines={3}>{plan.description}</Text>}
+                {!!planMsg && <Text style={styles.planDesc} numberOfLines={4}>{planMsg}</Text>}
                 <View style={styles.daysBadge}>
                   <Ionicons name="calendar-outline" size={14} color={colors.navy} />
                   <Text style={styles.daysBadgeText}>{duration} giorni</Text>
@@ -133,11 +138,16 @@ const styles = StyleSheet.create({
   body: { flex: 1, justifyContent: "center" },
   label: { color: "#FDE68A", fontSize: 11, fontWeight: "800", letterSpacing: 1.5, marginBottom: spacing.md },
   cover: { width: "100%", height: 130, borderRadius: radius.md, marginBottom: spacing.md },
+  bookWrap: { width: 130, height: 174, borderRadius: 6, borderTopLeftRadius: 3, borderBottomLeftRadius: 3, overflow: "hidden", alignSelf: "center", backgroundColor: colors.navy, marginBottom: spacing.md,
+    ...Platform.select({ web: { boxShadow: "6px 10px 20px rgba(0,0,0,0.55)" } as any, default: { shadowColor: "#000", shadowOpacity: 0.5, shadowRadius: 12, shadowOffset: { width: 4, height: 8 }, elevation: 8 } }) },
+  bookFallback: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.10)" },
+  bookSpine: { position: "absolute", left: 0, top: 0, bottom: 0, width: 12 },
+  bookSpineDark: { position: "absolute", left: 0, top: 0, bottom: 0, width: 2, backgroundColor: "rgba(0,0,0,0.35)" },
   coverEmpty: { width: 72, height: 72, borderRadius: radius.md, backgroundColor: "rgba(255,255,255,0.14)", alignItems: "center", justifyContent: "center", marginBottom: spacing.md },
-  planTitle: { color: colors.white, fontSize: 26, fontWeight: "800", lineHeight: 32 },
-  planSub: { color: colors.brandSecondary, fontSize: 15, fontWeight: "700", marginTop: spacing.sm },
-  planDesc: { color: "#CBD5E1", fontSize: 14, lineHeight: 20, marginTop: spacing.md },
-  daysBadge: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", backgroundColor: colors.white, paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.pill, marginTop: spacing.lg },
+  planTitle: { color: colors.white, fontSize: 24, fontWeight: "800", lineHeight: 30, textAlign: "center" },
+  planSub: { color: colors.brandSecondary, fontSize: 15, fontWeight: "700", marginTop: spacing.sm, textAlign: "center" },
+  planDesc: { color: "#CBD5E1", fontSize: 14, lineHeight: 20, marginTop: spacing.md, textAlign: "center" },
+  daysBadge: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "center", backgroundColor: colors.white, paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.pill, marginTop: spacing.lg },
   daysBadgeText: { color: colors.navy, fontSize: 13, fontWeight: "800" },
   planTitleSmall: { color: colors.brandSecondary, fontSize: 15, fontWeight: "700", marginBottom: spacing.sm },
   dayBig: { color: colors.white, fontSize: 32, fontWeight: "800" },
@@ -147,7 +157,7 @@ const styles = StyleSheet.create({
   refLine: { width: 24, height: 2, borderRadius: 1, backgroundColor: colors.brandSecondary },
   reference: { flex: 1, color: colors.brandSecondary, fontSize: 15, fontWeight: "800" },
   meditation: { color: "#CBD5E1", fontSize: 14, fontStyle: "italic", lineHeight: 21, marginTop: spacing.lg },
-  footer: { color: "#CBD5E1", fontSize: 12, fontWeight: "600" },
+  footer: { color: "#CBD5E1", fontSize: 12, fontWeight: "600", textAlign: "center" },
   actions: { flexDirection: "row", gap: spacing.md, marginTop: spacing.xl },
   shareBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, backgroundColor: colors.white, paddingVertical: spacing.md, paddingHorizontal: spacing.lg, borderRadius: radius.pill, minWidth: 150 },
   shareText: { color: colors.navy, fontSize: 16, fontWeight: "800" },

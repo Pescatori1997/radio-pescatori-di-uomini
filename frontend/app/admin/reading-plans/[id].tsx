@@ -27,6 +27,7 @@ export default function AdminPlanEditor() {
   const [cover, setCover] = useState<string | null>(null);
   const [category, setCategory] = useState("");
   const [readingTime, setReadingTime] = useState("");
+  const [shareMessage, setShareMessage] = useState("");
   const [featured, setFeatured] = useState(false);
   const [status, setStatus] = useState("draft");
   const [order, setOrder] = useState("0");
@@ -46,6 +47,7 @@ export default function AdminPlanEditor() {
       setCover(p.cover || null);
       setCategory(p.category || ""); setFeatured(!!p.featured); setStatus(p.status || "draft");
       setReadingTime(p.reading_time || "");
+      setShareMessage(p.share_message || "");
       setOrder(String(p.order ?? 0));
       setDays((p.days && p.days.length ? p.days : [emptyDay(1)]).map((d: any, i: number) => ({
         day: i + 1, title: d.title || "", meditation: d.meditation || "",
@@ -92,6 +94,7 @@ export default function AdminPlanEditor() {
       cover: cover || undefined,
       category: category.trim() || undefined, featured, status, order: parseInt(order, 10) || 0, days: cleanDays,
       reading_time: readingTime.trim() || undefined,
+      share_message: shareMessage.trim() || undefined,
     };
     setSaving(true);
     try {
@@ -117,6 +120,7 @@ export default function AdminPlanEditor() {
         <AImagePicker testID="plan-cover" label="Immagine di copertina" value={cover} onChange={(v: string) => setCover(v)} aspect={[3, 4]} />
         <AInput label="Sottotitolo" value={subtitle} onChangeText={setSubtitle} placeholder="Breve descrizione in una riga" testID="plan-subtitle" />
         <AInput label="Descrizione" value={description} onChangeText={setDescription} multiline placeholder="Descrizione del piano" testID="plan-description" />
+        <AInput label="Messaggio di condivisione" value={shareMessage} onChangeText={setShareMessage} multiline placeholder="Testo mostrato quando si condivide il piano (crea curiosità). Se vuoto, usa la descrizione." testID="plan-share-message" />
         <AInput label="Categoria" value={category} onChangeText={setCategory} placeholder="Es. Vangeli, Speranza" testID="plan-category" />
         <AInput label="Tempo di lettura giornaliero" value={readingTime} onChangeText={setReadingTime} placeholder="Es. 5-7 min, 10 min, 15 minuti" testID="plan-reading-time" />
         <AInput label="Ordine" value={order} onChangeText={setOrder} keyboardType="number-pad" testID="plan-order" />
