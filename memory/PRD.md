@@ -790,3 +790,8 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 ## Updated (2026-06 — Copertina nella lista Admin + categorie classiche)
 - **Lista Admin piani** (`app/admin/reading-plans/index.tsx`): la riga ora mostra la **foto di copertina** del piano (thumbnail 44×58) al posto dell'icona libro; l'icona resta solo come fallback se manca la copertina. Backend `GET /admin/reading-plans` ora passa per `imageopt.lighten_list("reading_plans", ...)` → copertine servite come URL leggeri `/api/img/...` (payload più leggero, cache-busting). L'editor singolo (`/admin/reading-plans/{id}`) resta con base64 pieno per il salvataggio.
 - **Categorie classiche/tematiche** aggiornate in `src/utils/planCategories.ts` (stile piani classici): Ansia, Paura, Tristezza, Felicità, Stress, Solitudine, Rabbia, Perdono, Speranza, Fede, Amore, Relazioni, Matrimonio, Famiglia, Genitori e Figli, Amicizia, Dipendenze, Guarigione, Salute, Lavoro e Finanze, Gratitudine, Pace, Preghiera, Identità, Perdita e Lutto, Dubbi, Nuovi Credenti, Crescita Spirituale, Attualità (+ "Personalizzata").
+
+## Fixed (2026-06 — Piani-esempio che ricomparivano dopo l'eliminazione)
+- **Bug**: i due piani seed ("Incontra Gesù – 7 giorni", "Le Promesse di Dio – 30 giorni") venivano reinseriti da `seed_reading_plans` ad ogni avvio/deploy del backend → tornavano dopo che l'admin li cancellava.
+- **Fix**: `seed_reading_plans` ora semina gli esempi **solo se la collezione `reading_plans` è vuota** (installazione nuova). Se esiste già almeno un piano, non riaggiunge mai gli esempi → un piano eliminato resta eliminato tra restart/redeploy. Eliminati anche i due doc dalla preview DB.
+- Verificato: dopo restart backend restano 8 piani, i due esempi non ricompaiono.

@@ -98,11 +98,15 @@ SEED_PLANS = [PLAN_JESUS, PLAN_PROMISES]
 
 
 async def seed_reading_plans(db, logger, new_id, now_utc):
-    """Insert the example plans if their seed_key is missing (idempotent)."""
+    """Insert the example plans ONLY on a fresh install (empty collection).
+
+    Once the admin has any reading plan, we never re-add the examples — so a
+    plan deleted by the admin stays deleted across restarts/redeploys.
+    """
+    if await db.reading_plans.count_documents({}) > 0:
+        return
     inserted = 0
     for tpl in SEED_PLANS:
-        if await db.reading_plans.find_one({"seed_key": tpl["seed_key"]}):
-            continue
         now = now_utc()
         doc = {
             "id": new_id("plan"),
