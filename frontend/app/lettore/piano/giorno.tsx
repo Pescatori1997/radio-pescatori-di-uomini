@@ -174,8 +174,24 @@ export default function PlanDayPage() {
             <Text style={styles.dayTitle}>{dayObj.title || `Giorno ${dayNum}`}</Text>
             <Ornament />
 
-            {/* Bible reading */}
-            <View style={styles.sectionRow}><Ionicons name="book-outline" size={15} color={INK_SOFT} /><Text style={styles.sectionLabel}>LETTURA BIBLICA DEL GIORNO</Text></View>
+            {/* Meditation */}
+            {!!dayObj.meditation && (
+              <>
+                <View style={styles.sectionRow}><Ionicons name="heart-outline" size={15} color={INK_SOFT} /><Text style={styles.sectionLabel}>💭  MEDITAZIONE</Text></View>
+                <Text style={styles.meditation}>{dayObj.meditation}</Text>
+              </>
+            )}
+
+            {/* Talk with the Lord */}
+            {!!dayObj.talk && (
+              <>
+                <View style={[styles.sectionRow, { marginTop: spacing.xl }]}><Ionicons name="chatbubble-ellipses-outline" size={15} color={INK_SOFT} /><Text style={styles.sectionLabel}>🙏  PARLA CON IL SIGNORE</Text></View>
+                <Text style={styles.talk}>{dayObj.talk}</Text>
+              </>
+            )}
+
+            {/* Bible verses */}
+            <View style={[styles.sectionRow, { marginTop: spacing.xl }]}><Ionicons name="book-outline" size={15} color={INK_SOFT} /><Text style={styles.sectionLabel}>📖  VERSETTI BIBLICI DEL GIORNO</Text></View>
             {verseBlocks.map((b: any, i: number) => (
               <View key={i} style={styles.verseBlock}>
                 <Text style={styles.verseRef}>{b.ref}</Text>
@@ -198,22 +214,6 @@ export default function PlanDayPage() {
                 )}
               </View>
             ))}
-
-            {/* Talk with the Lord */}
-            {!!dayObj.talk && (
-              <>
-                <View style={[styles.sectionRow, { marginTop: spacing.xl }]}><Ionicons name="chatbubble-ellipses-outline" size={15} color={INK_SOFT} /><Text style={styles.sectionLabel}>🙏  PARLA CON IL SIGNORE</Text></View>
-                <Text style={styles.talk}>{dayObj.talk}</Text>
-              </>
-            )}
-
-            {/* Meditation */}
-            {!!dayObj.meditation && (
-              <>
-                <View style={[styles.sectionRow, { marginTop: spacing.xl }]}><Ionicons name="heart-outline" size={15} color={INK_SOFT} /><Text style={styles.sectionLabel}>💭  MEDITAZIONE</Text></View>
-                <Text style={styles.meditation}>{dayObj.meditation}</Text>
-              </>
-            )}
 
             {/* Personal reflection */}
             <View style={[styles.sectionRow, { marginTop: spacing.xl }]}><Ionicons name="create-outline" size={15} color={INK_SOFT} /><Text style={styles.sectionLabel}>RIFLESSIONE PERSONALE</Text></View>
