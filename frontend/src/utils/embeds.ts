@@ -9,8 +9,11 @@ export function embedSrc(url: string, provider?: string | null): string | null {
     if (vm) return `https://player.vimeo.com/video/${vm[1]}`;
   }
   if (provider === "spotify") {
-    const sp = url.match(/open\.spotify\.com\/(episode|track|show|playlist|album)\/([A-Za-z0-9]+)/);
+    const sp = url.match(/open\.spotify\.com\/(?:intl-[a-z]{2}\/)?(episode|track|show|playlist|album)\/([A-Za-z0-9]+)/);
     if (sp) return `https://open.spotify.com/embed/${sp[1]}/${sp[2]}`;
+    // Also accept the "spotify:episode:ID" URI form (copied from the desktop app).
+    const uri = url.match(/spotify:(episode|track|show|playlist|album):([A-Za-z0-9]+)/);
+    if (uri) return `https://open.spotify.com/embed/${uri[1]}/${uri[2]}`;
   }
   if (provider === "tiktok") {
     const tk = url.match(/\/video\/(\d+)/);
@@ -61,7 +64,7 @@ export function detectProvider(url: string): string | null {
   if (u.includes("facebook.com") || u.includes("fb.watch")) return "facebook";
   if (u.includes("twitch.tv")) return "twitch";
   if (u.includes("restream.io")) return "restream";
-  if (u.includes("spotify.com")) return "spotify";
+  if (u.includes("spotify.com") || u.includes("spotify.link") || u.startsWith("spotify:")) return "spotify";
   return null;
 }
 
