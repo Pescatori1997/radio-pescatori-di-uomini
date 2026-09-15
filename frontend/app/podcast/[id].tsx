@@ -9,6 +9,8 @@ import { api, audioSrc } from "@/src/api";
 import { goBackOrHome } from "@/src/utils/nav";
 import { usePlayer } from "@/src/context/PlayerContext";
 import { useAuth } from "@/src/context/AuthContext";
+import { detectProvider, embedSrc } from "@/src/utils/embeds";
+import EmbedFrame from "@/src/components/live/EmbedFrame";
 import PressableScale from "@/src/components/PressableScale";
 import ContentSocialProof from "@/src/components/community/ContentSocialProof";
 import { colors, spacing, radius } from "@/src/theme";
@@ -31,6 +33,9 @@ export default function PodcastDetail() {
   if (!p) return <View style={[styles.container, styles.center]}><ActivityIndicator color={colors.brandPrimary} size="large" /></View>;
 
   const isThis = track?.id === p.id;
+  const provider = detectProvider(p.audio_url || "");
+  const embedUrl = provider ? embedSrc(p.audio_url || "", provider) : null;
+  const isEmbed = !!embedUrl; // Spotify (and other providers) play via in-app embed, not the audio player
   const play = () => {
     if (isThis) { togglePlay(); return; }
     playTrack({ id: p.id, title: p.title, artist: p.author, artwork: p.artwork, url: audioSrc(p.audio_url), isLive: false });
@@ -63,18 +68,34 @@ export default function PodcastDetail() {
           </View>
         </View>
 
-        <View style={styles.actions}>
-          <PressableScale testID="pod-detail-play" style={styles.playBtn} onPress={play}>
-            <Ionicons name={isThis && isPlaying ? "pause" : "play"} size={22} color={colors.navy} />
-            <Text style={styles.playText}>{isThis && isPlaying ? "In pausa" : "Riproduci"}</Text>
-          </PressableScale>
-          <PressableScale testID="pod-detail-fav" style={styles.circleBtn} onPress={toggleFav}>
-            <Ionicons name={fav ? "heart" : "heart-outline"} size={22} color={fav ? colors.error : colors.onSurface} />
-          </PressableScale>
-          <PressableScale testID="pod-detail-share" style={styles.circleBtn} onPress={() => Share.share({ message: `Ascolta "${p.title}" su Pescatori di Uomini` })}>
-            <Ionicons name="share-outline" size={22} color={colors.onSurface} />
-          </PressableScale>
-        </View>
+        {isEmbed ? (
+          <View style={styles.embedWrap}>
+            <View style={styles.embedRow}>
+              <EmbedFrame testID="pod-detail-embed" url={embedUrl!} style={styles.embed} />
+            </View>
+            <View style={styles.embedActions}>
+              <PressableScale testID="pod-detail-fav" style={styles.circleBtn} onPress={toggleFav}>
+                <Ionicons name={fav ? "heart" : "heart-outline"} size={22} color={fav ? colors.error : colors.onSurface} />
+              </PressableScale>
+              <PressableScale testID="pod-detail-share" style={styles.circleBtn} onPress={() => Share.share({ message: `Ascolta "${p.title}" su Pescatori di Uomini` })}>
+                <Ionicons name="share-outline" size={22} color={colors.onSurface} />
+              </PressableScale>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.actions}>
+            <PressableScale testID="pod-detail-play" style={styles.playBtn} onPress={play}>
+              <Ionicons name={isThis && isPlaying ? "pause" : "play"} size={22} color={colors.navy} />
+              <Text style={styles.playText}>{isThis && isPlaying ? "In pausa" : "Riproduci"}</Text>
+            </PressableScale>
+            <PressableScale testID="pod-detail-fav" style={styles.circleBtn} onPress={toggleFav}>
+              <Ionicons name={fav ? "heart" : "heart-outline"} size={22} color={fav ? colors.error : colors.onSurface} />
+            </PressableScale>
+            <PressableScale testID="pod-detail-share" style={styles.circleBtn} onPress={() => Share.share({ message: `Ascolta "${p.title}" su Pescatori di Uomini` })}>
+              <Ionicons name="share-outline" size={22} color={colors.onSurface} />
+            </PressableScale>
+          </View>
+        )}
 
         <View style={{ paddingHorizontal: spacing.lg }}>
           <ContentSocialProof kind="podcast" id={id as string} metric="plays" />
@@ -111,6 +132,10 @@ const styles = StyleSheet.create({
   meta: { color: colors.muted, fontSize: 13 },
   dot: { color: colors.muted },
   actions: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.lg },
+  embedWrap: { padding: spacing.lg, gap: spacing.md },
+  embedRow: { height: 232, borderRadius: radius.lg, overflow: "hidden", backgroundColor: colors.navyCard },
+  embed: { flex: 1, borderRadius: radius.lg },
+  embedActions: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.md },
   playBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.border, paddingVertical: spacing.md, borderRadius: radius.pill },
   playText: { color: colors.navy, fontSize: 16, fontWeight: "800" },
   circleBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },

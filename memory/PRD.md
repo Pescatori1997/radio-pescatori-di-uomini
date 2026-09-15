@@ -795,3 +795,10 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - **Bug**: i due piani seed ("Incontra Gesù – 7 giorni", "Le Promesse di Dio – 30 giorni") venivano reinseriti da `seed_reading_plans` ad ogni avvio/deploy del backend → tornavano dopo che l'admin li cancellava.
 - **Fix**: `seed_reading_plans` ora semina gli esempi **solo se la collezione `reading_plans` è vuota** (installazione nuova). Se esiste già almeno un piano, non riaggiunge mai gli esempi → un piano eliminato resta eliminato tra restart/redeploy. Eliminati anche i due doc dalla preview DB.
 - Verificato: dopo restart backend restano 8 piani, i due esempi non ricompaiono.
+
+## Implemented (2026-06 — Podcast: supporto link Spotify via embed)
+- Richiesta: caricare i podcast audio su Spotify e incollare solo il link nella sezione Podcast (niente hosting audio in-app).
+- **Schermata dettaglio podcast** (`app/podcast/[id].tsx`): se `audio_url` è un link di un provider (Spotify e altri) → `detectProvider`/`embedSrc` producono l'URL embed e viene mostrato il **player incorporato** (`EmbedFrame` → iframe su web, WebView su nativo) al posto del pulsante "Riproduci"; restano i pulsanti Preferiti/Condividi. Se `audio_url` è un file audio normale (upload/mp3) resta il lettore nativo come prima.
+- Backend/modello invariati: si continua a usare il campo `audio_url` del podcast (basta incollare il link Spotify episode/show).
+- La lista podcast naviga solo al dettaglio (nessun play inline da correggere).
+- Nota: in anteprima headless il player Spotify lancia `RangeError: Incorrect locale information provided` (bug del player Spotify per il locale mancante del browser di test); su dispositivi/browser reali funziona. Podcast di test "test prova" impostato con un link Spotify per la verifica sul device.
