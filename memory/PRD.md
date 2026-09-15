@@ -811,3 +811,11 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 ## Fixed (2026-06 — Link Spotify con prefisso intl-it non riconosciuto)
 - **Bug**: i link Spotify localizzati (es. `https://open.spotify.com/intl-it/track/ID?si=...`) NON venivano riconosciuti da `embedSrc` (la regex non prevedeva il segmento `intl-xx/`) → `detectProvider` restituiva "spotify" ma l'embed era null → veniva mostrato il vecchio pulsante "Riproduci" (audio vuoto).
 - **Fix** (`src/utils/embeds.ts`): regex Spotify ora accetta il prefisso opzionale `intl-[a-z]{2}/` e la forma URI `spotify:TYPE:ID`; `detectProvider` riconosce anche `spotify.link`/`spotify:` (i link corti `spotify.link` non sono ancora convertibili in embed → usare il link lungo). Verificato in preview con il link reale dell'utente: ora appare il player embed (`pod-detail-embed`) e non il pulsante "Riproduci". L'errore visivo del player in preview è dovuto al locale del browser headless (bug lato Spotify), non all'app.
+
+
+## Update — Spotify Show/Channel Player (Podcast section)
+- Requirement: show the OFFICIAL Spotify show player of "Pescatori di Uomini" in the Podcast section. Episodes are managed entirely by Spotify (cover, name, episode list, playback) and auto-update; nothing stored in the site DB.
+- Implementation: `frontend/app/(tabs)/podcast.tsx` now renders the official Spotify show embed at the TOP of the Podcast tab (inside the FlatList `ListHeaderComponent`, so it stays visible even when the DB list is empty/loading). Uses the existing `embedSrc(url, "spotify")` + `EmbedFrame` (web `<iframe>` / native `WebView`) with no design changes elsewhere.
+- Spotify show URL: `https://open.spotify.com/show/11WSBH5OJrC10dnZZEpfVx` (const `SPOTIFY_SHOW_URL`). Embed src: `https://open.spotify.com/embed/show/11WSBH5OJrC10dnZZEpfVx`. Player is responsive (width 100%, height 352).
+- IMPORTANT test caveat: the headless screenshot/testing browser reports a broken locale `navigator.language: en-US@posix`, which makes Spotify's OWN iframe (Next.js) crash with `RangeError: Incorrect locale information provided` ("Application error"). This is NOT our bug and does NOT reproduce on real iPhone/Android/desktop with a valid locale. Verified: the iframe is injected with the correct `embed/show` src in the correct section.
+
