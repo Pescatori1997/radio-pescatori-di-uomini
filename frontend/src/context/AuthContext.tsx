@@ -84,13 +84,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user?.user_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadMe = async () => {
-    try {
-      const me = await api.me();
-      setUser(me);
-    } catch {
-      setUser(null);
-      await storage.secureRemove(TOKEN_KEY);
+    // Retry transient failures (network / 5xx / backend cold start on refresh) a
+    // few times before giving up, so a slow response doesn't flash the login gate.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const me = await api.me();
+        setUser(me);
+        return;
+      } catch (e: any) {
+        const status = e?.status;
+        if (status === 401 || status === 403) {
+          // Explicit invalid/expired session → real logout.
+          setUser(null);
+          await storage.secureRemove(TOKEN_KEY);
+          return;
+        }
+        // Transient: wait briefly and retry; keep the token either way.
+        await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
+      }
     }
+    // Still failing after retries: keep the stored token (do NOT log out); the
+    // next successful load restores the session.
   };
 
   const processSessionId = async (sessionId: string) => {

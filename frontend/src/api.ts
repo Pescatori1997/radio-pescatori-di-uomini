@@ -195,13 +195,18 @@ async function request(path: string, options: RequestInit = {}, auth = false) {
     } catch {}
     // Gateway / infra errors return an HTML page (no JSON detail): the backend was
     // momentarily unreachable/restarting — surface that instead of a misleading message.
+    let err: Error;
     if (!detail) {
       if (res.status === 502 || res.status === 503 || res.status === 504) {
-        throw new Error("Server momentaneamente non raggiungibile. Riprova tra qualche secondo.");
+        err = new Error("Server momentaneamente non raggiungibile. Riprova tra qualche secondo.");
+      } else {
+        err = new Error(`Errore ${res.status}`);
       }
-      throw new Error(`Errore ${res.status}`);
+    } else {
+      err = new Error(detail);
     }
-    throw new Error(detail);
+    (err as any).status = res.status; // let callers distinguish 401 from transient failures
+    throw err;
   }
   return absolutizeImages(await res.json());
 }

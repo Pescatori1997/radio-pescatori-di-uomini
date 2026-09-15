@@ -802,3 +802,8 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - Backend/modello invariati: si continua a usare il campo `audio_url` del podcast (basta incollare il link Spotify episode/show).
 - La lista podcast naviga solo al dettaglio (nessun play inline da correggere).
 - Nota: in anteprima headless il player Spotify lancia `RangeError: Incorrect locale information provided` (bug del player Spotify per il locale mancante del browser di test); su dispositivi/browser reali funziona. Podcast di test "test prova" impostato con un link Spotify per la verifica sul device.
+
+## Fixed (2026-06 — Logout all'aggiornamento pagina)
+- **Bug**: aggiornando la pagina (web/PWA) l'utente veniva sloggato. Causa: `AuthContext.loadMe` cancellava il token in `catch` per QUALSIASI errore di `api.me()` — inclusi errori transitori al refresh (rete/5xx/backend lento) → token rimosso = logout permanente.
+- **Fix**: `api.ts` `request` ora allega `err.status` (codice HTTP) all'errore. `loadMe` cancella token+utente SOLO su 401/403 (sessione realmente scaduta); su errori transitori mantiene il token e riprova fino a 3 volte (backoff 0.7/1.4/2.1s) così non compare nemmeno il gate di login. Verificato: login → reload → utente ancora loggato (profilo Test User).
+- La schermata "Nessun contenuto in riproduzione" vista al refresh è la rotta `/player` riaperta senza traccia in memoria (innocua, si chiude con "Chiudi"); non è un logout.
