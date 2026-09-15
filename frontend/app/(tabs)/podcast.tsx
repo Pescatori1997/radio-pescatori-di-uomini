@@ -8,14 +8,7 @@ import { useRouter } from "expo-router";
 import { api } from "@/src/api";
 import { useSiteText } from "@/src/context/SiteTextsContext";
 import PressableScale from "@/src/components/PressableScale";
-import EmbedFrame from "@/src/components/live/EmbedFrame";
-import { embedSrc } from "@/src/utils/embeds";
 import { colors, spacing, radius } from "@/src/theme";
-
-// Official Spotify show/channel of "Pescatori di Uomini". Episodes are managed
-// entirely by Spotify (cover, name, list, playback) and auto-update — nothing
-// is stored/managed in the site database.
-const SPOTIFY_SHOW_URL = "https://open.spotify.com/show/11WSBH5OJrC10dnZZEpfVx";
 
 export default function PodcastScreen() {
   const insets = useSafeAreaInsets();
@@ -31,7 +24,6 @@ export default function PodcastScreen() {
   const showFeatured = featured.length > 0 && !search && cat === "Tutti";
   const featuredIds = React.useMemo(() => new Set(featured.map((f: any) => f.id)), [featured]);
   const listData = showFeatured ? items.filter((i) => !featuredIds.has(i.id)) : items;
-  const spotifyEmbed = embedSrc(SPOTIFY_SHOW_URL, "spotify");
 
   const load = useCallback(async (c: string, s: string) => {
     setLoading(true);
@@ -81,28 +73,20 @@ export default function PodcastScreen() {
         </ScrollView>
       </View>
 
-      <FlatList
-          data={loading ? [] : listData}
+      {loading ? (
+        <View style={styles.center}><ActivityIndicator color={colors.brandPrimary} size="large" /></View>
+      ) : items.length === 0 ? (
+        <View style={styles.center}><Text style={styles.empty}>{st("podcast", "empty")}</Text></View>
+      ) : (
+        <FlatList
+          data={listData}
           keyExtractor={(i) => i.id}
           numColumns={2}
           columnWrapperStyle={{ gap: spacing.md, paddingHorizontal: spacing.lg }}
           contentContainerStyle={{ gap: spacing.lg, paddingTop: spacing.md, paddingBottom: 180 }}
           showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            loading
-              ? <View style={styles.center}><ActivityIndicator color={colors.brandPrimary} size="large" /></View>
-              : <View style={styles.center}><Text style={styles.empty}>{st("podcast", "empty")}</Text></View>
-          }
           ListHeaderComponent={
-            <View>
-              {spotifyEmbed ? (
-                <View style={styles.spotifyWrap}>
-                  <View style={styles.spotifyFrame}>
-                    <EmbedFrame testID="podcast-spotify-show" url={spotifyEmbed} style={styles.spotifyEmbed} />
-                  </View>
-                </View>
-              ) : null}
-              {featured.length > 0 && !search && cat === "Tutti" ? (
+            featured.length > 0 && !search && cat === "Tutti" ? (
               <View style={{ marginBottom: spacing.lg }}>
                 <Text style={styles.featTitle}>{st("podcast", "featured")}</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featRow}>
@@ -119,8 +103,7 @@ export default function PodcastScreen() {
                   ))}
                 </ScrollView>
               </View>
-              ) : null}
-            </View>
+            ) : null
           }
           renderItem={({ item }) => (
             <PressableScale
@@ -139,6 +122,7 @@ export default function PodcastScreen() {
             </PressableScale>
           )}
         />
+      )}
     </View>
   );
 }
@@ -167,11 +151,8 @@ const styles = StyleSheet.create({
   durText: { color: colors.white, fontSize: 11, fontWeight: "600" },
   cardTitle: { color: colors.onSurface, fontSize: 14, fontWeight: "700", marginTop: spacing.sm },
   cardCat: { color: colors.onSurfaceTertiary, fontSize: 12, marginTop: 2 },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: spacing["2xl"] },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
   empty: { color: colors.muted, fontSize: 15 },
-  spotifyWrap: { paddingHorizontal: spacing.lg, marginBottom: spacing.lg },
-  spotifyFrame: { height: 352, borderRadius: radius.lg, overflow: "hidden", backgroundColor: colors.navyCard },
-  spotifyEmbed: { flex: 1, borderRadius: radius.lg },
   featTitle: { color: colors.onSurface, fontSize: 18, fontWeight: "800", paddingHorizontal: spacing.lg, marginBottom: spacing.md },
   featRow: { gap: spacing.md, paddingHorizontal: spacing.lg },
   featCard: { width: 280, height: 150, borderRadius: radius.lg, overflow: "hidden", backgroundColor: colors.navy },

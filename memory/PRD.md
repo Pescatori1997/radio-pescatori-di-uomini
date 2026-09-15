@@ -813,9 +813,10 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - **Fix** (`src/utils/embeds.ts`): regex Spotify ora accetta il prefisso opzionale `intl-[a-z]{2}/` e la forma URI `spotify:TYPE:ID`; `detectProvider` riconosce anche `spotify.link`/`spotify:` (i link corti `spotify.link` non sono ancora convertibili in embed → usare il link lungo). Verificato in preview con il link reale dell'utente: ora appare il player embed (`pod-detail-embed`) e non il pulsante "Riproduci". L'errore visivo del player in preview è dovuto al locale del browser headless (bug lato Spotify), non all'app.
 
 
-## Update — Spotify Show/Channel Player (Podcast section)
-- Requirement: show the OFFICIAL Spotify show player of "Pescatori di Uomini" in the Podcast section. Episodes are managed entirely by Spotify (cover, name, episode list, playback) and auto-update; nothing stored in the site DB.
-- Implementation: `frontend/app/(tabs)/podcast.tsx` now renders the official Spotify show embed at the TOP of the Podcast tab (inside the FlatList `ListHeaderComponent`, so it stays visible even when the DB list is empty/loading). Uses the existing `embedSrc(url, "spotify")` + `EmbedFrame` (web `<iframe>` / native `WebView`) with no design changes elsewhere.
-- Spotify show URL: `https://open.spotify.com/show/11WSBH5OJrC10dnZZEpfVx` (const `SPOTIFY_SHOW_URL`). Embed src: `https://open.spotify.com/embed/show/11WSBH5OJrC10dnZZEpfVx`. Player is responsive (width 100%, height 352).
-- IMPORTANT test caveat: the headless screenshot/testing browser reports a broken locale `navigator.language: en-US@posix`, which makes Spotify's OWN iframe (Next.js) crash with `RangeError: Incorrect locale information provided` ("Application error"). This is NOT our bug and does NOT reproduce on real iPhone/Android/desktop with a valid locale. Verified: the iframe is injected with the correct `embed/show` src in the correct section.
+## Update — Spotify = external SOURCE only (architecture clarification)
+- CLARIFIED requirement: Spotify is used ONLY as external hosting/source for episodes. Admin pastes a Spotify episode/podcast URL into the podcast's audio field; the app plays that content via Spotify's officially supported embed on the PODCAST DETAIL page. Spotify must NOT be the main interface.
+- The earlier "Spotify SHOW player at top of the Podcast tab" experiment was REVERTED. `frontend/app/(tabs)/podcast.tsx` is back to the ORIGINAL PdU layout (search + category chips + "In evidenza" + 2-column card grid). No Spotify embed in the tab.
+- Kept working (unchanged): `frontend/app/podcast/[id].tsx` renders the per-episode Spotify embed (`open.spotify.com/embed/{track|episode|show}/{id}`) when the podcast's `audio_url` is a Spotify link; otherwise the original PdU "Riproduci" player is used. This is the "Spotify URL reading" function the user wants preserved.
+- No MP3 uploaded/duplicated/stored on server for Spotify-sourced episodes.
+
 
