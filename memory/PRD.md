@@ -820,3 +820,10 @@ Web + mobile app for an Italian evangelical Christian radio "Pescatori di Uomini
 - No MP3 uploaded/duplicated/stored on server for Spotify-sourced episodes.
 
 
+
+## Update — "Importa da Spotify" (RSS → MP3 diretto, player PdU) [DONE, tested]
+- Spotify resta SOLO sorgente esterna. Nuovo flusso: Admin podcast → pulsante verde "Importa episodio da Spotify" (testID pod-import-spotify) → modale `SpotifyImportModal` → incolla URL show Spotify (o feed RSS) → "Carica episodi" → sceglie episodio → auto-compila titolo/descrizione/copertina/durata + audio_url = MP3 DIRETTO (media_id azzerato). La pagina dettaglio quindi usa il PLAYER PdU (tasto Riproduci), NON l'iframe Spotify.
+- Backend: `POST /api/admin/podcasts/spotify-episodes` (perm 'podcasts'). Risolve il feed RSS da un URL show Spotify via oEmbed (titolo) + iTunes Search API (feedUrl); oppure accetta direttamente un feed RSS. Parsa l'RSS, fa l'unwrap degli enclosure anchor.fm/play → URL cloudfront .mp3. File: backend/server.py (~1815), helper `_spotify_unwrap_audio/_strip_html/_fmt_rss_duration`.
+- Frontend: `frontend/src/components/SpotifyImportModal.tsx`, integrato in `frontend/app/admin/podcasts/[id].tsx`; `api.spotifyEpisodes(source)` in `frontend/src/api.ts`. Ultimo URL usato salvato in AsyncStorage ("pdu.spotify.source").
+- Show dell'utente: `https://open.spotify.com/show/11WSBH5OJrC10dnZZEpfVx` → feed `https://anchor.fm/s/10cb630ac/podcast/rss` (publisher Luigi Volpe, 20 episodi).
+- Verificato: testing_agent iteration_51 (backend 6/6, Admin UI + player PdU OK, 0 iframe Spotify nella pagina dettaglio). Test: backend/tests/test_spotify_import.py.

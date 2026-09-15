@@ -370,6 +370,7 @@ export const api = {
   },
   adminCreatePodcast: (body: any) => request("/admin/podcasts", { method: "POST", body: JSON.stringify(body) }, true),
   adminEditPodcast: (id: string, body: any) => request(`/admin/podcasts/${id}`, { method: "PATCH", body: JSON.stringify(body) }, true),
+  spotifyEpisodes: (source: string) => request("/admin/podcasts/spotify-episodes", { method: "POST", body: JSON.stringify({ source }) }, true),
   adminDeletePodcast: (id: string) => request(`/admin/podcasts/${id}`, { method: "DELETE" }, true),
   // admin news
   adminNews: (status?: string, search?: string) => {

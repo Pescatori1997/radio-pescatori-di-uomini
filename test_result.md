@@ -823,3 +823,32 @@ frontend:
         -working: true
         -agent: "main"
         -comment: "Rimossa la linguetta (testo rotante sbordava). Pallina 48px: drag verificato via mouse (da 328,718 a 158,288 MOVED=True), tap apre (timoteo-input presente), posizione persistita (POS_KEY v2). Su web aggiunto touch-action:none/userSelect:none inline così su mobile/PWA la pagina non scorre durante il drag. Fix di un ReferenceError 'track' (riaggiunto al destructure usePlayer)."
+
+
+## --- Podcast: "Importa da Spotify" (RSS -> MP3 diretto per player PdU) ---
+backend:
+  - task: "POST /admin/podcasts/spotify-episodes: dato un URL show Spotify (o feed RSS), risolve il feed via oEmbed+iTunes, scarica e parsa l'RSS, restituisce episodi con audio_url MP3 DIRETTO (unwrap dei link anchor.fm/play -> cloudfront). Richiede permesso 'podcasts'."
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Testato via curl con token admin: show https://open.spotify.com/show/11WSBH5OJrC10dnZZEpfVx -> feed anchor.fm/s/10cb630ac/podcast/rss, 20 episodi, mp3 diretti audio/mpeg. Unwrap corretto degli enclosure."
+frontend:
+  - task: "Admin editor podcast: pulsante 'Importa episodio da Spotify' apre SpotifyImportModal; l'admin incolla il link show/feed, carica gli episodi, ne sceglie uno e i campi (titolo, descrizione, copertina, durata, audio_url .mp3) si compilano; media_id azzerato cosi' la pagina dettaglio usa il PLAYER PdU (niente iframe Spotify)."
+    implemented: true
+    working: "NA"
+    file: "frontend/app/admin/podcasts/[id].tsx, frontend/src/components/SpotifyImportModal.tsx, frontend/src/api.ts"
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Da testare in UI: login admin (email pescatoridiuomini@outlook.it / Admin1234!), aprire un podcast in /admin/podcasts, toccare 'Importa episodio da Spotify', incollare https://open.spotify.com/show/11WSBH5OJrC10dnZZEpfVx, Carica episodi, selezionare 'Amore a Tempo Indeterminato', verificare che i campi si compilino con audio_url mp3 (d3ctxlq1ktw2nl.cloudfront.net) e che la pagina dettaglio del podcast mostri il tasto Riproduci (player PdU) e NON l'iframe Spotify."
+
+## agent_communication:
+##     -agent: "main"
+##     -message: "Nuova feature: importazione episodi da Spotify via feed RSS. Spotify e' SOLO sorgente esterna; il player mostrato deve restare quello PdU (audio_url .mp3 diretto). Backend gia' verificato via curl. Testare il flusso Admin UI + verifica pagina dettaglio."

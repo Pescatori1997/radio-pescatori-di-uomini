@@ -1,0 +1,28 @@
+{
+  "summary": "Full end-to-end verification of the new 'Importa episodio da Spotify' feature. Backend: 6/6 pytest cases pass on POST /api/admin/podcasts/spotify-episodes (Spotify show URL + direct RSS feed, both return same 20 episodes with direct .mp3 URLs on host d3ctxlq1ktw2nl.cloudfront.net and NEVER open.spotify.com; auth-gate returns 403 without token and with bad token; empty source returns 400; podcast_title correctly contains 'Pescatori di Uomini'). Frontend UI (mobile 390x844): email login as admin (pescatoridiuomini@outlook.it / Admin1234!) succeeds -> auto-redirect to /admin; /admin/podcasts/pod_51a4b0509027 shows green 'Importa episodio da Spotify' button (testID pod-import-spotify); modal opens with saved URL, 'Carica episodi' renders 20 episodes (spotify-ep-0..19); tapping spotify-ep-0 closes the modal, fills Titolo ('S3. Episodio 2: Sono Una Brava Persona'), Descrizione, Categoria (Predicazione), Copertina, audio_url (direct cloudfront .mp3) and Durata (00:04:03), and shows the success message 'Episodio importato da Spotify — controlla i campi e salva.'. Guest flow: /podcast/pod_51a4b0509027 shows the PdU player button 'Riproduci' (testID pod-detail-play) with 0 iframes on the page — NO Spotify embed is rendered when audio_url is a direct .mp3 (as expected because detectProvider returns null for cloudfront URLs).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_spotify_import.py",
+    "/app/test_reports/pytest/iteration_51_spotify.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is 7555 lines — should be split into modules (not related to this feature but a growing concern).",
+    "SpotifyImportModal loading state has no timeout; if backend hangs the user cannot cancel. Non-blocking, acceptable for now."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_spotify_import.py (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "None — used the already-seeded admin user (pescatoridiuomini@outlook.it) and the existing podcast pod_51a4b0509027 with direct .mp3 audio_url.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "POST /api/admin/podcasts/spotify-episodes accepts either a Spotify show URL (https://open.spotify.com/show/...) or a direct RSS feed (https://anchor.fm/s/.../podcast/rss). Backend unwraps Anchor's /play/<id>/<encoded-mp3> enclosure to a raw cloudfront .mp3 URL. Frontend detectProvider() must NOT match cloudfront URLs (otherwise the detail page would render the Spotify iframe instead of the PdU player) — confirmed working.",
+  "rca_of_issue": "N/A — new feature verified working end-to-end."
+}

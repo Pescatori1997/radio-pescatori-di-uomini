@@ -1814,6 +1814,121 @@ async def admin_podcast_featured_order(body: dict, admin=Depends(require_perm("p
     return {"ok": True}
 
 
+# ---- Import episodes from a Spotify show (via its public RSS feed) ----
+def _spotify_unwrap_audio(url: str) -> str:
+    """Anchor/Spotify-for-Podcasters enclosure URLs wrap the real MP3 as the last
+    (URL-encoded) path segment: .../play/<id>/https%3A%2F%2F...mp3 → unwrap it."""
+    m = re.search(r"/play/\d+/(https?%3A%2F%2F.+)$", url or "", re.I)
+    if m:
+        from urllib.parse import unquote
+        return unquote(m.group(1))
+    return url
+
+
+def _strip_html(t: str) -> str:
+    return re.sub(r"<[^>]+>", "", t or "").strip()
+
+
+def _fmt_rss_duration(d: str) -> str:
+    d = (d or "").strip()
+    if not d:
+        return ""
+    if d.isdigit():
+        s = int(d); h = s // 3600; m = (s % 3600) // 60; sec = s % 60
+        return f"{h}:{m:02d}:{sec:02d}" if h else f"{m}:{sec:02d}"
+    return d
+
+
+@api_router.post("/admin/podcasts/spotify-episodes")
+async def admin_spotify_episodes(body: dict, admin=Depends(require_perm("podcasts"))):
+    """Given a Spotify show/episode URL OR a direct RSS feed URL, resolve the
+    podcast's public RSS feed and return its episodes with the DIRECT .mp3 URL,
+    so the native PdU player can play them (Spotify itself only allows the branded
+    embed; the real audio lives in the host's RSS feed)."""
+    import xml.etree.ElementTree as ET
+    source = (body.get("source") or "").strip()
+    if not source:
+        raise HTTPException(status_code=400, detail="Incolla il link dello show Spotify o il feed RSS.")
+    low = source.lower()
+    feed_url = None
+    async with httpx.AsyncClient(timeout=25, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0 (PdU)"}) as client:
+        if "open.spotify.com" in low or low.startswith("spotify:"):
+            # Resolve the show name via Spotify oEmbed, then find the RSS feed via the iTunes API.
+            title = None
+            try:
+                oe = await client.get("https://open.spotify.com/oembed", params={"url": source})
+                if oe.status_code == 200:
+                    title = (oe.json() or {}).get("title")
+            except Exception:
+                title = None
+            if not title:
+                raise HTTPException(status_code=400, detail="Impossibile leggere il podcast da questo link Spotify. Incolla il link dello SHOW (open.spotify.com/show/...) o il feed RSS.")
+            results = []
+            try:
+                it = await client.get("https://itunes.apple.com/search", params={"term": title, "entity": "podcast", "limit": 25})
+                if it.status_code == 200:
+                    results = (it.json() or {}).get("results", [])
+            except Exception:
+                results = []
+            tl = title.strip().lower()
+            best = next((r for r in results if r.get("feedUrl") and (r.get("collectionName") or "").strip().lower() == tl), None)
+            if not best:
+                best = next((r for r in results if r.get("feedUrl") and tl in (r.get("collectionName") or "").lower()), None)
+            if not best:
+                best = next((r for r in results if r.get("feedUrl")), None)
+            if not best:
+                raise HTTPException(status_code=404, detail=f"Feed RSS non trovato per «{title}». Incolla direttamente il feed RSS del tuo podcast.")
+            feed_url = best["feedUrl"]
+        else:
+            feed_url = source
+        try:
+            resp = await client.get(feed_url)
+            resp.raise_for_status()
+            xml_text = resp.text
+        except Exception:
+            raise HTTPException(status_code=400, detail="Impossibile scaricare il feed RSS. Controlla il link.")
+    try:
+        root = ET.fromstring(xml_text.encode("utf-8"))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Il feed RSS non è valido.")
+    ns = {"itunes": "http://www.itunes.com/dtds/podcast-1.0.dtd"}
+    channel = root.find("channel")
+    if channel is None:
+        raise HTTPException(status_code=400, detail="Il feed RSS non è valido.")
+    podcast_title = channel.findtext("title") or ""
+    author = channel.findtext("itunes:author", default="", namespaces=ns) or ""
+    chan_img = None
+    ci = channel.find("itunes:image", ns)
+    if ci is not None:
+        chan_img = ci.get("href")
+    if not chan_img:
+        img = channel.find("image")
+        if img is not None:
+            chan_img = img.findtext("url")
+    episodes = []
+    for item in channel.findall("item"):
+        enc = item.find("enclosure")
+        audio = enc.get("url") if enc is not None else None
+        if not audio:
+            continue
+        img = None
+        ii = item.find("itunes:image", ns)
+        if ii is not None:
+            img = ii.get("href")
+        episodes.append({
+            "title": (item.findtext("title") or "").strip(),
+            "description": _strip_html(item.findtext("description") or item.findtext("itunes:summary", default="", namespaces=ns) or "")[:2000],
+            "published": (item.findtext("pubDate") or "")[:16],
+            "duration": _fmt_rss_duration(item.findtext("itunes:duration", default="", namespaces=ns)),
+            "image": img or chan_img,
+            "author": author,
+            "audio_url": _spotify_unwrap_audio(audio),
+        })
+    if not episodes:
+        raise HTTPException(status_code=404, detail="Nessun episodio trovato nel feed.")
+    return {"feed_url": feed_url, "podcast_title": podcast_title, "author": author, "image": chan_img, "episodes": episodes[:150]}
+
+
 # ---------------- Admin: News CMS ----------------
 class NewsIn(BaseModel):
     title: str

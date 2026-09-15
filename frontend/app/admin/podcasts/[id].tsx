@@ -7,6 +7,7 @@ import { api, mediaUrl } from "@/src/api";
 import { ADMIN } from "@/src/components/AdminShell";
 import PressableScale from "@/src/components/PressableScale";
 import MediaUpload from "@/src/components/MediaUpload";
+import SpotifyImportModal, { SpotifyEpisode } from "@/src/components/SpotifyImportModal";
 import { AInput, ASwitch, AImagePicker } from "@/src/components/adminForm";
 import { colors, spacing, radius } from "@/src/theme";
 
@@ -19,7 +20,22 @@ export default function PodcastEditor() {
   const [loading, setLoading] = useState(!isNew);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  const [importOpen, setImportOpen] = useState(false);
   const set = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }));
+
+  const applySpotifyEpisode = (ep: SpotifyEpisode) => {
+    setF((p: any) => ({
+      ...p,
+      title: ep.title || p.title,
+      description: ep.description || p.description,
+      author: p.author || ep.author || "",
+      artwork: ep.image || p.artwork,
+      audio_url: ep.audio_url,
+      media_id: null, media_type: null, media_filename: null,
+      duration: ep.duration || p.duration,
+    }));
+    setMsg("Episodio importato da Spotify — controlla i campi e salva.");
+  };
 
   useEffect(() => {
     if (!isNew && id) {
@@ -67,6 +83,10 @@ export default function PodcastEditor() {
         <AInput label="Categoria" value={f.category} onChangeText={(v: string) => set("category", v)} placeholder="Es. Studi Biblici" />
         <AInput label="Tag (separati da virgola)" value={f.tags} onChangeText={(v: string) => set("tags", v)} />
         <Text style={styles.fieldLabel}>Audio del podcast</Text>
+        <PressableScale testID="pod-import-spotify" style={styles.spotifyBtn} onPress={() => setImportOpen(true)}>
+          <Ionicons name="logo-rss" size={18} color={colors.white} />
+          <Text style={styles.spotifyBtnText}>Importa episodio da Spotify</Text>
+        </PressableScale>
         <MediaUpload
           accept={["audio/*"]}
           value={{ media_id: f.media_id, media_type: f.media_type, media_filename: f.media_filename, video_url: f.media_id ? "" : (f.audio_url || ""), duration: f.duration }}
@@ -96,6 +116,7 @@ export default function PodcastEditor() {
           </PressableScale>
         )}
       </ScrollView>
+      <SpotifyImportModal visible={importOpen} onClose={() => setImportOpen(false)} onSelect={applySpotifyEpisode} />
     </KeyboardAvoidingView>
   );
 }
@@ -107,6 +128,8 @@ const styles = StyleSheet.create({
   iconBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: ADMIN.card, alignItems: "center", justifyContent: "center" },
   headerTitle: { color: colors.white, fontSize: 18, fontWeight: "800" },
   fieldLabel: { color: ADMIN.muted, fontSize: 13, fontWeight: "700", marginBottom: 8 },
+  spotifyBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, backgroundColor: "#1DB954", paddingVertical: spacing.md, borderRadius: radius.md, marginBottom: spacing.md },
+  spotifyBtnText: { color: colors.white, fontSize: 15, fontWeight: "800" },
   msg: { color: colors.brandSecondary, fontSize: 14, textAlign: "center", marginBottom: spacing.md },
   btn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, paddingVertical: spacing.md, borderRadius: radius.pill },
   btnText: { color: colors.white, fontSize: 16, fontWeight: "800" },
